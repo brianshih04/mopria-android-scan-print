@@ -1,7 +1,11 @@
 package com.brianshih.mopria.android.scanprint.ui
 
+import android.content.Context
 import android.graphics.Canvas
+import android.graphics.BitmapFactory
 import android.graphics.Paint
+import android.graphics.RectF
+import android.net.Uri
 import android.graphics.pdf.PdfDocument
 import android.os.Bundle
 import android.os.CancellationSignal
@@ -12,9 +16,11 @@ import android.print.PrintDocumentAdapter
 import android.print.PrintDocumentInfo
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
+import kotlin.math.min
 
 class SystemPrintAdapter(
     private val document: MopriaDocument,
+    private val context: Context? = null,
 ) : PrintDocumentAdapter() {
     override fun onLayout(
         oldAttributes: PrintAttributes?,
@@ -83,10 +89,36 @@ class SystemPrintAdapter(
         canvas.drawText("Mopria Scan & Print", 54f, 76f, titlePaint)
         canvas.drawText(document.name, 54f, 112f, bodyPaint)
         canvas.drawLine(54f, 140f, 558f, 140f, linePaint)
-        canvas.drawText("${page.pageNumber}. ${page.title}", 54f, 190f, titlePaint)
-        canvas.drawText("System Print Framework preview fixture.", 54f, 236f, bodyPaint)
-        canvas.drawText("The real eSCL scan result will replace this fixture.", 54f, 264f, bodyPaint)
+        val bitmap = loadBitmap(page.imagePath)
+        if (bitmap != null) {
+            val margin = 54f
+            val top = 158f
+            val bottom = 640f
+            val scale = min(
+                (canvas.width - margin * 2) / bitmap.width.toFloat(),
+                (bottom - top) / bitmap.height.toFloat(),
+            )
+            val width = bitmap.width * scale
+            val height = bitmap.height * scale
+            val left = (canvas.width - width) / 2f
+            canvas.drawBitmap(bitmap, null, RectF(left, top, left + width, top + height), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+            canvas.drawText("${page.pageNumber}. ${page.title}", margin, 684f, titlePaint)
+            bitmap.recycle()
+        } else {
+            canvas.drawText("${page.pageNumber}. ${page.title}", 54f, 190f, titlePaint)
+            canvas.drawText("System Print Framework preview fixture.", 54f, 236f, bodyPaint)
+            canvas.drawText("The real eSCL scan result will replace this fixture.", 54f, 264f, bodyPaint)
+        }
         canvas.drawText("Source: ${document.sourceLabel}", 54f, 690f, bodyPaint)
         canvas.drawText("Page ${page.pageNumber} of ${document.pages.size}", 54f, 728f, bodyPaint)
+    }
+
+    private fun loadBitmap(path: String?): android.graphics.Bitmap? {
+        if (path == null) return null
+        return if (path.startsWith("content://") && context != null) {
+            context.contentResolver.openInputStream(Uri.parse(path))?.use(BitmapFactory::decodeStream)
+        } else {
+            BitmapFactory.decodeFile(path)
+        }
     }
 }

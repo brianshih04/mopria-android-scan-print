@@ -2,6 +2,8 @@ package com.brianshih.mopria.android.scanprint.ui
 
 import android.app.Application
 import android.content.Context
+import android.print.PrintJob
+import android.print.PrintJobInfo
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.brianshih.mopria.android.scanprint.domain.DeviceDiscovery
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MopriaViewModel(application: Application) : AndroidViewModel(application) {
@@ -34,10 +37,12 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         MopriaUiState(integrationMode = loadIntegrationMode()),
     )
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    private val _printRequests = MutableSharedFlow<MopriaDocument>(extraBufferCapacity = 4)
     private val scanExportService = ScanExportService(application)
 
     val uiState = _uiState.asStateFlow()
     val events = _events.asSharedFlow()
+    val printRequests = _printRequests.asSharedFlow()
 
     init {
         viewModelScope.launch {
@@ -169,6 +174,19 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     return@launch
                 }
 
+                if (mode == IntegrationMode.Real) {
+                    _uiState.update {
+                        it.copy(
+                            isDiscovering = false,
+                            devices = devices,
+                            selectedDocumentId = document.id,
+                        )
+                    }
+                    _printRequests.tryEmit(document)
+                    _events.tryEmit("已找到 ${printer.name}，正在開啟 Android 系統列印預覽")
+                    return@launch
+                }
+
                 val currentJobId = "print-job-${System.currentTimeMillis()}"
                 jobId = currentJobId
                 val queuedJob = JobRecord(
@@ -269,6 +287,51 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         )
         _uiState.update { it.copy(jobs = listOf(job) + it.jobs) }
         _events.tryEmit("已送至 Android 系統列印預覽")
+    }
+
+    fun monitorSystemPrint(printJob: PrintJob, title: String) {
+        val jobId = "system-print-${System.currentTimeMillis()}"
+        val queuedJob = JobRecord(
+            id = jobId,
+            kind = JobKind.Print,
+            title = title,
+            targetLabel = "Android Print Framework",
+            status = JobStatus.Queued,
+            progress = 0,
+            detail = "已開啟系統列印預覽",
+        )
+        _uiState.update { it.copy(jobs = listOf(queuedJob) + it.jobs) }
+        viewModelScope.launch {
+            while (!printJob.isCompleted && !printJob.isFailed && !printJob.isCancelled) {
+                val info = printJob.info
+                val running = info.state == PrintJobInfo.STATE_STARTED || info.state == PrintJobInfo.STATE_BLOCKED
+                updateJob(
+                    jobId,
+                    if (running) JobStatus.Running else JobStatus.Queued,
+                    if (running) 50 else 15,
+                    when (info.state) {
+                        PrintJobInfo.STATE_BLOCKED -> "列印服務暫停，等待恢復"
+                        PrintJobInfo.STATE_STARTED -> "列印服務正在處理"
+                        else -> "等待列印服務確認"
+                    },
+                )
+                delay(500)
+            }
+            val finalStatus = when {
+                printJob.isCompleted -> JobStatus.Completed
+                printJob.isCancelled -> JobStatus.Cancelled
+                else -> JobStatus.Failed
+            }
+            updateJob(jobId, finalStatus, if (finalStatus == JobStatus.Completed) 100 else 0, when (finalStatus) {
+                JobStatus.Completed -> "系統列印工作已完成"
+                JobStatus.Cancelled -> "系統列印工作已取消"
+                else -> "系統列印工作失敗"
+            })
+        }
+    }
+
+    fun reportMessage(message: String) {
+        _events.tryEmit(message)
     }
 
     private fun updateJob(id: String, status: JobStatus, progress: Int, detail: String) {

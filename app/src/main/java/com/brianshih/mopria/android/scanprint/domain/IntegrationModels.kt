@@ -16,12 +16,17 @@ data class IntegrationDevice(
     val kind: DeviceKind,
     val protocol: String,
     val isMock: Boolean = true,
+    val host: String? = null,
+    val port: Int? = null,
+    val secure: Boolean = false,
+    val serviceType: String? = null,
 )
 
 data class DocumentPage(
     val id: String,
     val pageNumber: Int,
     val title: String,
+    val imagePath: String? = null,
 )
 
 enum class ScanOutputFormat(val label: String, val extension: String) {

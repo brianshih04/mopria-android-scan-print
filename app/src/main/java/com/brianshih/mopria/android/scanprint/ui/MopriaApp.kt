@@ -1,6 +1,7 @@
 package com.brianshih.mopria.android.scanprint.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +43,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -96,14 +98,22 @@ private enum class AppTab(val label: String, val icon: ImageVector) {
 fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    fun openPrint(title: String, adapter: android.print.PrintDocumentAdapter) {
+        runCatching {
+            val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+            printManager.print(title, adapter, null)
+        }.onSuccess { printJob ->
+            viewModel.monitorSystemPrint(printJob, title)
+        }.onFailure { error ->
+            viewModel.reportMessage("開啟系統列印失敗：${error.message ?: "請確認列印服務"}")
+        }
+    }
     val phonePrintLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
         if (uris.isNotEmpty()) {
-            val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
             val title = if (uris.size == 1) "手機文件" else "手機文件（${uris.size} 個）"
-            viewModel.recordSystemPrint(uris.size)
-            printManager.print(title, UriPrintAdapter(context, uris, title), null)
+            openPrint(title, UriPrintAdapter(context, uris, title))
         }
     }
     var selectedTabName by rememberSaveable { mutableStateOf(AppTab.Home.name) }
@@ -112,6 +122,11 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { snackbarHostState.showSnackbar(it) }
+    }
+    LaunchedEffect(viewModel, context) {
+        viewModel.printRequests.collect { document ->
+            openPrint(document.name, SystemPrintAdapter(document, context))
+        }
     }
 
     Scaffold(
@@ -197,8 +212,7 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                         phonePrintLauncher.launch(arrayOf("application/pdf", "image/jpeg", "image/png"))
                     },
                     onSystemPrint = { document ->
-                        val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
-                        printManager.print(document.name, SystemPrintAdapter(document), null)
+                        openPrint(document.name, SystemPrintAdapter(document, context))
                     },
                 )
 
@@ -222,17 +236,7 @@ private fun HomeScreen(
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("文件工作台", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Text(
-                    if (uiState.mockMode) "先用模擬裝置跑通流程，接上真實設備後沿用同一套工作狀態。"
-                    else "搜尋區域網路上的真實設備，沿用同一套掃描與列印工作狀態。",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        item { WorkspaceHeader(uiState) }
         item { ReadinessCard(uiState) }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -261,6 +265,52 @@ private fun HomeScreen(
 }
 
 @Composable
+private fun WorkspaceHeader(uiState: MopriaUiState) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
+        shape = MaterialTheme.shapes.extraLarge,
+    ) {
+        Column(modifier = Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.14f),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                    }
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("文件工作台", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
+                    Text("Mopria Scan & Print", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f))
+                }
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.14f),
+                ) {
+                    Text(
+                        uiState.integrationMode.label,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                    )
+                }
+            }
+            Text(
+                if (uiState.mockMode) "先用模擬裝置跑通流程，接上真實設備後沿用同一套工作狀態。"
+                else "搜尋區域網路上的真實設備，沿用同一套掃描與列印工作狀態。",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f),
+            )
+        }
+    }
+}
+
+@Composable
 private fun ReadinessCard(uiState: MopriaUiState) {
     val modeLabel = uiState.integrationMode.label
     val title = when {
@@ -279,23 +329,31 @@ private fun ReadinessCard(uiState: MopriaUiState) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
         shape = MaterialTheme.shapes.extraLarge,
     ) {
-        Row(
-            modifier = Modifier.padding(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Surface(
-                modifier = Modifier.size(44.dp),
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.primary,
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                Surface(
+                    modifier = Modifier.size(44.dp),
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.primary,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                    }
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
                 }
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            if (uiState.isDiscovering) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                )
             }
         }
     }
@@ -311,8 +369,10 @@ private fun ActionCard(
 ) {
     Card(
         onClick = onClick,
-        modifier = modifier.height(154.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        modifier = modifier
+            .height(154.dp)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.large),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         shape = MaterialTheme.shapes.large,
     ) {
         Column(
@@ -341,7 +401,9 @@ private fun ActionCard(
 @Composable
 private fun DeviceStatusCard(uiState: MopriaUiState, onFindDevices: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.large),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         shape = MaterialTheme.shapes.large,
     ) {
@@ -409,7 +471,7 @@ private fun RecentJobsCard(uiState: MopriaUiState, onViewAll: () -> Unit) {
                 TextButton(onClick = onViewAll, enabled = uiState.jobs.isNotEmpty()) { Text("查看全部") }
             }
             if (uiState.jobs.isEmpty()) {
-                EmptyState(Icons.Outlined.FolderOpen, "還沒有工作紀錄", "完成第一次模擬掃描或列印後，紀錄會顯示在這裡。")
+                EmptyState(Icons.Outlined.FolderOpen, "還沒有工作紀錄", "完成掃描、匯出或列印後，紀錄會顯示在這裡。")
             } else {
                 uiState.jobs.take(2).forEach { job -> JobRow(job) }
             }
@@ -448,7 +510,9 @@ private fun DocumentsScreen(
             }
         item {
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f), MaterialTheme.shapes.large),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 shape = MaterialTheme.shapes.large,
             ) {
@@ -465,15 +529,15 @@ private fun DocumentsScreen(
                 }
             }
         }
-        if (uiState.isBusy) {
-            item { OperationProgressCard(uiState) }
+            if (uiState.isBusy) {
+                item { OperationProgressCard(uiState) }
         }
         if (uiState.documents.isEmpty()) {
             item {
                 EmptyScreen(
                     icon = Icons.Outlined.Description,
                     title = "文件庫是空的",
-                    description = "建立一份示範文件，或執行模擬掃描，接著測試真正的文件工作流。",
+                    description = if (uiState.mockMode) "建立一份示範文件，或執行模擬掃描，接著測試文件工作流。" else "請搜尋真實掃描器，或先建立示範文件測試列印工作流。",
                     actionLabel = "建立示範文件",
                     actionIcon = Icons.Outlined.FileOpen,
                     onAction = onCreateDemo,
@@ -481,7 +545,7 @@ private fun DocumentsScreen(
             }
         } else {
             items(uiState.documents, key = { it.id }) { document ->
-                DocumentCard(document, onExport, onSaveJpegs, onPrint, onSystemPrint)
+                DocumentCard(document, uiState.integrationMode, onExport, onSaveJpegs, onPrint, onSystemPrint)
             }
         }
     }
@@ -501,7 +565,13 @@ private fun OperationProgressCard(uiState: MopriaUiState) {
                 activeJob?.detail ?: if (uiState.mockMode) "Mock provider 正在回應" else "Android NSD 正在探索區域網路",
                 style = MaterialTheme.typography.bodySmall,
             )
-            Text("${activeJob?.progress ?: 15}%", style = MaterialTheme.typography.labelMedium)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                LinearProgressIndicator(
+                    progress = { (activeJob?.progress ?: 15) / 100f },
+                    modifier = Modifier.weight(1f),
+                )
+                Text("${activeJob?.progress ?: 15}%", style = MaterialTheme.typography.labelMedium)
+            }
         }
     }
 }
@@ -509,13 +579,16 @@ private fun OperationProgressCard(uiState: MopriaUiState) {
 @Composable
 private fun DocumentCard(
     document: MopriaDocument,
+    integrationMode: IntegrationMode,
     onExport: (String) -> Unit,
     onSaveJpegs: (String) -> Unit,
     onPrint: (String) -> Unit,
     onSystemPrint: (MopriaDocument) -> Unit,
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.large),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         shape = MaterialTheme.shapes.large,
     ) {
@@ -572,7 +645,7 @@ private fun DocumentCard(
             Button(onClick = { onPrint(document.id) }, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.Print, contentDescription = null)
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("模擬列印")
+                Text(if (integrationMode == IntegrationMode.Mock) "模擬列印" else "列印到系統")
             }
             TextButton(onClick = { onSystemPrint(document) }, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.Print, contentDescription = null)

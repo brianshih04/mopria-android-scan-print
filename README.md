@@ -85,8 +85,10 @@ App 內建可切換的 `Mock Integration Mode` 與 `Real Integration Mode`。模
 ### Real Integration Mode
 
 - `RealIntegrationProvider` 使用 Android `NsdManager` 探索 `_uscan._tcp`／`_uscans._tcp` eSCL 掃描服務，以及 `_ipp._tcp`／`_ipps._tcp` 印表機服務。
-- 真實探索結果會標記為非 mock 設備；若區域網路找不到設備，App 會顯示可理解的狀態與錯誤訊息，不會自動建立模擬設備。
-- eSCL capabilities、scan job／檔案接收，以及實際列印 provider 仍在後續里程碑；切換至真實模式不代表目前已完成 Mopria 相容性或認證。
+- NSD 會解析服務的 host／port；真實探索結果會標記為非 mock 設備。若區域網路找不到設備，App 會顯示可理解的狀態與錯誤訊息，不會自動建立模擬設備。
+- `EsclHttpClient` 依序執行 `ScannerCapabilities`、`ScanJobs`、`Location`／`NextDocument`，支援 JPEG 單頁或多頁內容並保存至 App 暫存區，再由 `ScanExportService` 匯出至固定的 `Download/Mopria Scan & Print/Scans` folder。
+- Real mode 的列印使用 Android `PrintManager`／`PrintDocumentAdapter`，並監看 `PrintJob` 狀態；印表機探索、能力協商與 IPP/IPPS 傳送仍由 Android Default Print Service 或 Mopria Print Service 負責。App 不直接實作 `_ipp` 列印傳輸。
+- 目前已完成協定 client、no-device fallback、mock／emulator smoke test；尚未完成實體 scanner/printer 的跨品牌驗收，也不宣稱 Mopria Certified。
 
 ## 開源專案 review 與採用決策
 
@@ -129,10 +131,16 @@ cd E:\projects\mopria-android-scan-print
 adb install -r .\app\build\outputs\apk\debug\app-debug.apk
 ```
 
-Mock provider 的 JVM 測試可用以下指令執行：
+單元測試（包含 mock provider、eSCL XML 解析及 HTTP fixture）可用以下指令執行：
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest --no-daemon --offline --console=plain
+```
+
+完整本地驗證可執行：
+
+```powershell
+.\gradlew.bat :app:assembleDebug :app:testDebugUnitTest --no-daemon --offline --console=plain
 ```
 
 ## 預定模組
@@ -163,4 +171,4 @@ feature:history     最近工作、重試與錯誤資訊
 
 ## 專案狀態
 
-目前已完成產品研究、Mopria API 邊界確認、ScanBridge／JIPP 的第一輪程式碼 review、Compose UI/UX scaffold、可切換的 Mock／Real Integration Mode，以及不依賴硬體的 Mock Integration Mode。已在 `Brian_Pixel_8_API_36` Emulator 上驗證「模擬掃描 → PDF 匯出 → 模擬列印 → 工作紀錄」及「手機資料夾 PDF／JPEG → Android 系統列印預覽」流程；Real mode 已接上 Android NSD discovery boundary，MVP 仍採「eSCL 原生掃描 + Android Print Framework 列印」。真實 eSCL capabilities／scan 與跨品牌驗收尚未完成。詳細工作拆解請參考 [`dev_plan.md`](dev_plan.md)。
+目前已完成產品研究、Mopria API 邊界確認、ScanBridge／JIPP 的第一輪程式碼 review、Compose UI/UX、可切換的 Mock／Real Integration Mode、Android NSD 真實裝置探索、eSCL capabilities／scan job／文件接收，以及 Android Print Framework 的系統列印入口。已在 `Brian_Pixel_8_API_36` Emulator 上驗證「模擬掃描 → PDF 匯出 → 模擬列印 → 工作紀錄」、「手機資料夾 PDF／JPEG → Android 系統列印預覽」及 Real mode 找不到設備時的錯誤狀態；協定 HTTP fixture 也已通過。尚待同一 Wi-Fi 下的實體 scanner/printer 進行跨品牌驗收。詳細工作拆解請參考 [`dev_plan.md`](dev_plan.md)。

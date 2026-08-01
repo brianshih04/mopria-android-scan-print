@@ -155,12 +155,15 @@ Review 固定在以下版本，後續升級必須重新檢查差異：
 - `MopriaViewModel` 管理 discovery、scan、export、print 與 job state，不讓 UI 直接依賴協定或 Android service。
 - 設定頁可切換 `IntegrationMode.Mock`／`IntegrationMode.Real`；選擇會保存到 SharedPreferences，切換後清空舊裝置並重新探索。
 - `RealIntegrationProvider` 已接上 Android `NsdManager`，探索 `_uscan._tcp`／`_uscans._tcp`、`_ipp._tcp`／`_ipps._tcp`，真實結果標記為 `isMock = false`。
+- `NsdManager.resolveService` 已解析實際 host／port；`EsclHttpClient` 已完成 `ScannerCapabilities`、`ScanJobs`、`Location`／`NextDocument` 的 HTTP 流程，並將 eSCL JPEG 內容寫入 App 暫存區。
+- Real scan 會依 scanner endpoint 建立 eSCL base URL，解析 capabilities 後選擇可用的 JPEG／解析度／色彩設定，下載單頁或多頁結果，再交給既有匯出服務保存為 PDF／JPEG。
+- Real print 已接上 Android `PrintManager`；`PrintDocumentAdapter` 輸出文件內容，`PrintJob` lifecycle 會回寫工作紀錄。Android Print Service 負責實際印表機探索與 IPP/IPPS 傳輸。
 - Emulator 已實際跑通「模擬搜尋／掃描 3 頁 → 文件庫預覽 → PDF 匯出 → 模擬列印 → 工作紀錄」流程。
 - PDF／JPEG 由 Android `PdfDocument`／Bitmap 產生並寫入公開 `Download/Mopria Scan & Print/Scans` folder；App 啟動時會透過 MediaStore 重新索引已保存文件。
 - 文件列印已接上 Android Storage Access Framework；可從手機資料夾選取 PDF／JPEG／PNG，透過 `UriPrintAdapter` 進入 `PrintManager`／系統 Print Spooler 預覽。
 - Emulator 已驗證手機 JPEG 1 頁與 PDF 3 頁的系統列印預覽；這仍不等同實際印表機傳送成功。
 - 目前 mock mode 的輸出內容是測試 fixture，不可視為真實 scanner image 或印表機接受工作的證據。
-- Real mode 的 eSCL capabilities、scan job／檔案接收與實際列印 provider 尚未完成；這些工作會沿用相同的 provider 介面與 UI state。
+- Real mode 在無實體設備的 emulator 上已驗證「找不到設備」狀態，不會退回 mock；在 mock mode 已驗證掃描、匯出及列印完成狀態。
 
 ## 5. 資料與介面設計
 
@@ -248,23 +251,26 @@ interface JobRepository
 
 驗收：核心測試矩陣通過，沒有 blocker／critical issue，且掃描或列印失敗不會造成文件遺失。
 
-### 6.1 目前執行狀態（2026-08-01）
+### 6.1 目前執行狀態（2026-08-02）
 
 已完成：
 
 - Android app scaffold：`com.brianshih.mopria.android.scanprint`、`minSdk 28`、`compile/targetSdk 36`、Java/Kotlin JVM 17、Gradle wrapper 9.3.1。
 - Compose UI/UX 與 Integration Modes：首頁、文件、工作紀錄、設定四個入口、可切換的 Mock／Real 模式，以及可操作的掃描／匯出／列印／裝置搜尋流程。
-- Real mode provider scaffold：`RealIntegrationProvider` 已使用 Android `NsdManager` 探索 eSCL／IPP service type；尚未宣稱完成 capability query 或實際 scan／print。
+- Real mode：`RealIntegrationProvider` 使用 Android `NsdManager` 探索並 resolve eSCL／IPP service type；eSCL client 已完成 capabilities、scan job、Location／NextDocument 與實際影像檔案接收。
+- Real print：文件會透過 Android `PrintManager`／`PrintDocumentAdapter` 交給系統列印服務，並以 `PrintJob` 狀態更新 App 工作紀錄；不在 App 內重做 IPP 傳輸。
 - Android Emulator 驗證：既有 `Brian_Pixel_8_API_36` AVD（API 36、x86_64、Google APIs Play Store）已啟動，Debug APK 已成功安裝並開啟 `MainActivity`。
 - 可重現建置：`.\gradlew.bat :app:assembleDebug --no-daemon --offline --console=plain` 已成功。
 - Emulator workflow evidence：已在固定 folder 產生 1 個 PDF 與 3 個 JPEG，重啟 App 後文件庫仍能讀回它們，且工作紀錄頁看到掃描、匯出及列印完成項目；logcat 無 fatal crash。
-- provider unit tests：`app:testDebugUnitTest` 已成功，涵蓋 mock discovery、三頁 scan fixture 與 print provider contract。
+- provider／protocol unit tests：`app:testDebugUnitTest` 已成功，涵蓋 mock discovery、三頁 scan fixture、eSCL XML parser、HTTP capabilities／ScanJobs／NextDocument fixture 與 print provider contract。
+- 完整 debug build：`:app:assembleDebug :app:testDebugUnitTest --no-daemon --offline --console=plain` 已成功；`git diff --check` 無內容錯誤。
+- Emulator smoke test：已安裝新版 APK，驗證 mock scan 3 頁、mock print 完成、Real mode no-device 狀態與 UI 重啟後無 fatal crash。
 
 尚未完成：
 
-- 真實 eSCL capability query、scan job 與檔案接收；`NsdManager` 的 service discovery boundary 已接線，但仍需實體設備驗證。
-- 真實 `PrintDocumentAdapter` 的系統列印狀態回報、取消與工作完成持久化。
-- 真實裝置、網路與跨品牌印表機／掃描器驗收。
+- 實體 eSCL scanner 的跨品牌 discovery、capability 差異、ADF／Platen、多頁掃描與斷線恢復驗收。
+- 實體印表機的 Android Print Service 傳送成功、取消、失敗及跨品牌紙張／雙面／色彩設定驗收。
+- 進階 capability-driven scan 設定、手動 IP／URL 加入、前景服務與大型文件的背景恢復。
 
 ## 7. 測試策略
 
@@ -328,9 +334,9 @@ interface JobRepository
 
 ## 11. 下一步
 
-1. 下載並接受 Mopria eSCL Specification，建立 clean-room 實作與授權紀錄。
-2. 完成 eSCL capabilities、HTTP job 建立、單頁／多頁 scan 與檔案接收 spike。
-3. 完成真實 Android Print Framework 的服務狀態、取消與工作完成持久化。
-4. 寫入 ADR-001（列印）、ADR-002（eSCL 掃描）、ADR-003（直接 IPP，deferred）。
-5. 將首頁的裝置狀態替換成實際 `IntegrationStatus`，並加入真實錯誤／逾時／重試處理。
-6. 確認第一批 Canon、Brother、Fujifilm 或其他 eSCL／Mopria 相容實體測試設備型號。
+1. 在同一 Wi-Fi 接上實體 eSCL scanner，完成 discovery、capability、單頁／多頁掃描與斷線測試。
+2. 接上至少一個 Android Print Service 與實體印表機，驗證 PrintJob 成功、取消、失敗與跨品牌設定。
+3. 完成 capability-driven scan 設定、手動 IP／URL fallback、前景服務及大型文件恢復。
+4. 寫入 ADR-001（列印）、ADR-002（eSCL 掃描）、ADR-003（直接 IPP，deferred），並補齊規格授權與第三方清單。
+5. 將首頁裝置狀態擴充為完整 `IntegrationStatus`，加入更細緻的錯誤／逾時／重試處理。
+6. 建立 Canon、Brother、Fujifilm 或其他 eSCL／Mopria 相容實體測試矩陣。

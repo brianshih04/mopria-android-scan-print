@@ -4,9 +4,11 @@ import android.content.ContentValues
 import android.content.ContentUris
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
@@ -21,6 +23,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
 import java.util.Locale
+import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -55,7 +58,12 @@ class ScanExportService(private val context: Context) {
                 sourceLabel = "Download/$PUBLIC_FOLDER",
                 createdAt = files.maxOf { it.createdAt },
                 pages = (1..pageCount).map { page ->
-                    DocumentPage("$base-page-$page", page, "已儲存頁面 $page")
+                    DocumentPage(
+                        id = "$base-page-$page",
+                        pageNumber = page,
+                        title = "已儲存頁面 $page",
+                        imagePath = jpegFiles.getOrNull(page - 1)?.uri?.toString(),
+                    )
                 },
                 savedFiles = files.map { file ->
                     SavedScanFile(
@@ -167,12 +175,21 @@ class ScanExportService(private val context: Context) {
     private fun saveJpeg(document: MopriaDocument, page: DocumentPage, index: Int): SavedScanFile {
         val name = "${safeName(document.name)}-page-${index + 1}.jpg"
         return writePublicFile(name, "image/jpeg") { output ->
-            val bitmap = Bitmap.createBitmap(612, 792, Bitmap.Config.ARGB_8888)
+            val bitmap = loadBitmap(page.imagePath)
             try {
-                drawPage(Canvas(bitmap), document, page)
-                check(bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "JPEG 壓縮失敗" }
+                if (bitmap != null) {
+                    check(bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "JPEG 壓縮失敗" }
+                } else {
+                    val fixture = Bitmap.createBitmap(612, 792, Bitmap.Config.ARGB_8888)
+                    try {
+                        drawPage(Canvas(fixture), document, page)
+                        check(fixture.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "JPEG 壓縮失敗" }
+                    } finally {
+                        fixture.recycle()
+                    }
+                }
             } finally {
-                bitmap.recycle()
+                bitmap?.recycle()
             }
         }
     }
@@ -243,9 +260,26 @@ class ScanExportService(private val context: Context) {
         canvas.drawText("Mopria Scan & Print", 54f, 76f, titlePaint)
         canvas.drawText(document.name, 54f, 112f, bodyPaint)
         canvas.drawLine(54f, 140f, 558f, 140f, linePaint)
-        canvas.drawText("${page.pageNumber}. ${page.title}", 54f, 190f, titlePaint)
-        canvas.drawText("Saved by Mock Integration Mode.", 54f, 236f, bodyPaint)
-        canvas.drawText("The real eSCL scan image will replace this fixture.", 54f, 264f, bodyPaint)
+        val bitmap = loadBitmap(page.imagePath)
+        if (bitmap != null) {
+            val margin = 54f
+            val top = 158f
+            val bottom = 640f
+            val scale = min(
+                (canvas.width - margin * 2) / bitmap.width.toFloat(),
+                (bottom - top) / bitmap.height.toFloat(),
+            )
+            val width = bitmap.width * scale
+            val height = bitmap.height * scale
+            val left = (canvas.width - width) / 2f
+            canvas.drawBitmap(bitmap, null, RectF(left, top, left + width, top + height), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+            canvas.drawText("${page.pageNumber}. ${page.title}", margin, 684f, titlePaint)
+            bitmap.recycle()
+        } else {
+            canvas.drawText("${page.pageNumber}. ${page.title}", 54f, 190f, titlePaint)
+            canvas.drawText("Saved by Mock Integration Mode.", 54f, 236f, bodyPaint)
+            canvas.drawText("The real eSCL scan image will replace this fixture.", 54f, 264f, bodyPaint)
+        }
         canvas.drawText("Source: ${document.sourceLabel}", 54f, 690f, bodyPaint)
         canvas.drawText("Page ${page.pageNumber} of ${document.pages.size}", 54f, 728f, bodyPaint)
     }
@@ -254,6 +288,17 @@ class ScanExportService(private val context: Context) {
         .replace(Regex("[^A-Za-z0-9\\u4e00-\\u9fff._-]"), "-")
         .trim('-')
         .ifBlank { "mopria-scan" }
+
+    private fun loadBitmap(path: String?): Bitmap? {
+        if (path == null) return null
+        return when {
+            path.startsWith("content://") -> {
+                context.contentResolver.openInputStream(Uri.parse(path))?.use(BitmapFactory::decodeStream)
+            }
+            path.startsWith("file://") -> BitmapFactory.decodeFile(Uri.parse(path).path)
+            else -> BitmapFactory.decodeFile(path)
+        }
+    }
 
     private companion object {
         const val PUBLIC_FOLDER = "Mopria Scan & Print/Scans"
