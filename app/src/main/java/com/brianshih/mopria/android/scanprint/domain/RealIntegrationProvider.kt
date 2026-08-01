@@ -131,26 +131,33 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         }
     }
 
-    override suspend fun scan(scanner: IntegrationDevice): MopriaDocument = withContext(Dispatchers.IO) {
+    override suspend fun scan(scanner: IntegrationDevice, settings: ScanSettings): MopriaDocument = withContext(Dispatchers.IO) {
         val baseUrl = scanner.eSclBaseUrl()
         val capabilitiesXml = httpClient.fetchCapabilities(baseUrl)
         val capabilities = EsclProtocol.parseCapabilities(capabilitiesXml)
-        val format = capabilities.documentFormats.firstOrNull { it.equals("image/jpeg", true) }
-            ?: "image/jpeg"
-        val resolution = capabilities.resolutions.firstOrNull { it == 300 } ?: capabilities.resolutions.firstOrNull() ?: 300
-        val colorMode = capabilities.colorModes.firstOrNull { it.equals("RGB24", true) }
+        val requestedSource = settings.inputSource.eSclValue
+        if (capabilities.inputSources.isNotEmpty()) {
+            require(capabilities.inputSources.any { supportsInputSource(it, requestedSource) }) {
+                "掃描器不支援${settings.inputSource.label}"
+            }
+        }
+        val resolution = capabilities.resolutions.firstOrNull { it == settings.resolutionDpi }
+            ?: capabilities.resolutions.firstOrNull { it >= settings.resolutionDpi }
+            ?: capabilities.resolutions.lastOrNull()
+            ?: settings.resolutionDpi
+        val colorMode = capabilities.colorModes.firstOrNull { it.equals(settings.colorMode.eSclValue, true) }
             ?: capabilities.colorModes.firstOrNull()
-            ?: "RGB24"
-        val settings = EsclProtocol.buildScanSettings(
-            documentFormat = format,
+            ?: settings.colorMode.eSclValue
+        val scanSettingsXml = EsclProtocol.buildScanSettings(
+            inputSource = requestedSource,
             resolution = resolution,
             colorMode = colorMode,
         )
-        val location = httpClient.createScanJob(baseUrl, settings)
+        val location = httpClient.createScanJob(baseUrl, scanSettingsXml)
         val scanId = System.currentTimeMillis()
         val directory = File(appContext.filesDir, "scans").apply { mkdirs() }
         val pageFiles = buildList {
-            for (index in 0 until MAX_SCAN_PAGES) {
+            for (index in 0 until settings.inputSource.maxPages.coerceAtMost(MAX_SCAN_PAGES)) {
                 val payload = httpClient.fetchNextDocument(EsclProtocol.nextDocumentUrl(baseUrl, location)) ?: break
                 val extension = when {
                     payload.contentType.contains("png") -> "png"
@@ -167,7 +174,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         MopriaDocument(
             id = "real-scan-$scanId",
             name = "真實掃描文件 ${scanId.toString().takeLast(4)}",
-            sourceLabel = "${scanner.name} · eSCL",
+            sourceLabel = "${scanner.name} · eSCL · ${settings.inputSource.shortLabel} · ${resolution} dpi · ${settings.colorMode.label}",
             pages = pageFiles.mapIndexed { index, file ->
                 DocumentPage(
                     id = "$scanId-page-${index + 1}",
@@ -207,5 +214,10 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
     private companion object {
         const val DISCOVERY_TIMEOUT_MS = 3_500L
         const val MAX_SCAN_PAGES = 20
+
+        fun supportsInputSource(actual: String, requested: String): Boolean =
+            actual.equals(requested, ignoreCase = true) ||
+                (requested.equals("ADF", ignoreCase = true) &&
+                    actual.equals("ADFDuplex", ignoreCase = true))
     }
 }

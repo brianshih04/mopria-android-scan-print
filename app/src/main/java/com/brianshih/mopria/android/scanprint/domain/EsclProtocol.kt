@@ -18,7 +18,11 @@ object EsclProtocol {
             .mapNotNull { it.toIntOrNull() }
             .distinct()
             .sorted(),
-        inputSources = values(xml, "InputSource") + values(xml, "InputSourceType"),
+        inputSources = (
+            values(xml, "InputSource") +
+                values(xml, "InputSourceType") +
+                structuralInputSources(xml)
+            ).distinct(),
     )
 
     fun buildScanSettings(
@@ -38,6 +42,12 @@ object EsclProtocol {
         </scan:ScanSettings>
     """.trimIndent()
 
+    fun buildScanSettings(settings: ScanSettings): String = buildScanSettings(
+        inputSource = settings.inputSource.eSclValue,
+        resolution = settings.resolutionDpi,
+        colorMode = settings.colorMode.eSclValue,
+    )
+
     fun nextDocumentUrl(baseUrl: String, location: String): String {
         val normalizedLocation = location.trim()
         val jobUrl = when {
@@ -56,6 +66,17 @@ object EsclProtocol {
         )
         return pattern.findAll(xml).map { unescapeXml(it.groupValues[1].trim()) }.filter { it.isNotEmpty() }.toList()
     }
+
+    private fun structuralInputSources(xml: String): List<String> = buildList {
+        if (hasElement(xml, "Platen") || xml.contains("PlatenInputCaps", ignoreCase = true)) add("Platen")
+        if (hasElement(xml, "Adf") || xml.contains("AdfSimplexInputCaps", ignoreCase = true)) add("ADF")
+        if (hasElement(xml, "AdfDuplex") || xml.contains("AdfDuplexInputCaps", ignoreCase = true)) add("ADFDuplex")
+    }
+
+    private fun hasElement(xml: String, localName: String): Boolean = Regex(
+        "<(?:(?:[A-Za-z_][\\w.-]*):)?$localName(?:\\s[^>]*)?>",
+        RegexOption.IGNORE_CASE,
+    ).containsMatchIn(xml)
 
     private fun escapeXml(value: String): String = value
         .replace("&", "&amp;")

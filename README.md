@@ -87,6 +87,8 @@ App 內建可切換的 `Mock Integration Mode` 與 `Real Integration Mode`。模
 - `RealIntegrationProvider` 使用 Android `NsdManager` 探索 `_uscan._tcp`／`_uscans._tcp` eSCL 掃描服務，以及 `_ipp._tcp`／`_ipps._tcp` 印表機服務。
 - NSD 會解析服務的 host／port；真實探索結果會標記為非 mock 設備。若區域網路找不到設備，App 會顯示可理解的狀態與錯誤訊息，不會自動建立模擬設備。
 - `EsclHttpClient` 依序執行 `ScannerCapabilities`、`ScanJobs`、`Location`／`NextDocument`，支援 JPEG 單頁或多頁內容並保存至 App 暫存區，再由 `ScanExportService` 匯出至固定的 `Download/Mopria Scan & Print/Scans` folder。
+- 文件庫的掃描參數卡可選 `Flatbed 單頁`（eSCL `Platen`）或 `ADF 多頁`（eSCL `ADF`），並設定 150／300／600 dpi 與彩色／灰階／黑白；設定會保存到 App 本機偏好。
+- Flatbed scan 只接收一個 `NextDocument`；ADF scan 會逐頁接收，最多 20 頁。Mock mode 使用同一份設定模型模擬 1 頁 Flatbed 或 3 頁 ADF。
 - Real mode 的列印使用 Android `PrintManager`／`PrintDocumentAdapter`，並監看 `PrintJob` 狀態；印表機探索、能力協商與 IPP/IPPS 傳送仍由 Android Default Print Service 或 Mopria Print Service 負責。App 不直接實作 `_ipp` 列印傳輸。
 - 目前已完成協定 client、no-device fallback、mock／emulator smoke test；尚未完成實體 scanner/printer 的跨品牌驗收，也不宣稱 Mopria Certified。
 
@@ -171,4 +173,4 @@ feature:history     最近工作、重試與錯誤資訊
 
 ## 專案狀態
 
-目前已完成產品研究、Mopria API 邊界確認、ScanBridge／JIPP 的第一輪程式碼 review、Compose UI/UX、可切換的 Mock／Real Integration Mode、Android NSD 真實裝置探索、eSCL capabilities／scan job／文件接收，以及 Android Print Framework 的系統列印入口。已在 `Brian_Pixel_8_API_36` Emulator 上驗證「模擬掃描 → PDF 匯出 → 模擬列印 → 工作紀錄」、「手機資料夾 PDF／JPEG → Android 系統列印預覽」及 Real mode 找不到設備時的錯誤狀態；協定 HTTP fixture 也已通過。尚待同一 Wi-Fi 下的實體 scanner/printer 進行跨品牌驗收。詳細工作拆解請參考 [`dev_plan.md`](dev_plan.md)。
+目前已完成產品研究、Mopria API 邊界確認、ScanBridge／JIPP 的第一輪程式碼 review、Compose UI/UX、可切換的 Mock／Real Integration Mode、Android NSD 真實裝置探索、eSCL capabilities／scan job／文件接收、Flatbed／ADF scan settings，以及 Android Print Framework 的系統列印入口。已在 `Brian_Pixel_8_API_36` Emulator 上驗證「Flatbed 模擬單頁掃描」、「ADF 模擬多頁掃描」、「PDF 匯出 → 模擬列印 → 工作紀錄」、「手機資料夾 PDF／JPEG → Android 系統列印預覽」及 Real mode 找不到設備時的錯誤狀態；協定 HTTP fixture 也已通過。尚待同一 Wi-Fi 下的實體 scanner/printer 進行跨品牌驗收。詳細工作拆解請參考 [`dev_plan.md`](dev_plan.md)。

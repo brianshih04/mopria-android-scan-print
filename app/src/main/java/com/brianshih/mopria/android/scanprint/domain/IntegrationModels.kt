@@ -10,6 +10,29 @@ enum class IntegrationMode(val label: String, val description: String) {
     Real("真實模式", "使用區域網路探索實體設備"),
 }
 
+enum class ScanInputSource(
+    val label: String,
+    val shortLabel: String,
+    val description: String,
+    val eSclValue: String,
+    val maxPages: Int,
+) {
+    Flatbed("Flatbed 單頁", "Flatbed", "放在平面玻璃上，掃描一頁", "Platen", 1),
+    Adf("ADF 多頁", "ADF", "由自動送稿器連續掃描多頁", "ADF", 20),
+}
+
+enum class ScanColorMode(val label: String, val eSclValue: String) {
+    Color("彩色", "RGB24"),
+    Grayscale("灰階", "Grayscale8"),
+    BlackAndWhite("黑白", "BlackAndWhite1"),
+}
+
+data class ScanSettings(
+    val inputSource: ScanInputSource = ScanInputSource.Flatbed,
+    val resolutionDpi: Int = 300,
+    val colorMode: ScanColorMode = ScanColorMode.Color,
+)
+
 data class IntegrationDevice(
     val id: String,
     val name: String,
@@ -84,6 +107,7 @@ data class MopriaUiState(
     val selectedDocumentId: String? = null,
     val lastExportPath: String? = null,
     val integrationMode: IntegrationMode = IntegrationMode.Mock,
+    val scanSettings: ScanSettings = ScanSettings(),
 ) {
     val mockMode: Boolean
         get() = integrationMode == IntegrationMode.Mock

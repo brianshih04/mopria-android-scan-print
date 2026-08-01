@@ -5,7 +5,7 @@ interface DeviceDiscovery {
 }
 
 interface ScanAcquisitionProvider {
-    suspend fun scan(scanner: IntegrationDevice): MopriaDocument
+    suspend fun scan(scanner: IntegrationDevice, settings: ScanSettings = ScanSettings()): MopriaDocument
 }
 
 interface PrintProvider {

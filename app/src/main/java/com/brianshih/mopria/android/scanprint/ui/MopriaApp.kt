@@ -40,6 +40,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -82,6 +83,9 @@ import com.brianshih.mopria.android.scanprint.domain.JobRecord
 import com.brianshih.mopria.android.scanprint.domain.JobStatus
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
+import com.brianshih.mopria.android.scanprint.domain.ScanColorMode
+import com.brianshih.mopria.android.scanprint.domain.ScanInputSource
+import com.brianshih.mopria.android.scanprint.domain.ScanSettings
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -204,6 +208,7 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                 AppTab.Documents -> DocumentsScreen(
                     uiState = uiState,
                     onScan = viewModel::scan,
+                    onScanSettingsChanged = viewModel::updateScanSettings,
                     onCreateDemo = viewModel::createDemoDocument,
                     onExport = viewModel::export,
                     onSaveJpegs = viewModel::saveJpegs,
@@ -246,7 +251,7 @@ private fun HomeScreen(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Outlined.DocumentScanner,
                         title = "掃描文件",
-                        description = if (uiState.mockMode) "使用模擬 eSCL 裝置" else "使用真實 eSCL 裝置",
+                        description = "${uiState.scanSettings.inputSource.shortLabel} · ${uiState.scanSettings.resolutionDpi} dpi · ${uiState.scanSettings.colorMode.label}",
                         onClick = onScan,
                     )
                     ActionCard(
@@ -483,6 +488,7 @@ private fun RecentJobsCard(uiState: MopriaUiState, onViewAll: () -> Unit) {
 private fun DocumentsScreen(
     uiState: MopriaUiState,
     onScan: () -> Unit,
+    onScanSettingsChanged: (ScanSettings) -> Unit,
     onCreateDemo: () -> Unit,
     onExport: (String) -> Unit,
     onSaveJpegs: (String) -> Unit,
@@ -501,13 +507,24 @@ private fun DocumentsScreen(
                         Text("文件庫", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                         Text(
                             if (uiState.mockMode) "先用 mock 文件完成預覽、匯出與列印流程。"
-                            else "使用真實設備取得文件；目前 eSCL 工作執行仍在開發中。",
+                            else "先選擇來源與參數，再從真實 eSCL 設備取得文件。",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    AssistChip(onClick = onScan, label = { Text("開始掃描") }, leadingIcon = { Icon(Icons.Outlined.DocumentScanner, null) })
+                    AssistChip(
+                        onClick = onScan,
+                        label = { Text("掃描 ${uiState.scanSettings.inputSource.shortLabel}") },
+                        leadingIcon = { Icon(Icons.Outlined.DocumentScanner, null) },
+                    )
                 }
             }
+        item {
+            ScanSettingsCard(
+                settings = uiState.scanSettings,
+                enabled = !uiState.isBusy,
+                onChanged = onScanSettingsChanged,
+            )
+        }
         item {
             Card(
                 modifier = Modifier
@@ -547,6 +564,71 @@ private fun DocumentsScreen(
             items(uiState.documents, key = { it.id }) { document ->
                 DocumentCard(document, uiState.integrationMode, onExport, onSaveJpegs, onPrint, onSystemPrint)
             }
+        }
+    }
+}
+
+@Composable
+private fun ScanSettingsCard(
+    settings: ScanSettings,
+    enabled: Boolean,
+    onChanged: (ScanSettings) -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, MaterialTheme.shapes.large),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column {
+                Text("掃描參數", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    settings.inputSource.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text("來源", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ScanInputSource.entries.forEach { source ->
+                    FilterChip(
+                        selected = settings.inputSource == source,
+                        onClick = { onChanged(settings.copy(inputSource = source)) },
+                        enabled = enabled,
+                        label = { Text(source.label) },
+                    )
+                }
+            }
+            Text("解析度", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(150, 300, 600).forEach { dpi ->
+                    FilterChip(
+                        selected = settings.resolutionDpi == dpi,
+                        onClick = { onChanged(settings.copy(resolutionDpi = dpi)) },
+                        enabled = enabled,
+                        label = { Text("${dpi} dpi") },
+                    )
+                }
+            }
+            Text("色彩", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ScanColorMode.entries.forEach { colorMode ->
+                    FilterChip(
+                        selected = settings.colorMode == colorMode,
+                        onClick = { onChanged(settings.copy(colorMode = colorMode)) },
+                        enabled = enabled,
+                        label = { Text(colorMode.label) },
+                    )
+                }
+            }
+            Text(
+                if (settings.inputSource == ScanInputSource.Adf) "ADF 會持續下載 NextDocument，最多 20 頁。"
+                else "Flatbed 只會取得一個 NextDocument。掃描結果仍可另存 PDF 或 JPEG。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }

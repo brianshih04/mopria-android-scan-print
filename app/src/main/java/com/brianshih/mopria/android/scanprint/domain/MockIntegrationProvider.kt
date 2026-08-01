@@ -28,18 +28,21 @@ class MockIntegrationProvider : DeviceDiscovery, ScanAcquisitionProvider, PrintP
         return devices
     }
 
-    override suspend fun scan(scanner: IntegrationDevice): MopriaDocument {
+    override suspend fun scan(scanner: IntegrationDevice, settings: ScanSettings): MopriaDocument {
         delay(850)
         val timestamp = System.currentTimeMillis()
+        val pageCount = if (settings.inputSource == ScanInputSource.Flatbed) 1 else 3
         return MopriaDocument(
             id = "scan-$timestamp",
             name = "模擬掃描文件 ${timestamp.toString().takeLast(4)}",
-            sourceLabel = "${scanner.name} · 模擬 eSCL",
-            pages = listOf(
-                DocumentPage("$timestamp-page-1", 1, "封面與摘要"),
-                DocumentPage("$timestamp-page-2", 2, "內容頁"),
-                DocumentPage("$timestamp-page-3", 3, "附錄"),
-            ),
+            sourceLabel = "${scanner.name} · 模擬 eSCL · ${settings.inputSource.shortLabel} · ${settings.resolutionDpi} dpi · ${settings.colorMode.label}",
+            pages = (1..pageCount).map { page ->
+                DocumentPage(
+                    "$timestamp-page-$page",
+                    page,
+                    if (page == 1) "封面與摘要" else if (page == 2) "內容頁" else "附錄",
+                )
+            },
             createdAt = timestamp,
         )
     }

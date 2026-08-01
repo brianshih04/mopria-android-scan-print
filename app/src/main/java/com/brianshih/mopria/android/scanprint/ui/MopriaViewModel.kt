@@ -20,7 +20,10 @@ import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
 import com.brianshih.mopria.android.scanprint.domain.PrintProvider
 import com.brianshih.mopria.android.scanprint.domain.RealIntegrationProvider
 import com.brianshih.mopria.android.scanprint.domain.ScanAcquisitionProvider
+import com.brianshih.mopria.android.scanprint.domain.ScanColorMode
+import com.brianshih.mopria.android.scanprint.domain.ScanInputSource
 import com.brianshih.mopria.android.scanprint.domain.ScanOutputFormat
+import com.brianshih.mopria.android.scanprint.domain.ScanSettings
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -34,7 +37,10 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
     private val mockProvider = MockIntegrationProvider()
     private val realProvider = RealIntegrationProvider(application)
     private val _uiState = MutableStateFlow(
-        MopriaUiState(integrationMode = loadIntegrationMode()),
+        MopriaUiState(
+            integrationMode = loadIntegrationMode(),
+            scanSettings = loadScanSettings(),
+        ),
     )
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     private val _printRequests = MutableSharedFlow<MopriaDocument>(extraBufferCapacity = 4)
@@ -84,6 +90,16 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun updateScanSettings(settings: ScanSettings) {
+        if (_uiState.value.isBusy) return
+        preferences.edit()
+            .putString(KEY_SCAN_INPUT_SOURCE, settings.inputSource.name)
+            .putInt(KEY_SCAN_RESOLUTION, settings.resolutionDpi)
+            .putString(KEY_SCAN_COLOR_MODE, settings.colorMode.name)
+            .apply()
+        _uiState.update { it.copy(scanSettings = settings) }
+    }
+
     fun scan() {
         if (_uiState.value.isBusy) return
 
@@ -120,7 +136,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 }
                 updateJob(currentJobId, JobStatus.Running, 35, "正在建立掃描工作")
-                val document = providers.scan.scan(scanner)
+                val document = providers.scan.scan(scanner, _uiState.value.scanSettings)
                 updateJob(currentJobId, JobStatus.Running, 85, "正在整理頁面")
                 _uiState.update {
                     it.copy(
@@ -355,6 +371,18 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         ?.let { value -> runCatching { IntegrationMode.valueOf(value) }.getOrDefault(IntegrationMode.Mock) }
         ?: IntegrationMode.Mock
 
+    private fun loadScanSettings(): ScanSettings = ScanSettings(
+        inputSource = preferences.getString(KEY_SCAN_INPUT_SOURCE, ScanInputSource.Flatbed.name)
+            ?.let { value -> runCatching { ScanInputSource.valueOf(value) }.getOrDefault(ScanInputSource.Flatbed) }
+            ?: ScanInputSource.Flatbed,
+        resolutionDpi = preferences.getInt(KEY_SCAN_RESOLUTION, 300)
+            .takeIf { it in SUPPORTED_RESOLUTIONS }
+            ?: 300,
+        colorMode = preferences.getString(KEY_SCAN_COLOR_MODE, ScanColorMode.Color.name)
+            ?.let { value -> runCatching { ScanColorMode.valueOf(value) }.getOrDefault(ScanColorMode.Color) }
+            ?: ScanColorMode.Color,
+    )
+
     private fun discoveryMessage(mode: IntegrationMode, devices: List<IntegrationDevice>): String = when {
         mode == IntegrationMode.Mock -> "找到 ${devices.size} 個模擬裝置，可開始測試流程"
         devices.isEmpty() -> "真實模式尚未找到設備，請確認 Wi-Fi 與設備服務已開啟"
@@ -384,5 +412,9 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
     private companion object {
         const val PREFERENCES_NAME = "mopria_settings"
         const val KEY_INTEGRATION_MODE = "integration_mode"
+        const val KEY_SCAN_INPUT_SOURCE = "scan_input_source"
+        const val KEY_SCAN_RESOLUTION = "scan_resolution"
+        const val KEY_SCAN_COLOR_MODE = "scan_color_mode"
+        val SUPPORTED_RESOLUTIONS = setOf(150, 300, 600)
     }
 }

@@ -157,6 +157,8 @@ Review 固定在以下版本，後續升級必須重新檢查差異：
 - `RealIntegrationProvider` 已接上 Android `NsdManager`，探索 `_uscan._tcp`／`_uscans._tcp`、`_ipp._tcp`／`_ipps._tcp`，真實結果標記為 `isMock = false`。
 - `NsdManager.resolveService` 已解析實際 host／port；`EsclHttpClient` 已完成 `ScannerCapabilities`、`ScanJobs`、`Location`／`NextDocument` 的 HTTP 流程，並將 eSCL JPEG 內容寫入 App 暫存區。
 - Real scan 會依 scanner endpoint 建立 eSCL base URL，解析 capabilities 後選擇可用的 JPEG／解析度／色彩設定，下載單頁或多頁結果，再交給既有匯出服務保存為 PDF／JPEG。
+- 掃描參數已加入 `ScanSettings`：Flatbed 單頁對應 eSCL `Platen`，ADF 多頁對應 eSCL `ADF`；UI 可設定 150／300／600 dpi、彩色／灰階／黑白，並保存到本機偏好。
+- Flatbed 最多接收一個 `NextDocument`，ADF 最多接收 20 個 `NextDocument`；mock provider 對應模擬 1 頁與 3 頁，讓 emulator 可驗證兩條流程。
 - Real print 已接上 Android `PrintManager`；`PrintDocumentAdapter` 輸出文件內容，`PrintJob` lifecycle 會回寫工作紀錄。Android Print Service 負責實際印表機探索與 IPP/IPPS 傳輸。
 - Emulator 已實際跑通「模擬搜尋／掃描 3 頁 → 文件庫預覽 → PDF 匯出 → 模擬列印 → 工作紀錄」流程。
 - PDF／JPEG 由 Android `PdfDocument`／Bitmap 產生並寫入公開 `Download/Mopria Scan & Print/Scans` folder；App 啟動時會透過 MediaStore 重新索引已保存文件。
@@ -264,13 +266,13 @@ interface JobRepository
 - Emulator workflow evidence：已在固定 folder 產生 1 個 PDF 與 3 個 JPEG，重啟 App 後文件庫仍能讀回它們，且工作紀錄頁看到掃描、匯出及列印完成項目；logcat 無 fatal crash。
 - provider／protocol unit tests：`app:testDebugUnitTest` 已成功，涵蓋 mock discovery、三頁 scan fixture、eSCL XML parser、HTTP capabilities／ScanJobs／NextDocument fixture 與 print provider contract。
 - 完整 debug build：`:app:assembleDebug :app:testDebugUnitTest --no-daemon --offline --console=plain` 已成功；`git diff --check` 無內容錯誤。
-- Emulator smoke test：已安裝新版 APK，驗證 mock scan 3 頁、mock print 完成、Real mode no-device 狀態與 UI 重啟後無 fatal crash。
+- Emulator smoke test：已安裝新版 APK，驗證 Flatbed 1 頁、ADF 3 頁、DPI／色彩設定切換、mock print 完成、Real mode no-device 狀態與 UI 重啟後無 fatal crash。
 
 尚未完成：
 
 - 實體 eSCL scanner 的跨品牌 discovery、capability 差異、ADF／Platen、多頁掃描與斷線恢復驗收。
 - 實體印表機的 Android Print Service 傳送成功、取消、失敗及跨品牌紙張／雙面／色彩設定驗收。
-- 進階 capability-driven scan 設定、手動 IP／URL 加入、前景服務與大型文件的背景恢復。
+- 依各 scanner capabilities 動態限制 UI 選項、手動 IP／URL 加入、前景服務與大型文件的背景恢復。
 
 ## 7. 測試策略
 

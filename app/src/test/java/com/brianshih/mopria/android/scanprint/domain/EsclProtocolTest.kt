@@ -27,13 +27,35 @@ class EsclProtocolTest {
 
     @Test
     fun buildsScanSettingsAndResolvesNextDocumentUrl() {
-        val settings = EsclProtocol.buildScanSettings(colorMode = "Grayscale8", resolution = 600)
+        val settings = EsclProtocol.buildScanSettings(
+            ScanSettings(
+                inputSource = ScanInputSource.Adf,
+                colorMode = ScanColorMode.Grayscale,
+                resolutionDpi = 600,
+            ),
+        )
 
+        assertTrue(settings.contains("<scan:InputSource>ADF</scan:InputSource>"))
         assertTrue(settings.contains("Grayscale8"))
         assertTrue(settings.contains("<scan:XResolution>600</scan:XResolution>"))
         assertEquals(
             "http://192.0.2.1:80/eSCL/ScanJobs/123/NextDocument",
             EsclProtocol.nextDocumentUrl("http://192.0.2.1:80/eSCL", "/eSCL/ScanJobs/123"),
         )
+    }
+
+    @Test
+    fun detectsPlatenAndAdfCapabilityContainers() {
+        val capabilities = EsclProtocol.parseCapabilities(
+            """
+            <scan:ScannerCapabilities xmlns:scan="${EsclProtocol.XML_NAMESPACE}">
+              <scan:Platen><scan:PlatenInputCaps /></scan:Platen>
+              <scan:Adf><scan:AdfSimplexInputCaps /></scan:Adf>
+            </scan:ScannerCapabilities>
+            """.trimIndent(),
+        )
+
+        assertTrue(capabilities.inputSources.contains("Platen"))
+        assertTrue(capabilities.inputSources.contains("ADF"))
     }
 }

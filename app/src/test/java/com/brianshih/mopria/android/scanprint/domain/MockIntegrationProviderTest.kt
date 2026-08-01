@@ -19,12 +19,22 @@ class MockIntegrationProviderTest {
     }
 
     @Test
-    fun scanReturnsThreePagesWithSourceLabel() = runBlocking {
+    fun flatbedScanReturnsOnePage() = runBlocking {
         val scanner = provider.discover().first { it.kind == DeviceKind.Scanner }
-        val document = provider.scan(scanner)
+        val document = provider.scan(scanner, ScanSettings(inputSource = ScanInputSource.Flatbed))
+
+        assertEquals(1, document.pages.size)
+        assertTrue(document.sourceLabel.contains("Flatbed"))
+        assertEquals(listOf(1), document.pages.map { it.pageNumber })
+    }
+
+    @Test
+    fun adfScanReturnsMultiplePagesWithSourceLabel() = runBlocking {
+        val scanner = provider.discover().first { it.kind == DeviceKind.Scanner }
+        val document = provider.scan(scanner, ScanSettings(inputSource = ScanInputSource.Adf))
 
         assertEquals(3, document.pages.size)
-        assertEquals("模擬 eSCL", document.sourceLabel.substringAfter("· "))
+        assertTrue(document.sourceLabel.contains("ADF"))
         assertEquals(listOf(1, 2, 3), document.pages.map { it.pageNumber })
     }
 
@@ -32,7 +42,7 @@ class MockIntegrationProviderTest {
     fun printProviderAcceptsMockDocument() = runBlocking {
         val scanner = provider.discover().first { it.kind == DeviceKind.Scanner }
         val printer = provider.discover().first { it.kind == DeviceKind.Printer }
-        val document = provider.scan(scanner)
+        val document = provider.scan(scanner, ScanSettings(inputSource = ScanInputSource.Adf))
 
         provider.print(printer, document)
     }
