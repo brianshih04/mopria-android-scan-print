@@ -2,45 +2,76 @@ package com.brianshih.mopria.android.scanprint.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF006874),
+    primary = Color(0xFF3156D3),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFF9EEFFD),
-    onPrimaryContainer = Color(0xFF001F24),
-    secondary = Color(0xFF4A635F),
+    primaryContainer = Color(0xFFE1E7FF),
+    onPrimaryContainer = Color(0xFF102264),
+    secondary = Color(0xFF007A73),
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFCCE8E4),
-    onSecondaryContainer = Color(0xFF05201D),
-    tertiary = Color(0xFF53618E),
+    secondaryContainer = Color(0xFFB9F1EA),
+    onSecondaryContainer = Color(0xFF00201D),
+    tertiary = Color(0xFF8A4D00),
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFDDE1FF),
-    onTertiaryContainer = Color(0xFF0E1736),
-    background = Color(0xFFF7FBFA),
-    surface = Color(0xFFF7FBFA),
-    surfaceVariant = Color(0xFFDCE5E5),
-    onSurface = Color(0xFF161D1E),
-    onSurfaceVariant = Color(0xFF3F494A),
+    tertiaryContainer = Color(0xFFFFDDB8),
+    onTertiaryContainer = Color(0xFF2C1600),
+    background = Color(0xFFF9F9FF),
+    surface = Color(0xFFF9F9FF),
+    surfaceVariant = Color(0xFFE2E2EC),
+    onSurface = Color(0xFF191B23),
+    onSurfaceVariant = Color(0xFF45464F),
+    outline = Color(0xFF767780),
+    outlineVariant = Color(0xFFC6C6D0),
+    error = Color(0xFFBA1A1A),
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF82D3E0),
-    onPrimary = Color(0xFF00363D),
-    primaryContainer = Color(0xFF004F58),
-    onPrimaryContainer = Color(0xFF9EEFFD),
-    secondary = Color(0xFFB0CCC8),
-    onSecondary = Color(0xFF1B3531),
-    secondaryContainer = Color(0xFF324B47),
-    onSecondaryContainer = Color(0xFFCCE8E4),
-    tertiary = Color(0xFFBBC4F5),
-    onTertiary = Color(0xFF252E4D),
-    tertiaryContainer = Color(0xFF3C4665),
-    onTertiaryContainer = Color(0xFFDDE1FF),
+    primary = Color(0xFFBAC3FF),
+    onPrimary = Color(0xFF00258B),
+    primaryContainer = Color(0xFF173EBA),
+    onPrimaryContainer = Color(0xFFE1E7FF),
+    secondary = Color(0xFF8DD5CD),
+    onSecondary = Color(0xFF003733),
+    secondaryContainer = Color(0xFF00504B),
+    onSecondaryContainer = Color(0xFFB9F1EA),
+    tertiary = Color(0xFFFFB86B),
+    onTertiary = Color(0xFF492900),
+    tertiaryContainer = Color(0xFF693C00),
+    onTertiaryContainer = Color(0xFFFFDDB8),
+    background = Color(0xFF11131A),
+    surface = Color(0xFF11131A),
+    surfaceVariant = Color(0xFF45464F),
+    onSurface = Color(0xFFE3E1EA),
+    onSurfaceVariant = Color(0xFFC6C6D0),
+    outline = Color(0xFF90909A),
+    outlineVariant = Color(0xFF45464F),
+)
+
+private val AppTypography = Typography().run {
+    copy(
+        headlineMedium = headlineMedium.copy(fontWeight = FontWeight.Bold),
+        headlineSmall = headlineSmall.copy(fontWeight = FontWeight.Bold),
+        titleLarge = titleLarge.copy(fontWeight = FontWeight.SemiBold),
+        titleMedium = titleMedium.copy(fontWeight = FontWeight.SemiBold),
+        labelLarge = labelLarge.copy(fontWeight = FontWeight.SemiBold),
+    )
+}
+
+private val AppShapes = Shapes(
+    small = RoundedCornerShape(10.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(22.dp),
+    extraLarge = RoundedCornerShape(28.dp),
 )
 
 @Composable
@@ -50,12 +81,8 @@ fun MopriaTheme(
 ) {
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
-        typography = Typography().run {
-            copy(
-                headlineMedium = headlineMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-                titleLarge = titleLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
-            )
-        },
+        typography = AppTypography,
+        shapes = AppShapes,
         content = content,
     )
 }

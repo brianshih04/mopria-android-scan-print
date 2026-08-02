@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.print.PrintJob
 import android.print.PrintJobInfo
+import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.brianshih.mopria.android.scanprint.domain.DeviceDiscovery
@@ -29,8 +30,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+internal data class ShareRequest(val uri: String, val title: String)
 
 class MopriaViewModel(application: Application) : AndroidViewModel(application) {
     private val preferences = application.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -44,17 +48,25 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
     )
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     private val _printRequests = MutableSharedFlow<MopriaDocument>(extraBufferCapacity = 4)
+    private val _shareRequests = MutableSharedFlow<ShareRequest>(extraBufferCapacity = 4)
     private val scanExportService = ScanExportService(application)
 
     val uiState = _uiState.asStateFlow()
     val events = _events.asSharedFlow()
     val printRequests = _printRequests.asSharedFlow()
+    internal val shareRequests = _shareRequests.asSharedFlow()
 
     init {
         viewModelScope.launch {
-            val savedDocuments = scanExportService.loadSavedDocuments()
-            if (savedDocuments.isNotEmpty()) {
-                _uiState.update { it.copy(documents = savedDocuments + it.documents) }
+            try {
+                val savedDocuments = scanExportService.loadSavedDocuments()
+                if (savedDocuments.isNotEmpty()) {
+                    _uiState.update { it.copy(documents = savedDocuments + it.documents) }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                _events.tryEmit("部分已儲存文件暫時無法讀取")
             }
         }
     }
@@ -62,7 +74,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
     fun setIntegrationMode(mode: IntegrationMode) {
         if (_uiState.value.isBusy || _uiState.value.integrationMode == mode) return
 
-        preferences.edit().putString(KEY_INTEGRATION_MODE, mode.name).apply()
+        preferences.edit { putString(KEY_INTEGRATION_MODE, mode.name) }
         _uiState.update {
             it.copy(
                 integrationMode = mode,
@@ -83,6 +95,9 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 val devices = providersFor(mode).discovery.discover()
                 _uiState.update { it.copy(isDiscovering = false, devices = devices) }
                 _events.tryEmit(discoveryMessage(mode, devices))
+            } catch (error: CancellationException) {
+                _uiState.update { it.copy(isDiscovering = false) }
+                throw error
             } catch (error: Exception) {
                 _uiState.update { it.copy(isDiscovering = false, devices = emptyList()) }
                 _events.tryEmit("${mode.label}搜尋失敗：${error.message ?: "請稍後重試"}")
@@ -92,11 +107,11 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateScanSettings(settings: ScanSettings) {
         if (_uiState.value.isBusy) return
-        preferences.edit()
-            .putString(KEY_SCAN_INPUT_SOURCE, settings.inputSource.name)
-            .putInt(KEY_SCAN_RESOLUTION, settings.resolutionDpi)
-            .putString(KEY_SCAN_COLOR_MODE, settings.colorMode.name)
-            .apply()
+        preferences.edit {
+            putString(KEY_SCAN_INPUT_SOURCE, settings.inputSource.name)
+            putInt(KEY_SCAN_RESOLUTION, settings.resolutionDpi)
+            putString(KEY_SCAN_COLOR_MODE, settings.colorMode.name)
+        }
         _uiState.update { it.copy(scanSettings = settings) }
     }
 
@@ -109,7 +124,12 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 _uiState.update { it.copy(isDiscovering = true) }
                 val providers = providersFor(mode)
-                val devices = providers.discovery.discover()
+                val cachedDevices = _uiState.value.devices
+                val devices = if (cachedDevices.any { it.kind == DeviceKind.Scanner }) {
+                    cachedDevices
+                } else {
+                    providers.discovery.discover()
+                }
                 val scanner = devices.firstOrNull { it.kind == DeviceKind.Scanner }
                 if (scanner == null) {
                     _uiState.update { it.copy(isDiscovering = false, devices = devices) }
@@ -147,6 +167,10 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 updateJob(currentJobId, JobStatus.Completed, 100, "已取得 ${document.pages.size} 頁")
                 _events.tryEmit("${mode.label}掃描完成：${document.pages.size} 頁已加入文件庫")
+            } catch (error: CancellationException) {
+                jobId?.let { updateJob(it, JobStatus.Cancelled, 0, "掃描已取消") }
+                _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
+                throw error
             } catch (error: Exception) {
                 jobId?.let { updateJob(it, JobStatus.Failed, 0, error.message ?: "掃描失敗") }
                 _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
@@ -180,26 +204,25 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     _uiState.update { it.copy(documents = listOf(document) + it.documents) }
                 }
 
+                if (mode == IntegrationMode.Real) {
+                    _uiState.update { it.copy(selectedDocumentId = document.id) }
+                    _printRequests.emit(document)
+                    _events.tryEmit("正在開啟 Android 系統列印預覽")
+                    return@launch
+                }
+
                 _uiState.update { it.copy(isDiscovering = true) }
                 val providers = providersFor(mode)
-                val devices = providers.discovery.discover()
+                val cachedDevices = _uiState.value.devices
+                val devices = if (cachedDevices.any { it.kind == DeviceKind.Printer }) {
+                    cachedDevices
+                } else {
+                    providers.discovery.discover()
+                }
                 val printer = devices.firstOrNull { it.kind == DeviceKind.Printer }
                 if (printer == null) {
                     _uiState.update { it.copy(isDiscovering = false, devices = devices) }
                     _events.tryEmit("${mode.label}沒有找到印表機，請確認設備與手機在同一個區域網路")
-                    return@launch
-                }
-
-                if (mode == IntegrationMode.Real) {
-                    _uiState.update {
-                        it.copy(
-                            isDiscovering = false,
-                            devices = devices,
-                            selectedDocumentId = document.id,
-                        )
-                    }
-                    _printRequests.tryEmit(document)
-                    _events.tryEmit("已找到 ${printer.name}，正在開啟 Android 系統列印預覽")
                     return@launch
                 }
 
@@ -227,6 +250,10 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 updateJob(currentJobId, JobStatus.Completed, 100, "列印工作已完成")
                 _uiState.update { it.copy(activeJobId = null) }
                 _events.tryEmit("${mode.label}列印完成：${document.name}")
+            } catch (error: CancellationException) {
+                jobId?.let { updateJob(it, JobStatus.Cancelled, 0, "列印已取消") }
+                _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
+                throw error
             } catch (error: Exception) {
                 jobId?.let { updateJob(it, JobStatus.Failed, 0, error.message ?: "列印失敗") }
                 _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
@@ -241,6 +268,25 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
 
     fun saveJpegs(documentId: String? = null) {
         saveScan(documentId, ScanOutputFormat.Jpeg)
+    }
+
+    fun share(documentId: String) {
+        if (_uiState.value.isBusy) return
+        val document = _uiState.value.documents.firstOrNull { it.id == documentId }
+        if (document == null) {
+            _events.tryEmit("找不到要分享的文件")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val uri = scanExportService.createSharePdf(document)
+                _shareRequests.emit(ShareRequest(uri.toString(), document.name))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _events.tryEmit("無法準備分享文件：${error.message ?: "請稍後重試"}")
+            }
+        }
     }
 
     private fun saveScan(documentId: String?, format: ScanOutputFormat) {
@@ -265,44 +311,33 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             )
             _uiState.update { it.copy(activeJobId = jobId, jobs = listOf(queuedJob) + it.jobs) }
 
-            runCatching { scanExportService.save(document, format) }
-                .onSuccess { file ->
-                    val updatedDocument = document.copy(
-                        exportedPath = file.firstOrNull()?.location,
-                        savedFiles = document.savedFiles + file,
+            try {
+                val file = scanExportService.save(document, format)
+                val updatedDocument = document.copy(
+                    exportedPath = file.firstOrNull()?.location,
+                    savedFiles = document.savedFiles + file,
+                )
+                _uiState.update {
+                    it.copy(
+                        activeJobId = null,
+                        lastExportPath = file.firstOrNull()?.location,
+                        documents = it.documents.map { item ->
+                            if (item.id == updatedDocument.id) updatedDocument else item
+                        },
                     )
-                    _uiState.update {
-                        it.copy(
-                            activeJobId = null,
-                            lastExportPath = file.firstOrNull()?.location,
-                            documents = it.documents.map { item ->
-                                if (item.id == updatedDocument.id) updatedDocument else item
-                            },
-                        )
-                    }
-                    updateJob(jobId, JobStatus.Completed, 100, "已儲存 ${file.size} 個 ${format.label} 檔案")
-                    _events.tryEmit("${format.label} 已儲存到 Download/Mopria Scan & Print/Scans")
                 }
-                .onFailure { error ->
-                    _uiState.update { it.copy(activeJobId = null) }
-                    updateJob(jobId, JobStatus.Failed, 0, error.message ?: "${format.label} 輸出失敗")
-                    _events.tryEmit("${format.label} 輸出失敗，請重試")
-                }
+                updateJob(jobId, JobStatus.Completed, 100, "已儲存 ${file.size} 個 ${format.label} 檔案")
+                _events.tryEmit("${format.label} 已儲存到 Download/Mopria Scan & Print/Scans")
+            } catch (error: CancellationException) {
+                updateJob(jobId, JobStatus.Cancelled, 0, "${format.label} 輸出已取消")
+                _uiState.update { it.copy(activeJobId = null) }
+                throw error
+            } catch (error: Exception) {
+                _uiState.update { it.copy(activeJobId = null) }
+                updateJob(jobId, JobStatus.Failed, 0, error.message ?: "${format.label} 輸出失敗")
+                _events.tryEmit("${format.label} 輸出失敗，請重試")
+            }
         }
-    }
-
-    fun recordSystemPrint(fileCount: Int) {
-        val job = JobRecord(
-            id = "system-print-${System.currentTimeMillis()}",
-            kind = JobKind.Print,
-            title = if (fileCount == 1) "手機文件" else "手機文件（${fileCount} 個）",
-            targetLabel = "Android Print Framework",
-            status = JobStatus.Queued,
-            progress = 0,
-            detail = "已開啟系統列印預覽，等待使用者確認",
-        )
-        _uiState.update { it.copy(jobs = listOf(job) + it.jobs) }
-        _events.tryEmit("已送至 Android 系統列印預覽")
     }
 
     fun monitorSystemPrint(printJob: PrintJob, title: String) {
@@ -356,7 +391,9 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 jobs = it.jobs.map { job ->
                     if (job.id == id) job.copy(status = status, progress = progress, detail = detail) else job
                 },
-                activeJobId = if (status == JobStatus.Completed || status == JobStatus.Failed) null else it.activeJobId,
+                activeJobId = if (
+                    status == JobStatus.Completed || status == JobStatus.Failed || status == JobStatus.Cancelled
+                ) null else it.activeJobId,
             )
         }
     }

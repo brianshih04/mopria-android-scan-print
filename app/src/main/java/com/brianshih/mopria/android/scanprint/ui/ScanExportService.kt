@@ -4,7 +4,6 @@ import android.content.ContentValues
 import android.content.ContentUris
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -15,12 +14,17 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.annotation.RequiresApi
+import androidx.core.content.FileProvider
+import androidx.core.graphics.createBitmap
+import androidx.core.net.toUri
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
 import com.brianshih.mopria.android.scanprint.domain.SavedScanFile
 import com.brianshih.mopria.android.scanprint.domain.ScanOutputFormat
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.io.OutputStream
 import java.util.Locale
 import kotlin.math.min
@@ -37,6 +41,16 @@ class ScanExportService(private val context: Context) {
                 }
             }
         }
+
+    suspend fun createSharePdf(document: MopriaDocument): Uri = withContext(Dispatchers.IO) {
+        val directory = File(context.cacheDir, SHARE_FOLDER).apply { mkdirs() }
+        directory.listFiles()
+            ?.filter { it.isFile && System.currentTimeMillis() - it.lastModified() > SHARE_MAX_AGE_MS }
+            ?.forEach { it.delete() }
+        val file = File(directory, safeName(document.name) + ".pdf")
+        FileOutputStream(file).use { output -> writePdf(document, output) }
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    }
 
     suspend fun loadSavedDocuments(): List<MopriaDocument> = withContext(Dispatchers.IO) {
         val entries = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -63,6 +77,8 @@ class ScanExportService(private val context: Context) {
                         pageNumber = page,
                         title = "已儲存頁面 $page",
                         imagePath = jpegFiles.getOrNull(page - 1)?.uri?.toString(),
+                        pdfPath = pdf?.uri?.toString(),
+                        pdfPageIndex = pdf?.let { page - 1 },
                     )
                 },
                 savedFiles = files.map { file ->
@@ -88,6 +104,7 @@ class ScanExportService(private val context: Context) {
         val uri: Uri?,
     )
 
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun queryMediaStoreEntries(): List<StoredEntry> {
         val entries = mutableListOf<StoredEntry>()
         val projection = arrayOf(
@@ -149,6 +166,7 @@ class ScanExportService(private val context: Context) {
 
     private fun baseName(displayName: String): String {
         return displayName
+            .replace(Regex(" \\(\\d+\\)(?=\\.[^.]+$)"), "")
             .replace(Regex("-page-\\d+\\.jpg$", RegexOption.IGNORE_CASE), "")
             .removeSuffix(".pdf")
             .removeSuffix(".PDF")
@@ -157,30 +175,35 @@ class ScanExportService(private val context: Context) {
     private fun savePdf(document: MopriaDocument): SavedScanFile {
         val name = safeName(document.name) + ".pdf"
         return writePublicFile(name, "application/pdf") { output ->
-            val pdf = PdfDocument()
-            try {
-                document.pages.forEachIndexed { index, page ->
-                    val pageInfo = PdfDocument.PageInfo.Builder(612, 792, index + 1).create()
-                    val pdfPage = pdf.startPage(pageInfo)
-                    drawPage(pdfPage.canvas, document, page)
-                    pdf.finishPage(pdfPage)
-                }
-                pdf.writeTo(output)
-            } finally {
-                pdf.close()
+            writePdf(document, output)
+        }
+    }
+
+    private fun writePdf(document: MopriaDocument, output: OutputStream) {
+        val pdf = PdfDocument()
+        try {
+            document.pages.forEachIndexed { index, page ->
+                val pageInfo = PdfDocument.PageInfo.Builder(612, 792, index + 1).create()
+                val pdfPage = pdf.startPage(pageInfo)
+                drawPage(pdfPage.canvas, document, page)
+                pdf.finishPage(pdfPage)
             }
+            pdf.writeTo(output)
+        } finally {
+            pdf.close()
         }
     }
 
     private fun saveJpeg(document: MopriaDocument, page: DocumentPage, index: Int): SavedScanFile {
         val name = "${safeName(document.name)}-page-${index + 1}.jpg"
         return writePublicFile(name, "image/jpeg") { output ->
+            if (copyOriginalJpeg(page.imagePath, output)) return@writePublicFile
             val bitmap = loadBitmap(page.imagePath)
             try {
                 if (bitmap != null) {
                     check(bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "JPEG 壓縮失敗" }
                 } else {
-                    val fixture = Bitmap.createBitmap(612, 792, Bitmap.Config.ARGB_8888)
+                    val fixture = createBitmap(612, 792)
                     try {
                         drawPage(Canvas(fixture), document, page)
                         check(fixture.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "JPEG 壓縮失敗" }
@@ -290,18 +313,35 @@ class ScanExportService(private val context: Context) {
         .ifBlank { "mopria-scan" }
 
     private fun loadBitmap(path: String?): Bitmap? {
-        if (path == null) return null
-        return when {
-            path.startsWith("content://") -> {
-                context.contentResolver.openInputStream(Uri.parse(path))?.use(BitmapFactory::decodeStream)
-            }
-            path.startsWith("file://") -> BitmapFactory.decodeFile(Uri.parse(path).path)
-            else -> BitmapFactory.decodeFile(path)
+        return BitmapLoader.load(context, path, requestedWidth = 2048, requestedHeight = 2048)
+    }
+
+    private fun copyOriginalJpeg(path: String?, output: OutputStream): Boolean {
+        if (path.isNullOrBlank()) return false
+        val uri = path.takeIf { it.startsWith("content://") }?.let(Uri::parse)
+        val isJpeg = if (uri != null) {
+            context.contentResolver.getType(uri).equals("image/jpeg", ignoreCase = true)
+        } else {
+            val filePath = if (path.startsWith("file://")) path.toUri().path else path
+            filePath?.endsWith(".jpg", ignoreCase = true) == true ||
+                filePath?.endsWith(".jpeg", ignoreCase = true) == true
         }
+        if (!isJpeg) return false
+
+        val input: InputStream = if (uri != null) {
+            context.contentResolver.openInputStream(uri)
+        } else {
+            val filePath = if (path.startsWith("file://")) path.toUri().path else path
+            filePath?.let { File(it).inputStream() }
+        } ?: return false
+        input.use { it.copyTo(output) }
+        return true
     }
 
     private companion object {
         const val PUBLIC_FOLDER = "Mopria Scan & Print/Scans"
         const val PUBLIC_RELATIVE_PATH = "Download/$PUBLIC_FOLDER"
+        const val SHARE_FOLDER = "shared-scans"
+        const val SHARE_MAX_AGE_MS = 24L * 60L * 60L * 1000L
     }
 }

@@ -143,26 +143,29 @@ Review 固定在以下版本，後續升級必須重新檢查差異：
 
 ### UI/UX prototype（已完成第一版）
 
-- Compose single-activity app shell，使用 Material 3 色彩、卡片、狀態 chip 與底部導覽。
-- 首頁提供「掃描文件」、「列印文件」、「裝置狀態」及「最近工作」四個工作區塊。
-- 文件庫、工作紀錄、設定頁先提供可理解的空狀態與協定邊界說明。
+- Compose single-activity app shell，使用 Material 3 色彩、深色模式、圓角 widget 卡片與底部導覽。
+- 首頁依行動裝置 widget dashboard 語言設計：大型掃描主卡、並排列印／裝置卡與最近工作；整張卡片均可操作。
+- 介面以圖示、數值及短標籤為主，協定說明集中在設定頁；首頁掃描卡進入專用掃描頁，底部文件庫只顯示既有掃描文件、實際頁面縮圖及列印／輸出／分享操作。JPEG 直接取樣解碼，PDF 使用 `PdfRenderer` 按頁產生縮圖，點選縮圖可放大。
 - Mock mode 的掃描、列印與搜尋會透過 provider 執行；Real mode 會透過真實 provider 搜尋區域網路，並以 Snackbar 顯示完成、找不到設備或尚未完成的協定功能。
-- 已加入基本 content description、可見文字與 Material touch target；真實字體縮放、TalkBack 與顏色對比仍列入 M1 驗收。
+- 已加入 icon button content description、live-region、radio semantics 與 Material touch target；Emulator 已驗證 1.3 倍字體與深色模式，TalkBack 人工走查仍列入實機驗收。
 
 ### Integration Modes（已完成第一版）
 
 - `MockIntegrationProvider` 提供 deterministic scanner／printer fixture，隔離實體設備依賴。
 - `MopriaViewModel` 管理 discovery、scan、export、print 與 job state，不讓 UI 直接依賴協定或 Android service。
 - 設定頁可切換 `IntegrationMode.Mock`／`IntegrationMode.Real`；選擇會保存到 SharedPreferences，切換後清空舊裝置並重新探索。
-- `RealIntegrationProvider` 已接上 Android `NsdManager`，探索 `_uscan._tcp`／`_uscans._tcp`、`_ipp._tcp`／`_ipps._tcp`，真實結果標記為 `isMock = false`。
-- `NsdManager.resolveService` 已解析實際 host／port；`EsclHttpClient` 已完成 `ScannerCapabilities`、`ScanJobs`、`Location`／`NextDocument` 的 HTTP 流程，並將 eSCL JPEG 內容寫入 App 暫存區。
+- `RealIntegrationProvider` 已接上 Android `NsdManager`，只探索 `_uscan._tcp`／`_uscans._tcp` 掃描服務；列印不依賴 App 自行探索 `_ipp`／`_ipps`。
+- `NsdManager.resolveService` 已解析實際 host／port；`EsclHttpClient` 已完成 `ScannerCapabilities`、`ScanJobs`、`Location`／`NextDocument`，並將 eSCL 頁面直接串流到暫存檔。
+- eSCL 控制回應、錯誤內容與掃描頁均有大小上限；`ScanJobs` 的 `Location` 必須與 scanner endpoint 同 scheme／host／effective port，避免被異常設備導向其他 origin。
 - Real scan 會依 scanner endpoint 建立 eSCL base URL，解析 capabilities 後選擇可用的 JPEG／解析度／色彩設定，下載單頁或多頁結果，再交給既有匯出服務保存為 PDF／JPEG。
 - 掃描參數已加入 `ScanSettings`：Flatbed 單頁對應 eSCL `Platen`，ADF 多頁對應 eSCL `ADF`；UI 可設定 150／300／600 dpi、彩色／灰階／黑白，並保存到本機偏好。
 - Flatbed 最多接收一個 `NextDocument`，ADF 最多接收 20 個 `NextDocument`；mock provider 對應模擬 1 頁與 3 頁，讓 emulator 可驗證兩條流程。
 - Real print 已接上 Android `PrintManager`；`PrintDocumentAdapter` 輸出文件內容，`PrintJob` lifecycle 會回寫工作紀錄。Android Print Service 負責實際印表機探索與 IPP/IPPS 傳輸。
+- 列印 adapter 已遵守 requested `PageRange` 與 media size，在 IO coroutine 產生 PDF，並以取樣解碼限制大型圖片的 bitmap 記憶體。
 - Emulator 已實際跑通「模擬搜尋／掃描 3 頁 → 文件庫預覽 → PDF 匯出 → 模擬列印 → 工作紀錄」流程。
 - PDF／JPEG 由 Android `PdfDocument`／Bitmap 產生並寫入公開 `Download/Mopria Scan & Print/Scans` folder；App 啟動時會透過 MediaStore 重新索引已保存文件。
-- 文件列印已接上 Android Storage Access Framework；可從手機資料夾選取 PDF／JPEG／PNG，透過 `UriPrintAdapter` 進入 `PrintManager`／系統 Print Spooler 預覽。
+- Android 9 匯出會按需要求 legacy storage permission；Android 10+ 使用 MediaStore。掃描暫存目錄已排除 cloud backup 與 device transfer。
+- 文件列印已接上 Android Storage Access Framework；首頁先進入具有 App 返回導覽的列印頁，再從手機資料夾選取 PDF／JPEG／PNG。取消系統選檔會返回列印頁，選取後透過 `UriPrintAdapter` 進入 `PrintManager`／系統 Print Spooler 預覽。
 - Emulator 已驗證手機 JPEG 1 頁與 PDF 3 頁的系統列印預覽；這仍不等同實際印表機傳送成功。
 - 目前 mock mode 的輸出內容是測試 fixture，不可視為真實 scanner image 或印表機接受工作的證據。
 - Real mode 在無實體設備的 emulator 上已驗證「找不到設備」狀態，不會退回 mock；在 mock mode 已驗證掃描、匯出及列印完成狀態。
@@ -259,14 +262,15 @@ interface JobRepository
 
 - Android app scaffold：`com.brianshih.mopria.android.scanprint`、`minSdk 28`、`compile/targetSdk 36`、Java/Kotlin JVM 17、Gradle wrapper 9.3.1。
 - Compose UI/UX 與 Integration Modes：首頁、文件、工作紀錄、設定四個入口、可切換的 Mock／Real 模式，以及可操作的掃描／匯出／列印／裝置搜尋流程。
-- Real mode：`RealIntegrationProvider` 使用 Android `NsdManager` 探索並 resolve eSCL／IPP service type；eSCL client 已完成 capabilities、scan job、Location／NextDocument 與實際影像檔案接收。
+- 首頁 UI：已完成 icon-first widget dashboard、大型掃描主卡、列印／裝置方形卡、精簡工作紀錄與自訂 launcher icon。
+- Real mode：`RealIntegrationProvider` 使用 Android `NsdManager` 探索並 resolve eSCL service type；eSCL client 已完成 capabilities、scan job、同源 Location 驗證與串流影像接收。
 - Real print：文件會透過 Android `PrintManager`／`PrintDocumentAdapter` 交給系統列印服務，並以 `PrintJob` 狀態更新 App 工作紀錄；不在 App 內重做 IPP 傳輸。
 - Android Emulator 驗證：既有 `Brian_Pixel_8_API_36` AVD（API 36、x86_64、Google APIs Play Store）已啟動，Debug APK 已成功安裝並開啟 `MainActivity`。
-- 可重現建置：`.\gradlew.bat :app:assembleDebug --no-daemon --offline --console=plain` 已成功。
+- 可重現建置：`.\gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --no-daemon --offline --console=plain` 已成功；lint 為 0 errors。
 - Emulator workflow evidence：已在固定 folder 產生 1 個 PDF 與 3 個 JPEG，重啟 App 後文件庫仍能讀回它們，且工作紀錄頁看到掃描、匯出及列印完成項目；logcat 無 fatal crash。
 - provider／protocol unit tests：`app:testDebugUnitTest` 已成功，涵蓋 mock discovery、三頁 scan fixture、eSCL XML parser、HTTP capabilities／ScanJobs／NextDocument fixture 與 print provider contract。
 - 完整 debug build：`:app:assembleDebug :app:testDebugUnitTest --no-daemon --offline --console=plain` 已成功；`git diff --check` 無內容錯誤。
-- Emulator smoke test：已安裝新版 APK，驗證 Flatbed 1 頁、ADF 3 頁、DPI／色彩設定切換、mock print 完成、Real mode no-device 狀態與 UI 重啟後無 fatal crash。
+- Emulator smoke test：已安裝新版 APK，驗證 Flatbed 1 頁、ADF 3 頁、DPI／色彩設定保存、1.0／1.3 倍字體、深色模式、mock print 完成、Real mode no-device 狀態與 UI 重啟後無 fatal crash。
 
 尚未完成：
 

@@ -50,6 +50,8 @@ data class DocumentPage(
     val pageNumber: Int,
     val title: String,
     val imagePath: String? = null,
+    val pdfPath: String? = null,
+    val pdfPageIndex: Int? = null,
 )
 
 enum class ScanOutputFormat(val label: String, val extension: String) {

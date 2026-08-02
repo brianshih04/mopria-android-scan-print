@@ -21,8 +21,6 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
     private val serviceTypes = listOf(
         ServiceType("_uscan._tcp.", DeviceKind.Scanner, "eSCL / AirScan", secure = false),
         ServiceType("_uscans._tcp.", DeviceKind.Scanner, "eSCL / AirScan TLS", secure = true),
-        ServiceType("_ipp._tcp.", DeviceKind.Printer, "IPP / Android Print Framework", secure = false),
-        ServiceType("_ipps._tcp.", DeviceKind.Printer, "IPPS / Android Print Framework", secure = true),
     )
 
     @Suppress("DEPRECATION")
@@ -48,7 +46,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                 finished = true
                 mainHandler.removeCallbacks(timeout)
                 stopDiscovery()
-                continuation.resume(devices.values.toList())
+                if (continuation.isActive) continuation.resume(devices.values.toList())
             }
 
             fun addResolvedDevice(service: ServiceType, info: NsdServiceInfo) {
@@ -92,6 +90,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
 
             timeout = Runnable { finish() }
             continuation.invokeOnCancellation {
+                finished = true
                 mainHandler.removeCallbacks(timeout)
                 stopDiscovery()
             }
@@ -125,7 +124,9 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                         startedListeners.remove(this)
                     }
                 }
+                startedListeners += listener
                 runCatching { nsdManager.discoverServices(service.type, NsdManager.PROTOCOL_DNS_SD, listener) }
+                    .onFailure { startedListeners.remove(listener) }
             }
             mainHandler.postDelayed(timeout, DISCOVERY_TIMEOUT_MS)
         }
@@ -136,11 +137,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         val capabilitiesXml = httpClient.fetchCapabilities(baseUrl)
         val capabilities = EsclProtocol.parseCapabilities(capabilitiesXml)
         val requestedSource = settings.inputSource.eSclValue
-        if (capabilities.inputSources.isNotEmpty()) {
-            require(capabilities.inputSources.any { supportsInputSource(it, requestedSource) }) {
-                "掃描器不支援${settings.inputSource.label}"
-            }
-        }
+        val inputSource = resolveInputSource(capabilities.inputSources, requestedSource)
         val resolution = capabilities.resolutions.firstOrNull { it == settings.resolutionDpi }
             ?: capabilities.resolutions.firstOrNull { it >= settings.resolutionDpi }
             ?: capabilities.resolutions.lastOrNull()
@@ -149,32 +146,46 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
             ?: capabilities.colorModes.firstOrNull()
             ?: settings.colorMode.eSclValue
         val scanSettingsXml = EsclProtocol.buildScanSettings(
-            inputSource = requestedSource,
+            inputSource = inputSource,
             resolution = resolution,
             colorMode = colorMode,
         )
         val location = httpClient.createScanJob(baseUrl, scanSettingsXml)
         val scanId = System.currentTimeMillis()
         val directory = File(appContext.filesDir, "scans").apply { mkdirs() }
-        val pageFiles = buildList {
+        val pageFiles = mutableListOf<File>()
+        try {
             for (index in 0 until settings.inputSource.maxPages.coerceAtMost(MAX_SCAN_PAGES)) {
-                val payload = httpClient.fetchNextDocument(EsclProtocol.nextDocumentUrl(baseUrl, location)) ?: break
+                val temporaryFile = File(directory, "real-scan-$scanId-page-${index + 1}.part")
+                val payload = httpClient.fetchNextDocument(
+                    EsclProtocol.nextDocumentUrl(baseUrl, location),
+                    temporaryFile,
+                ) ?: break
                 val extension = when {
                     payload.contentType.contains("png") -> "png"
-                    payload.contentType.contains("pdf") -> "pdf"
+                    payload.contentType.contains("pdf") -> {
+                        payload.file.delete()
+                        error("掃描器未依要求回傳 JPEG／PNG 影像")
+                    }
                     else -> "jpg"
                 }
-                val file = File(directory, "real-scan-$scanId-page-${index + 1}.$extension")
-                file.writeBytes(payload.bytes)
-                add(file)
+                val finalFile = File(directory, "real-scan-$scanId-page-${index + 1}.$extension")
+                if (!payload.file.renameTo(finalFile)) {
+                    payload.file.delete()
+                    error("無法保存掃描頁面 ${index + 1}")
+                }
+                pageFiles += finalFile
             }
+        } catch (error: Exception) {
+            pageFiles.forEach(File::delete)
+            throw error
         }
         require(pageFiles.isNotEmpty()) { "eSCL ScanJob 沒有回傳影像" }
 
         MopriaDocument(
             id = "real-scan-$scanId",
             name = "真實掃描文件 ${scanId.toString().takeLast(4)}",
-            sourceLabel = "${scanner.name} · eSCL · ${settings.inputSource.shortLabel} · ${resolution} dpi · ${settings.colorMode.label}",
+            sourceLabel = "${scanner.name} · eSCL · ${settings.inputSource.shortLabel} · ${resolution} dpi · ${colorModeLabel(colorMode)}",
             pages = pageFiles.mapIndexed { index, file ->
                 DocumentPage(
                     id = "$scanId-page-${index + 1}",
@@ -215,9 +226,18 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         const val DISCOVERY_TIMEOUT_MS = 3_500L
         const val MAX_SCAN_PAGES = 20
 
-        fun supportsInputSource(actual: String, requested: String): Boolean =
-            actual.equals(requested, ignoreCase = true) ||
-                (requested.equals("ADF", ignoreCase = true) &&
-                    actual.equals("ADFDuplex", ignoreCase = true))
+        fun resolveInputSource(available: List<String>, requested: String): String {
+            if (available.isEmpty()) return requested
+            return available.firstOrNull { it.equals(requested, ignoreCase = true) }
+                ?: available.firstOrNull {
+                    requested.equals("ADF", ignoreCase = true) && it.equals("ADFDuplex", ignoreCase = true)
+                }
+                ?: error("掃描器不支援${if (requested.equals("Platen", true)) " Flatbed" else " ADF"}")
+        }
+
+        fun colorModeLabel(value: String): String = ScanColorMode.entries
+            .firstOrNull { it.eSclValue.equals(value, ignoreCase = true) }
+            ?.label
+            ?: value
     }
 }

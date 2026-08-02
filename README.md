@@ -8,7 +8,7 @@
 - 列印 PDF、文件與照片。
 - 從掃描器或 MFP 取得單頁或多頁文件。
 - 在儲存前完成裁切、旋轉、排序及透視校正。
-- 將掃描結果儲存為 PDF／JPEG／PNG、分享，或直接列印。
+- 將掃描結果儲存為 PDF／JPEG、以 PDF 分享至其他 App，或直接列印；PNG 列為後續格式。
 - 以裝置能力為準顯示紙張、雙面、色彩、解析度及耗材狀態等選項。
 
 ## 產品參考
@@ -45,11 +45,11 @@
 
 ### 掃描
 
-1. App 以 mDNS/DNS-SD 搜尋 `_uscan._tcp`／`_uscans._tcp` 服務，亦允許手動輸入 IP 或 URL。
+1. App 以 mDNS/DNS-SD 搜尋 `_uscan._tcp`／`_uscans._tcp` 服務；手動 IP／URL 加入列為下一階段。
 2. 透過 eSCL 取得 scanner capabilities，顯示來源、色彩模式、解析度、格式及掃描範圍。
 3. 建立 eSCL scan job，輪詢狀態並逐頁下載掃描內容。
-4. 將原始頁面串流寫入受控儲存區，再進行裁切、旋轉、透視校正及排序。
-5. 儲存為 PDF／JPEG／PNG，或交給 Android Print Framework 列印。
+4. 將原始頁面逐頁串流寫入受控儲存區，避免把完整多頁文件累積在記憶體；編輯流程列為下一階段。
+5. 目前可儲存為 PDF／JPEG，或交給 Android Print Framework 列印；PNG 輸出列為下一階段。
 
 ## 技術方向
 
@@ -75,22 +75,31 @@ App 內建可切換的 `Mock Integration Mode` 與 `Real Integration Mode`。模
 ### Mock Integration Mode
 
 - `MockIntegrationProvider` 提供一個 eSCL scanner 與一個 Mopria printer 的 deterministic fixture。
-- 可執行模擬搜尋、3 頁模擬掃描、文件頁面預覽、PDF 匯出及模擬列印。
+- 可執行模擬搜尋、3 頁模擬掃描、文件縮圖／放大預覽、PDF 匯出及模擬列印。文件庫會直接顯示 JPEG 掃描內容，只有 PDF 時則以 `PdfRenderer` 按頁產生有限尺寸的縮圖。
 - 掃描結果可保存到公開的 `Download/Mopria Scan & Print/Scans` folder；Android 10+ 使用 MediaStore，不需要廣泛儲存空間權限。
-- 列印入口可透過 Android Storage Access Framework 從手機資料夾選取一個或多個 PDF／JPEG／PNG；`UriPrintAdapter` 會把 PDF 頁面或圖片轉成 Android `PrintDocumentAdapter` 的列印串流。
+- 列印入口先進入 App 內具有明確返回按鈕的列印頁，再透過 Android Storage Access Framework 從手機資料夾選取一個或多個 PDF／JPEG／PNG；取消系統選檔會回到列印頁，選取後由 `UriPrintAdapter` 轉成 Android `PrintDocumentAdapter` 的列印串流。
 - 已在 Emulator 以系統 Print Spooler 驗證 JPEG 1 頁及 PDF 3 頁列印預覽；不需要實體印表機即可驗證文件列印格式與頁數。
 - 首頁、文件庫、工作紀錄及設定頁均使用同一套 `MopriaUiState`；未來只替換 provider，不改變主要 UI 工作流。
 - `Mock Integration Mode` 只驗證產品流程與本機文件處理，不代表已完成 eSCL／IPP 相容性或 Mopria 認證。
 
 ### Real Integration Mode
 
-- `RealIntegrationProvider` 使用 Android `NsdManager` 探索 `_uscan._tcp`／`_uscans._tcp` eSCL 掃描服務，以及 `_ipp._tcp`／`_ipps._tcp` 印表機服務。
+- `RealIntegrationProvider` 使用 Android `NsdManager` 探索 `_uscan._tcp`／`_uscans._tcp` eSCL 掃描服務。App 不以自行探索 IPP 印表機作為列印前置條件。
 - NSD 會解析服務的 host／port；真實探索結果會標記為非 mock 設備。若區域網路找不到設備，App 會顯示可理解的狀態與錯誤訊息，不會自動建立模擬設備。
-- `EsclHttpClient` 依序執行 `ScannerCapabilities`、`ScanJobs`、`Location`／`NextDocument`，支援 JPEG 單頁或多頁內容並保存至 App 暫存區，再由 `ScanExportService` 匯出至固定的 `Download/Mopria Scan & Print/Scans` folder。
-- 文件庫的掃描參數卡可選 `Flatbed 單頁`（eSCL `Platen`）或 `ADF 多頁`（eSCL `ADF`），並設定 150／300／600 dpi 與彩色／灰階／黑白；設定會保存到 App 本機偏好。
+- `EsclHttpClient` 依序執行 `ScannerCapabilities`、`ScanJobs`、`Location`／`NextDocument`；頁面直接串流到暫存檔，控制回應與掃描頁均設大小上限，並拒絕跨 origin 的 `Location` URL。
+- 專用掃描頁可選 `Flatbed 單頁`（eSCL `Platen`）或 `ADF 多頁`（eSCL `ADF`），並設定 150／300／600 dpi 與彩色／灰階／黑白；設定會保存到 App 本機偏好。底部「文件」只顯示過去掃描文件。
 - Flatbed scan 只接收一個 `NextDocument`；ADF scan 會逐頁接收，最多 20 頁。Mock mode 使用同一份設定模型模擬 1 頁 Flatbed 或 3 頁 ADF。
 - Real mode 的列印使用 Android `PrintManager`／`PrintDocumentAdapter`，並監看 `PrintJob` 狀態；印表機探索、能力協商與 IPP/IPPS 傳送仍由 Android Default Print Service 或 Mopria Print Service 負責。App 不直接實作 `_ipp` 列印傳輸。
+- PDF／圖片列印 adapter 會在 IO coroutine 產生頁面、遵守系統要求的 `PageRange` 與紙張尺寸，圖片解碼也會取樣以限制記憶體使用。
 - 目前已完成協定 client、no-device fallback、mock／emulator smoke test；尚未完成實體 scanner/printer 的跨品牌驗收，也不宣稱 Mopria Certified。
+
+## UI／UX
+
+- 首頁採附件參考的 widget dashboard 語言：大型掃描主卡、並排的列印與裝置卡、精簡最近工作；卡片本身就是操作入口。
+- 介面以圖示、數值、短標籤為主，移除教學式長句；必要的 eSCL／Android Print Framework 說明集中在設定頁。
+- 掃描設定整合 Flatbed／ADF、150／300／600 dpi 與彩色／灰階／黑白，設定會保存並直接顯示在首頁主卡。
+- 文件庫與掃描頁是不同 destination；文件頁以可橫向捲動的頁面縮圖顯示掃描結果，點選可放大，並可列印、輸出 PDF／JPEG，或以 FileProvider `content://` URI 交給 Android Sharesheet。
+- 狀態變更使用 live-region semantics，模式與來源選項具 radio semantics；已在 Emulator 驗證 1.3 倍字體與深色模式。
 
 ## 開源專案 review 與採用決策
 
@@ -142,7 +151,7 @@ adb install -r .\app\build\outputs\apk\debug\app-debug.apk
 完整本地驗證可執行：
 
 ```powershell
-.\gradlew.bat :app:assembleDebug :app:testDebugUnitTest --no-daemon --offline --console=plain
+.\gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --no-daemon --offline --console=plain
 ```
 
 ## 預定模組
@@ -173,4 +182,4 @@ feature:history     最近工作、重試與錯誤資訊
 
 ## 專案狀態
 
-目前已完成產品研究、Mopria API 邊界確認、ScanBridge／JIPP 的第一輪程式碼 review、Compose UI/UX、可切換的 Mock／Real Integration Mode、Android NSD 真實裝置探索、eSCL capabilities／scan job／文件接收、Flatbed／ADF scan settings，以及 Android Print Framework 的系統列印入口。已在 `Brian_Pixel_8_API_36` Emulator 上驗證「Flatbed 模擬單頁掃描」、「ADF 模擬多頁掃描」、「PDF 匯出 → 模擬列印 → 工作紀錄」、「手機資料夾 PDF／JPEG → Android 系統列印預覽」及 Real mode 找不到設備時的錯誤狀態；協定 HTTP fixture 也已通過。尚待同一 Wi-Fi 下的實體 scanner/printer 進行跨品牌驗收。詳細工作拆解請參考 [`dev_plan.md`](dev_plan.md)。
+目前已完成產品研究、Mopria API 邊界確認、ScanBridge／JIPP review、widget dashboard 風格的 Compose UI/UX、可切換的 Mock／Real Integration Mode、Android NSD 真實掃描器探索、eSCL capabilities／scan job／串流文件接收、Flatbed／ADF scan settings，以及 Android Print Framework 系統列印入口。完整 debug build、unit tests 與 Android lint 已通過；`Brian_Pixel_8_API_36` Emulator 已驗證 1.0／1.3 倍字體、深色模式、ADF 模擬 3 頁掃描、文件匯出／列印，以及 Real mode 無裝置狀態。尚待同一 Wi-Fi 下的實體 scanner/printer 進行跨品牌驗收。詳細工作拆解請參考 [`dev_plan.md`](dev_plan.md)。

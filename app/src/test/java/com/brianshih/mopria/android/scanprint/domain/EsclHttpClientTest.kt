@@ -6,6 +6,7 @@ import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 import java.net.InetSocketAddress
 import java.util.concurrent.Executors
 
@@ -17,6 +18,7 @@ class EsclHttpClientTest {
         var receivedSettings = ""
         val imageBytes = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xD9.toByte())
         var nextDocumentRequests = 0
+        val downloadedPage = File.createTempFile("escl-page", ".jpg").apply { delete() }
 
         server.createContext("/eSCL/ScannerCapabilities") { exchange ->
             respond(exchange, 200, "application/xml", "<scan:ScannerCapabilities><scan:ColorMode>RGB24</scan:ColorMode></scan:ScannerCapabilities>")
@@ -41,9 +43,16 @@ class EsclHttpClientTest {
             val location = client.createScanJob(baseUrl, EsclProtocol.buildScanSettings())
             assertEquals("/eSCL/ScanJobs/test-job", location)
             assertTrue(receivedSettings.contains("ScanSettings"))
-            assertArrayEquals(imageBytes, client.fetchNextDocument(EsclProtocol.nextDocumentUrl(baseUrl, location))?.bytes)
-            assertEquals(null, client.fetchNextDocument(EsclProtocol.nextDocumentUrl(baseUrl, location)))
+            assertArrayEquals(
+                imageBytes,
+                client.fetchNextDocument(EsclProtocol.nextDocumentUrl(baseUrl, location), downloadedPage)?.file?.readBytes(),
+            )
+            assertEquals(
+                null,
+                client.fetchNextDocument(EsclProtocol.nextDocumentUrl(baseUrl, location), downloadedPage),
+            )
         } finally {
+            downloadedPage.delete()
             server.stop(0)
             executor.shutdownNow()
         }

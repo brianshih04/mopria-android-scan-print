@@ -1,5 +1,7 @@
 package com.brianshih.mopria.android.scanprint.domain
 
+import java.net.URI
+
 /** Small, dependency-free eSCL XML boundary used by the real provider and JVM fixtures. */
 data class EsclCapabilities(
     val documentFormats: List<String> = emptyList(),
@@ -49,14 +51,21 @@ object EsclProtocol {
     )
 
     fun nextDocumentUrl(baseUrl: String, location: String): String {
-        val normalizedLocation = location.trim()
-        val jobUrl = when {
-            normalizedLocation.startsWith("http://") || normalizedLocation.startsWith("https://") -> normalizedLocation
-            normalizedLocation.startsWith("/") -> baseUrl.substringBefore("://") + "://" +
-                baseUrl.substringAfter("://").substringBefore("/") + normalizedLocation
-            else -> baseUrl.trimEnd('/') + "/" + normalizedLocation
+        val base = URI(baseUrl.trimEnd('/') + "/")
+        val job = base.resolve(URI(location.trim()))
+        require(job.scheme.equals(base.scheme, ignoreCase = true) &&
+            job.host.equals(base.host, ignoreCase = true) &&
+            effectivePort(job) == effectivePort(base)) {
+            "eSCL ScanJob Location 必須與掃描器使用相同來源"
         }
+        val jobUrl = job.toString().trimEnd('/')
         return if (jobUrl.endsWith("/NextDocument", ignoreCase = true)) jobUrl else "$jobUrl/NextDocument"
+    }
+
+    private fun effectivePort(uri: URI): Int = when {
+        uri.port >= 0 -> uri.port
+        uri.scheme.equals("https", ignoreCase = true) -> 443
+        else -> 80
     }
 
     private fun values(xml: String, localName: String): List<String> {

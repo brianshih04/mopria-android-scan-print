@@ -2,6 +2,7 @@ package com.brianshih.mopria.android.scanprint.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class EsclProtocolTest {
@@ -57,5 +58,15 @@ class EsclProtocolTest {
 
         assertTrue(capabilities.inputSources.contains("Platen"))
         assertTrue(capabilities.inputSources.contains("ADF"))
+    }
+
+    @Test
+    fun rejectsCrossOriginScanJobLocation() {
+        assertThrows(IllegalArgumentException::class.java) {
+            EsclProtocol.nextDocumentUrl(
+                "http://192.0.2.1:80/eSCL",
+                "https://example.com/ScanJobs/123",
+            )
+        }
     }
 }

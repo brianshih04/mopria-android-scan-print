@@ -2,8 +2,6 @@ package com.brianshih.mopria.android.scanprint.ui
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
@@ -18,10 +16,19 @@ import android.print.PrintAttributes
 import android.print.PrintDocumentAdapter
 import android.print.PrintDocumentInfo
 import android.provider.OpenableColumns
+import androidx.core.graphics.createBitmap
 import java.io.FileNotFoundException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
-/** Converts user-selected PDF/JPEG content into the PDF stream expected by PrintManager. */
+/** Converts user-selected PDF/JPEG/PNG content into the PDF stream expected by PrintManager. */
 class UriPrintAdapter(
     private val context: Context,
     private val uris: List<Uri>,
@@ -34,7 +41,16 @@ class UriPrintAdapter(
         val pageCount: Int,
     )
 
+    private val workerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @Volatile
     private var printItems: List<PrintItem> = emptyList()
+
+    @Volatile
+    private var pageWidth = DEFAULT_PAGE_WIDTH
+
+    @Volatile
+    private var pageHeight = DEFAULT_PAGE_HEIGHT
 
     override fun onLayout(
         oldAttributes: PrintAttributes?,
@@ -48,18 +64,26 @@ class UriPrintAdapter(
             return
         }
 
-        try {
-            printItems = uris.map { inspect(it) }
-            val pageCount = printItems.sumOf { it.pageCount }
-            callback.onLayoutFinished(
-                PrintDocumentInfo.Builder(title)
-                    .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
-                    .setPageCount(pageCount)
-                    .build(),
-                true,
-            )
-        } catch (error: Exception) {
-            callback.onLayoutFailed(error.message ?: "無法讀取選取的文件")
+        workerScope.launch {
+            try {
+                updatePageSize(newAttributes)
+                val inspectedItems = uris.map { uri ->
+                    if (cancellationSignal.isCanceled) throw CancellationException("列印版面配置已取消")
+                    inspect(uri)
+                }
+                printItems = inspectedItems
+                callback.onLayoutFinished(
+                    PrintDocumentInfo.Builder(title)
+                        .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                        .setPageCount(inspectedItems.sumOf { it.pageCount })
+                        .build(),
+                    oldAttributes != newAttributes,
+                )
+            } catch (_: CancellationException) {
+                callback.onLayoutCancelled()
+            } catch (error: Exception) {
+                callback.onLayoutFailed(error.message ?: "無法讀取選取的文件")
+            }
         }
     }
 
@@ -70,29 +94,80 @@ class UriPrintAdapter(
         callback: WriteResultCallback,
     ) {
         if (cancellationSignal.isCanceled) {
+            runCatching { destination.close() }
             callback.onWriteCancelled()
             return
         }
 
-        val pdf = PdfDocument()
-        var outputPage = 1
-        try {
-            printItems.forEach { item ->
-                if (cancellationSignal.isCanceled) return@forEach
-                if (item.isPdf) {
-                    outputPage = renderPdf(item, pdf, outputPage, cancellationSignal)
-                } else {
-                    outputPage = renderImage(item, pdf, outputPage)
+        workerScope.launch {
+            val pdf = PdfDocument()
+            try {
+                var sourcePageIndex = 0
+                var outputPageNumber = 1
+                printItems.forEach { item ->
+                    if (item.isPdf) {
+                        val descriptor = context.contentResolver.openFileDescriptor(item.uri, "r")
+                            ?: throw FileNotFoundException("無法開啟 ${item.displayName}")
+                        descriptor.use { fileDescriptor ->
+                            PdfRenderer(fileDescriptor).use { renderer ->
+                                repeat(renderer.pageCount) { pageIndex ->
+                                    ensureNotCancelled(cancellationSignal)
+                                    if (isPageRequested(sourcePageIndex, pages)) {
+                                        val sourcePage = renderer.openPage(pageIndex)
+                                        try {
+                                            val bitmap = createPageBitmap(sourcePage)
+                                            try {
+                                                sourcePage.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+                                                drawBitmapPage(pdf, bitmap, outputPageNumber)
+                                            } finally {
+                                                bitmap.recycle()
+                                            }
+                                        } finally {
+                                            sourcePage.close()
+                                        }
+                                        outputPageNumber += 1
+                                    }
+                                    sourcePageIndex += 1
+                                }
+                            }
+                        }
+                    } else {
+                        ensureNotCancelled(cancellationSignal)
+                        if (isPageRequested(sourcePageIndex, pages)) {
+                            val bitmap = BitmapLoader.load(
+                                context,
+                                item.uri,
+                                requestedWidth = MAX_BITMAP_EDGE,
+                                requestedHeight = MAX_BITMAP_EDGE,
+                            ) ?: throw FileNotFoundException("無法讀取 ${item.displayName}")
+                            try {
+                                drawBitmapPage(pdf, bitmap, outputPageNumber)
+                            } finally {
+                                bitmap.recycle()
+                            }
+                            outputPageNumber += 1
+                        }
+                        sourcePageIndex += 1
+                    }
                 }
+                ParcelFileDescriptor.AutoCloseOutputStream(destination).use { output -> pdf.writeTo(output) }
+                if (cancellationSignal.isCanceled) callback.onWriteCancelled()
+                else callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+            } catch (_: CancellationException) {
+                runCatching { destination.close() }
+                callback.onWriteCancelled()
+            } catch (error: Exception) {
+                runCatching { destination.close() }
+                callback.onWriteFailed(error.message ?: "無法建立列印文件")
+            } finally {
+                pdf.close()
             }
-            ParcelFileDescriptor.AutoCloseOutputStream(destination).use { output -> pdf.writeTo(output) }
-            if (cancellationSignal.isCanceled) callback.onWriteCancelled()
-            else callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
-        } catch (error: Exception) {
-            callback.onWriteFailed(error.message)
-        } finally {
-            pdf.close()
         }
+    }
+
+    override fun onFinish() {
+        workerScope.cancel()
+        super.onFinish()
     }
 
     private fun inspect(uri: Uri): PrintItem {
@@ -110,63 +185,48 @@ class UriPrintAdapter(
         }
     }
 
-    private fun renderPdf(
-        item: PrintItem,
-        output: PdfDocument,
-        firstPage: Int,
-        cancellationSignal: CancellationSignal,
-    ): Int {
-        val descriptor = context.contentResolver.openFileDescriptor(item.uri, "r")
-            ?: throw FileNotFoundException("無法開啟 ${item.displayName}")
-        var nextPage = firstPage
-        descriptor.use { fileDescriptor ->
-            PdfRenderer(fileDescriptor).use { renderer ->
-                repeat(renderer.pageCount) { pageIndex ->
-                    if (cancellationSignal.isCanceled) return nextPage
-                    val sourcePage = renderer.openPage(pageIndex)
-                    val bitmap = Bitmap.createBitmap(sourcePage.width, sourcePage.height, Bitmap.Config.ARGB_8888)
-                    bitmap.eraseColor(Color.WHITE)
-                    sourcePage.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
-                    drawBitmapPage(output, bitmap, nextPage)
-                    bitmap.recycle()
-                    sourcePage.close()
-                    nextPage += 1
-                }
-            }
+    private fun createPageBitmap(page: PdfRenderer.Page): Bitmap {
+        val scale = min(
+            1f,
+            min(MAX_BITMAP_EDGE / page.width.toFloat(), MAX_BITMAP_EDGE / page.height.toFloat()),
+        )
+        val width = max(1, (page.width * scale).roundToInt())
+        val height = max(1, (page.height * scale).roundToInt())
+        return createBitmap(width, height).apply {
+            eraseColor(Color.WHITE)
         }
-        return nextPage
-    }
-
-    private fun renderImage(item: PrintItem, output: PdfDocument, pageNumber: Int): Int {
-        val bitmap = context.contentResolver.openInputStream(item.uri)?.use { input ->
-            BitmapFactory.decodeStream(input)
-        } ?: throw FileNotFoundException("無法讀取 ${item.displayName}")
-        drawBitmapPage(output, bitmap, pageNumber)
-        bitmap.recycle()
-        return pageNumber + 1
     }
 
     private fun drawBitmapPage(output: PdfDocument, bitmap: Bitmap, pageNumber: Int) {
-        val pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
+        val width = pageWidth
+        val height = pageHeight
+        val pageInfo = PdfDocument.PageInfo.Builder(width, height, pageNumber).create()
         val page = output.startPage(pageInfo)
         val canvas = page.canvas
         canvas.drawColor(Color.WHITE)
-        val margin = 36f
+        val margin = min(width, height) * 0.06f
         val scale = min(
-            (PAGE_WIDTH - margin * 2) / bitmap.width.toFloat(),
-            (PAGE_HEIGHT - margin * 2) / bitmap.height.toFloat(),
+            (width - margin * 2) / bitmap.width.toFloat(),
+            (height - margin * 2) / bitmap.height.toFloat(),
         )
-        val width = bitmap.width * scale
-        val height = bitmap.height * scale
-        val left = (PAGE_WIDTH - width) / 2f
-        val top = (PAGE_HEIGHT - height) / 2f
+        val renderedWidth = bitmap.width * scale
+        val renderedHeight = bitmap.height * scale
+        val left = (width - renderedWidth) / 2f
+        val top = (height - renderedHeight) / 2f
         canvas.drawBitmap(
             bitmap,
             null,
-            RectF(left, top, left + width, top + height),
+            RectF(left, top, left + renderedWidth, top + renderedHeight),
             Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG),
         )
         output.finishPage(page)
+    }
+
+    private fun updatePageSize(attributes: PrintAttributes) {
+        attributes.mediaSize?.let { mediaSize ->
+            pageWidth = max(1, (mediaSize.widthMils / 1000f * POINTS_PER_INCH).roundToInt())
+            pageHeight = max(1, (mediaSize.heightMils / 1000f * POINTS_PER_INCH).roundToInt())
+        }
     }
 
     private fun queryDisplayName(uri: Uri): String {
@@ -176,8 +236,17 @@ class UriPrintAdapter(
         return uri.lastPathSegment ?: "選取文件"
     }
 
+    private fun ensureNotCancelled(signal: CancellationSignal) {
+        if (signal.isCanceled) throw CancellationException("列印已取消")
+    }
+
+    private fun isPageRequested(pageIndex: Int, ranges: Array<out PageRange>): Boolean =
+        ranges.any { pageIndex in it.start..it.end }
+
     private companion object {
-        const val PAGE_WIDTH = 612
-        const val PAGE_HEIGHT = 792
+        const val DEFAULT_PAGE_WIDTH = 612
+        const val DEFAULT_PAGE_HEIGHT = 792
+        const val POINTS_PER_INCH = 72f
+        const val MAX_BITMAP_EDGE = 3072
     }
 }
