@@ -55,27 +55,85 @@ Android 沒有一個同時提供 Mopria 掃描與列印的公開「Mopria API」
 
 Mopria 規格 PDF 是本機、受限制的研究來源，不會複製到此 repository。公開參考入口：[Mopria eSCL Specification](https://mopria.org/mopria-escl-specification)。
 
-## 專案結構
+## 專案檔案內容
+
+本專案目前是單一 Android `app` module，主要檔案如下：
 
 ```text
-app/src/main/java/.../domain/
-  EsclDiscovery.kt            DNS-SD TXT 正規化與安全服務去重
-  EsclProtocol.kt             capability/status XML、協商與 URL policy
-  EsclHttpClient.kt           bounded HTTP、重試、TLS、串流下載
-  RealIntegrationProvider.kt  Android NSD 與真實 eSCL 工作流程
-  MockIntegrationProvider.kt  模擬掃描器／印表機 fixture
-  ScanDocumentOrganizer.kt    Flatbed 合併與 ADF 拆分規則
-
-app/src/main/java/.../ui/
-  MopriaViewModel.kt          App 狀態與掃描／匯出／列印協調
-  ScanScreen.kt               Flatbed／ADF、頁數與 PDF 合併設定
-  DocumentPageBitmapLoader.kt JPEG／PNG／PDF-backed 頁面載入
-  ScanExportService.kt        PDF／JPEG 匯出與分享檔案
-  SystemPrintAdapter.kt       掃描文件列印 adapter
-  UriPrintAdapter.kt          手機 PDF／圖片列印 adapter
+MopriaAndroidScanPrint/
+├─ app/
+│  ├─ build.gradle.kts                 Android module、SDK、Compose 與測試依賴
+│  └─ src/
+│     ├─ main/
+│     │  ├─ AndroidManifest.xml         網路、儲存、FileProvider 與啟動 Activity
+│     │  ├─ java/com/.../MainActivity.kt App 入口與 Compose content
+│     │  ├─ java/com/.../domain/        eSCL、探索、掃描工作與文件模型
+│     │  ├─ java/com/.../ui/            Compose 畫面、ViewModel、匯出與列印
+│     │  └─ res/                        App icon、字串、theme、備份與網路設定
+│     └─ test/                           domain 純邏輯與協定單元測試
+├─ docs/screenshots/main-screens/       API 36 emulator 主畫面 JPEG
+├─ release/avi-print-scan.apk           可安裝測試 APK
+├─ .workflow/                           規格合規與 UI review 工作紀錄
+├─ build.gradle.kts                     root Gradle plugin 設定
+├─ settings.gradle.kts                  module、plugin 與 Maven repository 設定
+├─ gradle.properties                    Gradle／Android 建置參數
+├─ gradlew、gradlew.bat                 Gradle Wrapper 啟動腳本
+├─ dev_plan.md                          開發範圍、里程碑與驗收計畫
+├─ CHANGELOG.md                         版本變更與驗證紀錄
+├─ HANDOFF.md                           第三方接手、建置與風險說明
+├─ README.md                            專案總覽、架構與開發方式
+└─ userguide.md                         使用者操作指南
 ```
 
-目前採單一 `app` module；尚未加入 README 舊版規劃中的 Hilt、Room 或 WorkManager。
+### Android 設定與資源
+
+| 路徑 | 內容 |
+|---|---|
+| `app/build.gradle.kts` | `compileSdk/targetSdk 36`、`minSdk 28`、Kotlin JVM 17、Jetpack Compose、Lifecycle 與測試依賴。 |
+| `AndroidManifest.xml` | `INTERNET`、網路狀態與 Android 9 以下儲存權限；宣告 `MainActivity` 及用於分享檔案的 `FileProvider`。 |
+| `res/values/strings.xml`、`themes.xml` | App 名稱、Material theme 與基本 UI 資源。 |
+| `res/drawable/ic_launcher.xml` | App launcher icon。 |
+| `res/xml/network_security_config.xml` | eSCL HTTP／HTTPS 的 Android 網路安全政策。 |
+| `res/xml/file_paths.xml` | `FileProvider` 可分享的暫存檔路徑。 |
+| `res/xml/backup_rules.xml`、`data_extraction_rules.xml` | Android 備份與資料擷取規則。 |
+
+### 核心 domain 層
+
+| 檔案 | 責任 |
+|---|---|
+| `IntegrationModels.kt` | 掃描設定、設備、工作、文件頁面與 `MopriaUiState` 資料模型。 |
+| `IntegrationProviders.kt` | Mock／Real integration provider 的共同介面。 |
+| `EsclDiscovery.kt` | 透過 Android `NsdManager` 探索 `_uscan._tcp`／`_uscans._tcp`、解析 TXT 與驗證 resource root。 |
+| `EsclProtocol.kt` | namespace-aware XML capability/status parser、設定協商、ScanJob request 與 URL policy。 |
+| `EsclHttpClient.kt` | bounded HTTP、TLS、redirect、Retry-After、重試與串流下載。 |
+| `RealIntegrationProvider.kt` | 真實設備 discovery、eSCL scan job lifecycle、JPEG／PDF payload 下載。 |
+| `MockIntegrationProvider.kt` | 不連接硬體的 deterministic scanner／printer fixture。 |
+| `ScanDocumentOrganizer.kt` | Flatbed 逐頁合併與 ADF 多頁合併／拆分規則。 |
+
+### UI 與輸出層
+
+| 檔案 | 責任 |
+|---|---|
+| `MopriaApp.kt` | App destination、TopAppBar、底部導覽、Android file picker 與 system print launcher。 |
+| `MopriaViewModel.kt` | 模式切換、discovery、scan、文件儲存、匯出、分享與列印狀態協調。 |
+| `HomeScreen.kt` | 首頁掃描、列印、裝置與最近工作卡片。 |
+| `ScanScreen.kt` | Flatbed／ADF、dpi、色彩、ADF 頁數上限與 PDF 合併設定。 |
+| `DocumentsScreen.kt` | 文件縮圖／預覽，以及列印、分享、PDF、JPEG 操作。 |
+| `PrintScreen.kt` | 手機文件列印入口與已掃描文件入口。 |
+| `SupportScreens.kt` | 工作紀錄與設定頁面。 |
+| `DocumentPageBitmapLoader.kt`、`DocumentPreviewLoader.kt`、`BitmapLoader.kt` | JPEG／PNG／PDF 頁面載入、縮圖與預覽。 |
+| `ScanExportService.kt` | PDF／JPEG 寫入 Download 資料夾及分享 URI。 |
+| `SystemPrintAdapter.kt`、`UriPrintAdapter.kt` | 將掃描文件或手機 URI 接到 Android `PrintManager`。 |
+| `theme/Theme.kt` | Material 3 色彩、排版與 Compose theme。 |
+
+### 測試、文件與產物
+
+- `app/src/test/.../domain/`：測試 discovery、eSCL XML／HTTP、Mock provider 與文件合併規則；不需連接真實設備即可執行。
+- `docs/screenshots/main-screens/`：首頁、Flatbed、ADF、文件、列印檔案選擇器、紀錄與設定的 JPEG 參考畫面。
+- `release/avi-print-scan.apk`：以本機 debug keystore 簽署的 release build，供開發／emulator 測試；正式發布必須換產品簽章。
+- `app/build/`：Gradle 產生的暫存、測試報告與 APK 輸出，通常被 `.gitignore` 忽略，不應手動提交。
+
+目前未加入 Hilt、Room 或 WorkManager；文件資料與設定仍由目前的 ViewModel／本機儲存流程管理。
 
 ## 開發環境與建置
 
@@ -130,7 +188,7 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 4. 加入工作持久化、程序死亡恢復、暫存檔保留期限與大型文件 soak test。
 5. target SDK 37 時依 Android 官方 local-network permission／picker 模型遷移；target 36 目前不應提前宣告 `ACCESS_LOCAL_NETWORK`。參考：[Local network permission](https://developer.android.com/privacy-and-security/local-network-permission)。
 
-詳細規劃與接手資訊：[`dev_plan.md`](dev_plan.md)、[`CHANGELOG.md`](CHANGELOG.md)、[`HANDOFF.md`](HANDOFF.md)。
+詳細規劃、使用方式與接手資訊：[`dev_plan.md`](dev_plan.md)、[`userguide.md`](userguide.md)、[`CHANGELOG.md`](CHANGELOG.md)、[`HANDOFF.md`](HANDOFF.md)。
 
 ## 產品與開源參考
 
