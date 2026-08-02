@@ -24,6 +24,12 @@ adb shell am start -n com.brianshih.mopria.android.scanprint/.MainActivity
 
 已使用的 AVD：`Brian_Pixel_8_API_36`。本機若沒有 SDK 設定，建立未追蹤的 `local.properties` 指向 Android SDK。
 
+## 2.1 GitHub 交付產物
+
+- 測試 APK：[`release/avi-print-scan.apk`](release/avi-print-scan.apk)
+- API 36 emulator 主畫面 JPEG：[`docs/screenshots/main-screens/`](docs/screenshots/main-screens/)
+- APK 使用本機 debug keystore 簽署，適合開發與 emulator 安裝；正式發布前必須換成產品簽章。
+
 ## 3. 重要程式位置
 
 | 檔案 | 責任 |

@@ -18,6 +18,7 @@
 - 新增文件 merge／split 純邏輯與測試。
 - 新增 `.workflow/escl-v2.97-compliance` 合規計畫、狀態與最終報告。
 - 新增 `HANDOFF.md`，記錄第三方接手所需架構、驗證與剩餘風險。
+- 新增 GitHub 可下載的 `release/avi-print-scan.apk` 及 7 張 API 36 emulator 主畫面 JPEG。
 
 ### Changed
 
@@ -54,6 +55,7 @@
 - 30 unit tests passed，0 failed。
 - Android lint：0 errors，9 non-blocking warnings。
 - Debug APK build passed。
+- Release APK build passed，並以 `apksigner verify` 驗證簽章。
 - API 36 emulator 通過 ADF 6 頁合併 PDF、Flatbed 2 頁逐頁合併、文件預覽／匯出、DocumentsUI 返回與列印頁返回流程。
 - Smoke flow logcat 無 app `FATAL EXCEPTION`。
 

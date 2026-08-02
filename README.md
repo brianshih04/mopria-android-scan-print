@@ -90,6 +90,21 @@ adb install -r .\app\build\outputs\apk\debug\app-debug.apk
 
 Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 
+## GitHub 可下載成果
+
+- 可安裝測試 APK：[avi-print-scan.apk](release/avi-print-scan.apk)（release build，以本機 debug keystore 簽署，供開發／emulator 測試；正式發布前需改用產品簽章）。
+- APK SHA-256：`384637E3FC34A25C324E1163C44BDBCD19D42D6B75624CA857DFA8EFE0E0E272`
+- 主畫面 JPEG：[`docs/screenshots/main-screens`](docs/screenshots/main-screens/)
+  - [首頁](docs/screenshots/main-screens/01-home.jpg)
+  - [Flatbed 掃描設定](docs/screenshots/main-screens/02-scan-flatbed.jpg)
+  - [ADF 掃描設定](docs/screenshots/main-screens/03-scan-adf.jpg)
+  - [文件庫](docs/screenshots/main-screens/04-documents.jpg)
+  - [列印檔案選擇器](docs/screenshots/main-screens/05-print-file-picker.jpg)
+  - [工作紀錄](docs/screenshots/main-screens/06-history.jpg)
+  - [設定](docs/screenshots/main-screens/07-settings.jpg)
+
+截圖來自 API 36 Android emulator；「列印檔案選擇器」是 Android DocumentsUI，其他畫面為本 App UI。
+
 ## 最新驗證紀錄
 
 2026-08-02 的最終本機驗證：
