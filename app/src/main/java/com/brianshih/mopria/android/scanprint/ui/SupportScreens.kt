@@ -29,14 +29,21 @@ import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -46,6 +53,8 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.IntegrationMode
 import com.brianshih.mopria.android.scanprint.domain.JobKind
 import com.brianshih.mopria.android.scanprint.domain.JobRecord
@@ -64,9 +73,9 @@ internal fun HistoryScreen(uiState: MopriaUiState) {
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("工作紀錄", style = MaterialTheme.typography.headlineSmall)
+                Text(stringResource(R.string.history_title), style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "${uiState.jobs.size} 筆 · ${uiState.jobs.count { it.status == JobStatus.Completed }} 完成",
+                    stringResource(R.string.history_summary, uiState.jobs.size, uiState.jobs.count { it.status == JobStatus.Completed }),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -106,7 +115,7 @@ private fun JobHistoryCard(job: JobRecord) {
                 Column(Modifier.weight(1f)) {
                     Text(job.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
-                        "${job.kind.label} · ${formatTime(job.createdAt)}",
+                        "${stringResource(job.kind.labelRes)} · ${formatTime(job.createdAt)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -150,7 +159,7 @@ private fun EmptyHistoryCard() {
                     Icon(Icons.Outlined.History, contentDescription = null, modifier = Modifier.size(30.dp))
                 }
             }
-            Text("還沒有工作紀錄", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.history_empty), style = MaterialTheme.typography.titleLarge)
         }
     }
 }
@@ -160,6 +169,8 @@ internal fun SettingsScreen(
     uiState: MopriaUiState,
     onModeChanged: (IntegrationMode) -> Unit,
     onFindDevices: () -> Unit,
+    selectedLanguage: AppLanguage,
+    onLanguageChanged: (AppLanguage) -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -167,21 +178,21 @@ internal fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item {
-            Text("連線模式", style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.settings_connection_mode), style = MaterialTheme.typography.headlineSmall)
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 ModeOptionCard(
-                    title = "測試模式",
-                    description = "內建裝置 · 離線",
+                    title = stringResource(R.string.mode_mock),
+                    description = stringResource(R.string.mode_mock_description),
                     icon = Icons.Outlined.Science,
                     selected = uiState.integrationMode == IntegrationMode.Mock,
                     enabled = !uiState.isBusy,
                     onClick = { onModeChanged(IntegrationMode.Mock) },
                 )
                 ModeOptionCard(
-                    title = "實體裝置",
-                    description = "eSCL 掃描 · Android 列印",
+                    title = stringResource(R.string.mode_real),
+                    description = stringResource(R.string.mode_real_description),
                     icon = Icons.Outlined.Wifi,
                     selected = uiState.integrationMode == IntegrationMode.Real,
                     enabled = !uiState.isBusy,
@@ -210,11 +221,13 @@ internal fun SettingsScreen(
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    if (uiState.devices.isEmpty()) "尚未找到裝置" else "找到 ${uiState.devices.size} 個裝置",
+                                    if (uiState.devices.isEmpty()) stringResource(R.string.settings_devices_not_found)
+                                    else stringResource(R.string.settings_devices_found, uiState.devices.size),
                                     style = MaterialTheme.typography.titleMedium,
                                 )
                                 Text(
-                                    if (uiState.devices.isEmpty()) "同一個 Wi‑Fi" else "eSCL 已連線",
+                                    if (uiState.devices.isEmpty()) stringResource(R.string.settings_same_wifi)
+                                    else stringResource(R.string.settings_escl_connected),
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
@@ -222,14 +235,14 @@ internal fun SettingsScreen(
                         Button(onClick = onFindDevices, enabled = !uiState.isBusy, modifier = Modifier.fillMaxWidth()) {
                             Icon(Icons.Outlined.Search, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text(if (uiState.isDiscovering) "搜尋中" else "搜尋裝置")
+                            Text(stringResource(if (uiState.isDiscovering) R.string.settings_searching else R.string.settings_search_devices))
                         }
                     }
                 }
             }
         }
         item {
-            SectionTitle("運作方式")
+            SectionTitle(stringResource(R.string.settings_operation))
         }
         item {
             Card(
@@ -239,26 +252,61 @@ internal fun SettingsScreen(
                 Column {
                     SettingInfoRow(
                         icon = Icons.Outlined.DocumentScanner,
-                        title = "掃描",
-                        detail = "eSCL · Flatbed / ADF",
+                        title = stringResource(R.string.settings_scan),
+                        detail = stringResource(R.string.settings_scan_detail),
                     )
                     HorizontalDivider(Modifier.padding(horizontal = 18.dp))
                     SettingInfoRow(
                         icon = Icons.Outlined.Print,
-                        title = "列印",
-                        detail = "Android 系統列印",
+                        title = stringResource(R.string.settings_print),
+                        detail = stringResource(R.string.settings_print_detail),
                     )
                     HorizontalDivider(Modifier.padding(horizontal = 18.dp))
                     SettingInfoRow(
                         icon = Icons.Outlined.Description,
-                        title = "檔案",
-                        detail = "Download/Mopria Scan & Print/Scans",
+                        title = stringResource(R.string.settings_files),
+                        detail = stringResource(R.string.settings_files_detail),
                     )
                     HorizontalDivider(Modifier.padding(horizontal = 18.dp))
                     SettingInfoRow(
                         icon = Icons.Outlined.Security,
-                        title = "隱私",
-                        detail = "本機 · 不備份",
+                        title = stringResource(R.string.settings_privacy),
+                        detail = stringResource(R.string.settings_privacy_detail),
+                    )
+                }
+            }
+        }
+        item {
+            LanguageSelector(selectedLanguage, onLanguageChanged)
+        }
+    }
+}
+
+@Composable
+private fun LanguageSelector(
+    selectedLanguage: AppLanguage,
+    onLanguageChanged: (AppLanguage) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.titleMedium)
+        Text(
+            stringResource(R.string.settings_language_detail),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Box {
+            OutlinedButton(onClick = { expanded = true }) {
+                Text(stringResource(selectedLanguage.labelRes))
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                AppLanguage.userSelectable.forEach { language ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(language.labelRes)) },
+                        onClick = {
+                            expanded = false
+                            onLanguageChanged(language)
+                        },
                     )
                 }
             }

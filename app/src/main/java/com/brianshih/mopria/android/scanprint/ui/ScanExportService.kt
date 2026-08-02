@@ -18,6 +18,7 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.FileProvider
 import androidx.core.graphics.createBitmap
 import androidx.core.net.toUri
+import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
 import com.brianshih.mopria.android.scanprint.domain.SavedScanFile
@@ -75,7 +76,7 @@ class ScanExportService(private val context: Context) {
                     DocumentPage(
                         id = "$base-page-$page",
                         pageNumber = page,
-                        title = "已儲存頁面 $page",
+                        title = LanguageManager.wrap(context).getString(R.string.document_saved_page, page),
                         imagePath = jpegFiles.getOrNull(page - 1)?.uri?.toString(),
                         pdfPath = pdf?.uri?.toString(),
                         pdfPageIndex = pdf?.let { page - 1 },

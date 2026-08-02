@@ -1,29 +1,35 @@
 package com.brianshih.mopria.android.scanprint.domain
 
-enum class DeviceKind(val label: String) {
-    Scanner("掃描器"),
-    Printer("印表機"),
+import androidx.annotation.StringRes
+import com.brianshih.mopria.android.scanprint.R
+
+enum class DeviceKind(@StringRes val labelRes: Int) {
+    Scanner(R.string.device_scanner),
+    Printer(R.string.device_printer),
 }
 
-enum class IntegrationMode(val label: String, val description: String) {
-    Mock("模擬模式", "使用內建 fixture，不需要實體設備"),
-    Real("真實模式", "使用區域網路探索實體設備"),
+enum class IntegrationMode(
+    @StringRes val labelRes: Int,
+    @StringRes val descriptionRes: Int,
+) {
+    Mock(R.string.mode_mock, R.string.mode_mock_description),
+    Real(R.string.mode_real, R.string.mode_real_description),
 }
 
 enum class ScanInputSource(
-    val label: String,
-    val shortLabel: String,
-    val description: String,
+    @StringRes val labelRes: Int,
+    @StringRes val shortLabelRes: Int,
+    @StringRes val descriptionRes: Int,
     val eSclValue: String,
 ) {
-    Flatbed("Flatbed 單頁", "Flatbed", "放在平面玻璃上，掃描一頁", "Platen"),
-    Adf("ADF 多頁", "ADF", "由自動送稿器連續掃描多頁", "Feeder"),
+    Flatbed(R.string.source_flatbed, R.string.source_flatbed_short, R.string.source_flatbed_description, "Platen"),
+    Adf(R.string.source_adf, R.string.source_adf_short, R.string.source_adf_description, "Feeder"),
 }
 
-enum class ScanColorMode(val label: String, val eSclValue: String) {
-    Color("彩色", "RGB24"),
-    Grayscale("灰階", "Grayscale8"),
-    BlackAndWhite("黑白", "BlackAndWhite1"),
+enum class ScanColorMode(@StringRes val labelRes: Int, val eSclValue: String) {
+    Color(R.string.color_color, "RGB24"),
+    Grayscale(R.string.color_grayscale, "Grayscale8"),
+    BlackAndWhite(R.string.color_black_white, "BlackAndWhite1"),
 }
 
 data class ScanSettings(
@@ -59,9 +65,9 @@ data class DocumentPage(
     val pdfPageIndex: Int? = null,
 )
 
-enum class ScanOutputFormat(val label: String, val extension: String) {
-    Pdf("PDF", "pdf"),
-    Jpeg("JPEG", "jpg"),
+enum class ScanOutputFormat(@StringRes val labelRes: Int, val extension: String) {
+    Pdf(R.string.format_pdf, "pdf"),
+    Jpeg(R.string.format_jpeg, "jpg"),
 }
 
 data class SavedScanFile(
@@ -80,18 +86,18 @@ data class MopriaDocument(
     val savedFiles: List<SavedScanFile> = emptyList(),
 )
 
-enum class JobKind(val label: String) {
-    Scan("掃描"),
-    Print("列印"),
-    Export("匯出"),
+enum class JobKind(@StringRes val labelRes: Int) {
+    Scan(R.string.job_scan),
+    Print(R.string.job_print),
+    Export(R.string.job_export),
 }
 
-enum class JobStatus(val label: String) {
-    Queued("排隊中"),
-    Running("處理中"),
-    Completed("已完成"),
-    Failed("失敗"),
-    Cancelled("已取消"),
+enum class JobStatus(@StringRes val labelRes: Int) {
+    Queued(R.string.status_queued),
+    Running(R.string.status_running),
+    Completed(R.string.status_completed),
+    Failed(R.string.status_failed),
+    Cancelled(R.string.status_cancelled),
 }
 
 data class JobRecord(

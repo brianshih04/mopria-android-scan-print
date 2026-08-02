@@ -24,7 +24,7 @@ class MockIntegrationProviderTest {
         val document = provider.scan(scanner, ScanSettings(inputSource = ScanInputSource.Flatbed))
 
         assertEquals(1, document.pages.size)
-        assertTrue(document.sourceLabel.contains("Flatbed"))
+        assertTrue(document.sourceLabel.contains("Platen"))
         assertEquals(listOf(1), document.pages.map { it.pageNumber })
     }
 
@@ -34,7 +34,7 @@ class MockIntegrationProviderTest {
         val document = provider.scan(scanner, ScanSettings(inputSource = ScanInputSource.Adf, maxPages = 4))
 
         assertEquals(4, document.pages.size)
-        assertTrue(document.sourceLabel.contains("ADF"))
+        assertTrue(document.sourceLabel.contains("Feeder"))
         assertEquals(listOf(1, 2, 3, 4), document.pages.map { it.pageNumber })
     }
 

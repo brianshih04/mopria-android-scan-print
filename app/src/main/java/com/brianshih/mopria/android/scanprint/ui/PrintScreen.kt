@@ -29,7 +29,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.brianshih.mopria.android.scanprint.R
 
 @Composable
 internal fun PrintScreen(
@@ -42,7 +44,7 @@ internal fun PrintScreen(
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item {
-            Text("選擇列印內容", style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.print_choose_content), style = MaterialTheme.typography.headlineSmall)
         }
         item {
             Card(
@@ -68,10 +70,10 @@ internal fun PrintScreen(
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Icon(Icons.Outlined.PictureAsPdf, contentDescription = "PDF")
-                        Icon(Icons.Outlined.Image, contentDescription = "JPEG 或 PNG")
+                        Icon(Icons.Outlined.PictureAsPdf, contentDescription = stringResource(R.string.print_pdf_accessibility))
+                        Icon(Icons.Outlined.Image, contentDescription = stringResource(R.string.print_image_accessibility))
                         Text(
-                            "PDF · JPEG · PNG",
+                            stringResource(R.string.print_file_types),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
@@ -79,7 +81,7 @@ internal fun PrintScreen(
                     Button(onClick = onChooseFiles, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Outlined.FolderOpen, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("從手機選擇")
+                        Text(stringResource(R.string.print_choose_from_phone))
                     }
                 }
             }
@@ -88,7 +90,7 @@ internal fun PrintScreen(
             OutlinedButton(onClick = onOpenDocuments, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.Description, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("已掃描文件")
+                Text(stringResource(R.string.print_scanned_documents))
             }
         }
     }

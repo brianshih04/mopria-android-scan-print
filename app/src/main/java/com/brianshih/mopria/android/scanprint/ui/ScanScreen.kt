@@ -34,11 +34,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
 import com.brianshih.mopria.android.scanprint.domain.ScanColorMode
 import com.brianshih.mopria.android.scanprint.domain.ScanInputSource
@@ -62,10 +64,10 @@ internal fun ScanScreen(
         AlertDialog(
             onDismissRequest = {},
             icon = { Icon(Icons.Outlined.PictureAsPdf, contentDescription = null) },
-            title = { Text("第 $pageCount 頁完成") },
-            text = { Text("換上下一頁繼續掃描，或完成並儲存為單一 PDF。") },
-            confirmButton = { TextButton(onClick = onContinueFlatbed) { Text("下一頁") } },
-            dismissButton = { TextButton(onClick = onFinishFlatbed) { Text("完成 PDF") } },
+            title = { Text(stringResource(R.string.scan_page_complete_title, pageCount)) },
+            text = { Text(stringResource(R.string.scan_page_complete_message)) },
+            confirmButton = { TextButton(onClick = onContinueFlatbed) { Text(stringResource(R.string.scan_next_page)) } },
+            dismissButton = { TextButton(onClick = onFinishFlatbed) { Text(stringResource(R.string.scan_finish_pdf)) } },
         )
     }
     LazyColumn(
@@ -73,7 +75,7 @@ internal fun ScanScreen(
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        item { Text("掃描文件", style = MaterialTheme.typography.headlineSmall) }
+        item { Text(stringResource(R.string.scan_title), style = MaterialTheme.typography.headlineSmall) }
         item {
             ScanComposerCard(
                 settings = uiState.scanSettings,
@@ -94,6 +96,16 @@ private fun ScanComposerCard(
     onChanged: (ScanSettings) -> Unit,
     onScan: () -> Unit,
 ) {
+    var summary = stringResource(
+        R.string.scan_summary_format,
+        stringResource(settings.inputSource.shortLabelRes),
+        settings.resolutionDpi,
+        stringResource(settings.colorMode.labelRes),
+    )
+    if (settings.inputSource == ScanInputSource.Adf) {
+        summary = stringResource(R.string.scan_summary_adf_pages, summary, settings.maxPages)
+    }
+    if (settings.combineAsPdf) summary = stringResource(R.string.scan_summary_pdf, summary)
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
@@ -118,13 +130,9 @@ private fun ScanComposerCard(
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("掃描設定", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.scan_settings), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        buildString {
-                            append("${settings.inputSource.shortLabel} · ${settings.resolutionDpi} dpi · ${settings.colorMode.label}")
-                            if (settings.inputSource == ScanInputSource.Adf) append(" · 最多 ${settings.maxPages} 頁")
-                            if (settings.combineAsPdf) append(" · PDF")
-                        },
+                        summary,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -132,7 +140,7 @@ private fun ScanComposerCard(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("文件來源", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.scan_source), style = MaterialTheme.typography.labelLarge)
                 ScanInputSource.entries.forEach { source ->
                     SourceOption(
                         source = source,
@@ -150,7 +158,11 @@ private fun ScanComposerCard(
                 enabled = enabled,
                 leadingIcon = { Icon(Icons.Outlined.PictureAsPdf, contentDescription = null) },
                 label = {
-                    Text(if (settings.inputSource == ScanInputSource.Flatbed) "逐頁合併 PDF" else "合併為多頁 PDF")
+                    Text(
+                        stringResource(
+                            if (settings.inputSource == ScanInputSource.Flatbed) R.string.scan_combine_flatbed else R.string.scan_combine_adf,
+                        ),
+                    )
                 },
             )
 
@@ -161,8 +173,8 @@ private fun ScanComposerCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("頁數上限", style = MaterialTheme.typography.labelLarge)
-                        Text("${settings.maxPages} 頁", color = MaterialTheme.colorScheme.primary)
+                        Text(stringResource(R.string.scan_page_limit), style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.scan_page_count, settings.maxPages), color = MaterialTheme.colorScheme.primary)
                     }
                     Slider(
                         value = settings.maxPages.toFloat(),
@@ -175,7 +187,7 @@ private fun ScanComposerCard(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("解析度", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.scan_resolution), style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(150, 300, 600).forEach { dpi ->
                         FilterChip(
@@ -189,14 +201,14 @@ private fun ScanComposerCard(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("色彩", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.scan_color), style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ScanColorMode.entries.forEach { colorMode ->
                         FilterChip(
                             selected = settings.colorMode == colorMode,
                             onClick = { onChanged(settings.copy(colorMode = colorMode)) },
                             enabled = enabled,
-                            label = { Text(colorMode.label) },
+                            label = { Text(stringResource(colorMode.labelRes)) },
                         )
                     }
                 }
@@ -210,7 +222,7 @@ private fun ScanComposerCard(
             ) {
                 Icon(Icons.Outlined.DocumentScanner, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("開始掃描")
+                Text(stringResource(R.string.scan_start))
             }
         }
     }
@@ -249,9 +261,10 @@ private fun SourceOption(
             RadioButton(selected = selected, onClick = null, enabled = enabled)
             Spacer(Modifier.width(8.dp))
             Column {
-                Text(source.label, style = MaterialTheme.typography.bodyLarge)
+                Text(stringResource(source.labelRes), style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    if (source == ScanInputSource.Flatbed) "單頁" else "多頁 · 最多 $maxPages 頁",
+                    if (source == ScanInputSource.Flatbed) stringResource(R.string.scan_single_page)
+                    else stringResource(R.string.scan_multiple_pages_max, maxPages),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

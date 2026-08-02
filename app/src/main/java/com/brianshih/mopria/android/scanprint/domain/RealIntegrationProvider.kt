@@ -211,7 +211,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                 val finalFile = File(directory, "real-scan-$scanId-page-${index + 1}.$extension")
                 if (!payload.file.renameTo(finalFile)) {
                     payload.file.delete()
-                    error("無法保存掃描頁面 ${index + 1}")
+                    error("Could not save scanned page ${index + 1}")
                 }
                 payloads += payload.copy(file = finalFile)
             }
@@ -248,12 +248,12 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                 }
             }
                 .take(pageLimit)
-                .mapIndexed { index, page -> page.copy(pageNumber = index + 1, title = "掃描頁 ${index + 1}") }
+                .mapIndexed { index, page -> page.copy(pageNumber = index + 1, title = "Scanned page ${index + 1}") }
 
             MopriaDocument(
                 id = "real-scan-$scanId",
-                name = "真實掃描文件 ${scanId.toString().takeLast(4)}",
-                sourceLabel = "${scanner.name} · eSCL · ${settings.inputSource.shortLabel} · ${resolutionLabel(negotiated)} · ${colorModeLabel(negotiated.colorMode)}",
+                name = "Scanned document ${scanId.toString().takeLast(4)}",
+                sourceLabel = "${scanner.name} · eSCL · ${settings.inputSource.eSclValue} · ${resolutionLabel(negotiated)} · ${colorModeLabel(negotiated.colorMode)}",
                 pages = pages,
                 createdAt = scanId,
             )
@@ -373,7 +373,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
 
         fun colorModeLabel(value: String): String = ScanColorMode.entries
             .firstOrNull { it.eSclValue.equals(value, ignoreCase = true) }
-            ?.label
+            ?.eSclValue
             ?: value
 
         fun resolutionLabel(settings: EsclNegotiatedSettings): String = if (settings.resolution == settings.yResolution) {

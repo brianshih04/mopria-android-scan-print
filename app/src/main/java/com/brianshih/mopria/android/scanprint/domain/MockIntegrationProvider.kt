@@ -34,13 +34,13 @@ class MockIntegrationProvider : DeviceDiscovery, ScanAcquisitionProvider, PrintP
         val pageCount = if (settings.inputSource == ScanInputSource.Flatbed) 1 else settings.maxPages.coerceIn(1, 50)
         return MopriaDocument(
             id = "scan-$timestamp",
-            name = "模擬掃描文件 ${timestamp.toString().takeLast(4)}",
-            sourceLabel = "${scanner.name} · 模擬 eSCL · ${settings.inputSource.shortLabel} · ${settings.resolutionDpi} dpi · ${settings.colorMode.label}",
+            name = "Mock scan document ${timestamp.toString().takeLast(4)}",
+            sourceLabel = "${scanner.name} · Mock eSCL · ${settings.inputSource.eSclValue} · ${settings.resolutionDpi} dpi · ${settings.colorMode.eSclValue}",
             pages = (1..pageCount).map { page ->
                 DocumentPage(
                     "$timestamp-page-$page",
                     page,
-                    if (page == 1) "封面與摘要" else if (page == 2) "內容頁" else "附錄",
+                    if (page == 1) "Cover and summary" else if (page == 2) "Content page" else "Appendix",
                 )
             },
             createdAt = timestamp,

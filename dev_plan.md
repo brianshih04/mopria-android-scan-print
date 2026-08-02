@@ -25,6 +25,7 @@
 | 列印 | Android `PrintManager`／`PrintDocumentAdapter`；不自行探索或傳送 IPP |
 | 文件輸出 | Android `PdfDocument`、MediaStore、FileProvider、Sharesheet |
 | Mock／Real | 共用 domain model 與 UI，以 provider 切換實作 |
+| 多國語言 | Android string resources；系統語系自動選擇、English fallback、設定頁手動覆寫 |
 
 目前沒有 Hilt、Room、WorkManager 或多 module；若加入，必須以工作持久化或可測試性需求驅動，不做無目的架構搬移。
 
@@ -38,6 +39,7 @@
 - 列印頁有明確返回鍵；Android DocumentsUI 取消後返回 App 列印頁。
 - 文件頁提供實際縮圖、放大預覽、PDF／JPEG、列印與分享。
 - Mock／Real 模式可切換並保存。
+- UI、ViewModel 狀態訊息與文件顯示支援 10 種語言；系統語系不支援時 fallback English，使用者可手動覆寫。
 
 ### 掃描工作流
 
@@ -82,8 +84,9 @@
 |---|---|---|
 | M0 App shell／Mock／Print Framework | 完成 | 可建置、Mock scan、文件輸出、系統列印預覽 |
 | M1 現代化 UI／UX | 完成 | 清楚導覽、scan/documents 分離、返回行為、縮圖與分享 |
-| M2 eSCL v2.97 pull-scan client | 程式與 fixture 完成 | 30 unit tests、lint、build；尚缺實機 |
+| M2 eSCL v2.97 pull-scan client | 程式與 fixture 完成 | 34 unit tests、lint、build；尚缺實機 |
 | M3 Flatbed／ADF 多頁 PDF | Mock／UI 完成 | Flatbed 2 頁、ADF 6 頁 emulator smoke |
+| M3.1 多國語言 | 完成 | 10 種 resource locale、系統偵測、English fallback、手動選擇與 JVM tests |
 | M4 實體跨品牌驗收 | 待辦 | 至少兩個 scanner 品牌與兩個 printer 品牌 |
 | M5 文件編輯／持久工作 | 待辦 | 裁切、旋轉、排序、背景恢復、大型文件 |
 | M6 Beta 品質 | 待辦 | TalkBack、平板、效能、隱私、Play 測試 |
@@ -114,13 +117,14 @@
 
 ## 7. 自動測試計畫
 
-目前 30 個 JVM tests 涵蓋：
+目前 JVM tests 涵蓋：
 
 - eSCL namespace／Version／XXE、source profile、format、resolution range、ADF `NumberOfPages`。
 - ScannerStatus／JobInfo、Location URL policy。
 - DNS-SD TXT parsing、root sanitation、secure deduplication。
 - HTTP 201、200、404、503、401、DELETE、TE、PDF／JPEG signature 與錯誤 status。
 - Mock Flatbed／ADF 頁數及文件 merge／split 規則。
+- 語系 tag、繁／簡中文 script／region 判斷與未知語系 fallback。
 
 後續需補：
 

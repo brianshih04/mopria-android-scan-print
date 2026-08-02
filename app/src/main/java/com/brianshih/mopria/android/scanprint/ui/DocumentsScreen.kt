@@ -49,6 +49,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -57,6 +58,7 @@ import com.brianshih.mopria.android.scanprint.domain.DocumentPage
 import com.brianshih.mopria.android.scanprint.domain.IntegrationMode
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
+import com.brianshih.mopria.android.scanprint.R
 
 @Composable
 internal fun DocumentsScreen(
@@ -76,9 +78,9 @@ internal fun DocumentsScreen(
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("我的文件", style = MaterialTheme.typography.headlineSmall)
+                Text(stringResource(R.string.documents_my_files), style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "${uiState.documents.size} 份",
+                    stringResource(R.string.documents_count, uiState.documents.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -149,7 +151,7 @@ private fun DocumentCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        "${document.pages.size} 頁 · ${document.sourceLabel}",
+                        stringResource(R.string.documents_page_source, document.pages.size, document.sourceLabel),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
@@ -174,7 +176,7 @@ private fun DocumentCard(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "已儲存 ${document.savedFiles.size} 個檔案",
+                        stringResource(R.string.documents_saved_files, document.savedFiles.size),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.secondary,
                     )
@@ -189,7 +191,7 @@ private fun DocumentCard(
                 ) {
                     Icon(Icons.Outlined.Print, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text("列印")
+                    Text(stringResource(R.string.documents_print))
                 }
                 OutlinedButton(
                     onClick = { onShare(document.id) },
@@ -198,7 +200,7 @@ private fun DocumentCard(
                 ) {
                     Icon(Icons.Outlined.Share, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text("分享")
+                    Text(stringResource(R.string.documents_share))
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -227,7 +229,7 @@ private fun DocumentCard(
                     enabled = enabled,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("在系統列印預覽中檢查")
+                    Text(stringResource(R.string.documents_system_preview))
                 }
             }
         }
@@ -254,7 +256,7 @@ private fun PageThumbnail(page: DocumentPage, onClick: () -> Unit) {
             PagePreview(page = page, requestedWidth = 420, requestedHeight = 568)
         }
         Text(
-            "${page.pageNumber}  ${page.title}",
+            stringResource(R.string.documents_page_label, page.pageNumber, page.title),
             modifier = Modifier.padding(horizontal = 2.dp),
             style = MaterialTheme.typography.labelMedium,
             maxLines = 1,
@@ -292,7 +294,7 @@ private fun PagePreview(
         when {
             bitmap != null -> Image(
                 bitmap = bitmap.asImageBitmap(),
-                contentDescription = "第 ${page.pageNumber} 頁掃描結果",
+                contentDescription = stringResource(R.string.documents_scan_result, page.pageNumber),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Fit,
             )
@@ -334,7 +336,7 @@ private fun MockPagePreview(page: DocumentPage) {
         }
         Spacer(Modifier.weight(1f))
         Text(
-            "模擬 · ${page.pageNumber}",
+            stringResource(R.string.documents_mock_page, page.pageNumber),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -356,14 +358,14 @@ private fun PagePreviewDialog(page: DocumentPage, onDismiss: () -> Unit) {
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "${page.pageNumber} · ${page.title}",
+                        stringResource(R.string.documents_page_label, page.pageNumber, page.title),
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Outlined.Close, contentDescription = "關閉預覽")
+                        Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.documents_close_preview))
                     }
                 }
                 Surface(
@@ -402,7 +404,7 @@ private fun EmptyDocumentState() {
                     Icon(Icons.Outlined.Description, contentDescription = null, modifier = Modifier.size(30.dp))
                 }
             }
-            Text("還沒有文件", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.documents_empty), style = MaterialTheme.typography.titleLarge)
         }
     }
 }

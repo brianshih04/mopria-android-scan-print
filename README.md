@@ -2,7 +2,7 @@
 
 Kotlin／Jetpack Compose Android App，透過 eSCL（AirScan）掃描文件，並透過 Android Print Framework 列印手機檔案或掃描結果。專案目前版本為 `0.1.0`，`minSdk 28`、`targetSdk 36`。
 
-> 目前狀態（2026-08-02）：Mock 模式、eSCL pull-scan client、Flatbed／ADF 多頁工作流、PDF／JPEG 文件庫及 Android 系統列印入口均已完成並通過模擬器驗證。真實掃描器與印表機的跨品牌驗收仍待實體硬體。
+> 目前狀態（2026-08-02）：Mock 模式、eSCL pull-scan client、Flatbed／ADF 多頁工作流、PDF／JPEG 文件庫、Android 系統列印入口及 10 種語言 UI 均已完成並通過建置／測試驗證。真實掃描器與印表機的跨品牌驗收仍待實體硬體。
 
 ## Android／Mopria 技術邊界
 
@@ -20,6 +20,7 @@ Android 沒有一個同時提供 Mopria 掃描與列印的公開「Mopria API」
 
 - 現代化、icon-first 的 Compose／Material 3 主畫面。
 - 可切換「模擬模式」與「真實模式」，選擇與掃描設定會保存在本機。
+- 支援 English、日本語、한국어、Español、Português、Deutsch、Français、Русский、繁體中文、简体中文；預設依 Android 系統語系選擇，未支援的系統語系 fallback English，使用者也能在設定中手動覆寫。
 - 「掃描文件」進入專用掃描設定；「文件」只顯示既有掃描結果。
 - Flatbed：
   - 一般單頁掃描。
@@ -34,6 +35,27 @@ Android 沒有一個同時提供 Mopria 掃描與列印的公開「Mopria API」
 - 文件可輸出 PDF／JPEG、透過 Android Sharesheet 分享，或直接送往系統列印預覽。
 - 手機資料夾可選一個或多個 PDF／JPEG／PNG 列印；取消系統選檔會回到 App 列印頁，列印頁可回首頁。
 - Android 10+ 透過 MediaStore 寫入 `Download/Mopria Scan & Print/Scans`；Android 9 僅在需要時要求舊版儲存權限。
+
+## 多國語言
+
+App 使用 Android resource qualifiers 管理翻譯，不在 Compose 畫面中硬編碼可見文字。啟動時會依序檢查使用者手動選擇與 Android 系統語系；系統語系不在支援清單時使用 English。手動選擇會在設定頁立即套用並重新建立 Activity，選擇「依系統設定」即可恢復自動判斷。
+
+支援語系與資源目錄如下：
+
+| 語系 | Android resource |
+|---|---|
+| English | `res/values/` |
+| 日本語 | `res/values-ja/` |
+| 한국어 | `res/values-ko/` |
+| Español | `res/values-es/` |
+| Português | `res/values-pt/` |
+| Deutsch | `res/values-de/` |
+| Français | `res/values-fr/` |
+| Русский | `res/values-ru/` |
+| 繁體中文 | `res/values-zh-rTW/` |
+| 简体中文 | `res/values-zh-rCN/` |
+
+語系選擇器的判斷與 fallback 位於 `ui/LanguageManager.kt`；`MainActivity` 會在 `attachBaseContext` 套用 locale，ViewModel 產生的背景事件也使用相同設定。
 
 ## eSCL v2.97 實作範圍
 
@@ -69,7 +91,7 @@ MopriaAndroidScanPrint/
 │     │  ├─ java/com/.../MainActivity.kt App 入口與 Compose content
 │     │  ├─ java/com/.../domain/        eSCL、探索、掃描工作與文件模型
 │     │  ├─ java/com/.../ui/            Compose 畫面、ViewModel、匯出與列印
-│     │  └─ res/                        App icon、字串、theme、備份與網路設定
+│     │  └─ res/                        App icon、多國語言字串、theme、備份與網路設定
 │     └─ test/                           domain 純邏輯與協定單元測試
 ├─ docs/screenshots/main-screens/       API 36 emulator 主畫面 JPEG
 ├─ release/avi-print-scan.apk           可安裝測試 APK
@@ -115,6 +137,7 @@ MopriaAndroidScanPrint/
 | 檔案 | 責任 |
 |---|---|
 | `MopriaApp.kt` | App destination、TopAppBar、底部導覽、Android file picker 與 system print launcher。 |
+| `LanguageManager.kt` | 系統語系偵測、10 種語言手動覆寫與 English fallback。 |
 | `MopriaViewModel.kt` | 模式切換、discovery、scan、文件儲存、匯出、分享與列印狀態協調。 |
 | `HomeScreen.kt` | 首頁掃描、列印、裝置與最近工作卡片。 |
 | `ScanScreen.kt` | Flatbed／ADF、dpi、色彩、ADF 頁數上限與 PDF 合併設定。 |
@@ -128,7 +151,7 @@ MopriaAndroidScanPrint/
 
 ### 測試、文件與產物
 
-- `app/src/test/.../domain/`：測試 discovery、eSCL XML／HTTP、Mock provider 與文件合併規則；不需連接真實設備即可執行。
+- `app/src/test/.../domain/`、`app/src/test/.../ui/`：測試 discovery、eSCL XML／HTTP、Mock provider、文件合併規則與語系 fallback；不需連接真實設備即可執行。
 - `docs/screenshots/main-screens/`：首頁、Flatbed、ADF、文件、列印檔案選擇器、紀錄與設定的 JPEG 參考畫面。
 - `release/avi-print-scan.apk`：以本機 debug keystore 簽署的 release build，供開發／emulator 測試；正式發布必須換產品簽章。
 - `app/build/`：Gradle 產生的暫存、測試報告與 APK 輸出，通常被 `.gitignore` 忽略，不應手動提交。
@@ -151,7 +174,7 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 ## GitHub 可下載成果
 
 - 可安裝測試 APK：[avi-print-scan.apk](release/avi-print-scan.apk)（release build，以本機 debug keystore 簽署，供開發／emulator 測試；正式發布前需改用產品簽章）。
-- APK SHA-256：`384637E3FC34A25C324E1163C44BDBCD19D42D6B75624CA857DFA8EFE0E0E272`
+- APK SHA-256：`BE82F63EFDB607C60A4C081C8BE78B15252B374652FD0C43081780F4A99AF9AD`
 - 主畫面 JPEG：[`docs/screenshots/main-screens`](docs/screenshots/main-screens/)
   - [首頁](docs/screenshots/main-screens/01-home.jpg)
   - [Flatbed 掃描設定](docs/screenshots/main-screens/02-scan-flatbed.jpg)
@@ -167,11 +190,13 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 
 2026-08-02 的最終本機驗證：
 
-- Unit tests：30 passed，0 failed。
-- Android lint：0 errors，9 warnings（dependency update 與 Kotlin extension 建議；無 blocker）。
+- Unit tests：34 passed，0 failed。
+- Android lint：0 errors，34 warnings（dependency update、Kotlin annotation／extension 與 pluralization 建議；無 blocker）。
 - `:app:assembleDebug`：passed。
+- `:app:assembleRelease`：passed；release APK 已簽署並通過 `apksigner verify`。
 - `git diff --check`：passed。
 - Emulator：`Brian_Pixel_8_API_36`／API 36。
+- 語系 smoke：清除資料後系統 en-US 顯示 English；設定頁列出 10 種語言；手動切換 Japanese 與 Simplified Chinese 後設定頁與導覽文字更新。
 - ADF mock：將頁數改為 6，驗證合併為一份 6 頁 PDF 文件及公開 Download 匯出。
 - Flatbed mock：連續掃描 2 頁，驗證「下一頁」／「完成 PDF」與 2 頁文件結果。
 - 列印導覽：App 列印頁 → Android DocumentsUI → 返回列印頁 → 返回首頁。

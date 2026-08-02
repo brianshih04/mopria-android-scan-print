@@ -111,7 +111,7 @@ class EsclHttpClient(
                 } else {
                     val contentLength = connection.contentLengthLong
                     require(contentLength <= MAX_DOCUMENT_BYTES || contentLength < 0L) {
-                        "掃描頁面超過 ${MAX_DOCUMENT_BYTES / 1_048_576} MB 上限"
+                        "Scanned page exceeds the ${MAX_DOCUMENT_BYTES / 1_048_576} MB limit"
                     }
                     destination.parentFile?.mkdirs()
                     connection.inputStream.use { input ->

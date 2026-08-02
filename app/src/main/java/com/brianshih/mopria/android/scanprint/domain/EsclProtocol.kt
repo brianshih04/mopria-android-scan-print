@@ -199,7 +199,7 @@ object EsclProtocol {
     fun negotiate(capabilities: EsclCapabilities, settings: ScanSettings): EsclNegotiatedSettings {
         if (settings.inputSource == ScanInputSource.Adf) {
             require(settings.maxPages in 1..MAX_REQUESTED_PAGES) {
-                "ADF 掃描頁數必須介於 1 到 $MAX_REQUESTED_PAGES 頁"
+                "ADF page count must be between 1 and $MAX_REQUESTED_PAGES"
             }
         }
         val source = settings.inputSource.eSclValue
@@ -216,7 +216,7 @@ object EsclProtocol {
                     ?.nearestResolution(settings.colorMode.eSclValue, settings.resolutionDpi)
                     ?.let { Triple(profile, format, it) }
             }
-        } ?: error("掃描器不支援 ${settings.inputSource.shortLabel}／${settings.colorMode.label} 的 JPEG 或 PDF 組合")
+        } ?: error("Scanner does not support ${settings.inputSource.eSclValue}/${settings.colorMode.eSclValue} JPEG or PDF combination")
         val resolution = selection.third
         return EsclNegotiatedSettings(
             version = compatibleVersion(capabilities.version),

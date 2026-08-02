@@ -1,6 +1,7 @@
 package com.brianshih.mopria.android.scanprint.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
@@ -47,19 +48,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.IntegrationMode
 
-internal enum class AppDestination(val label: String, val icon: ImageVector) {
-    Home("首頁", Icons.Filled.Home),
-    Scan("掃描", Icons.Outlined.DocumentScanner),
-    Print("列印", Icons.Outlined.Print),
-    Documents("文件", Icons.Filled.Description),
-    History("紀錄", Icons.Filled.History),
-    Settings("設定", Icons.Filled.Settings),
+internal enum class AppDestination(val labelRes: Int, val icon: ImageVector) {
+    Home(R.string.nav_home, Icons.Filled.Home),
+    Scan(R.string.nav_scan, Icons.Outlined.DocumentScanner),
+    Print(R.string.nav_print, Icons.Outlined.Print),
+    Documents(R.string.nav_documents, Icons.Filled.Description),
+    History(R.string.nav_history, Icons.Filled.History),
+    Settings(R.string.nav_settings, Icons.Filled.Settings),
 }
 
 private enum class PendingExportKind { Pdf, Jpeg }
@@ -71,7 +75,9 @@ private data class PendingExport(val documentId: String, val kind: PendingExport
 fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val resources = LocalResources.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val selectedLanguage = LanguageManager.currentOverride(context)
     var selectedDestinationName by rememberSaveable { mutableStateOf(AppDestination.Home.name) }
     var pendingExport by remember { mutableStateOf<PendingExport?>(null) }
     val selectedDestination = AppDestination.entries
@@ -89,7 +95,9 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
         }.onSuccess { printJob ->
             viewModel.monitorSystemPrint(printJob, title)
         }.onFailure { error ->
-            viewModel.reportMessage("無法開啟系統列印：${error.message ?: "請確認列印服務已啟用"}")
+            viewModel.reportMessage(
+                resources.getString(R.string.event_open_print_failed, error.message ?: resources.getString(R.string.common_retry)),
+            )
         }
     }
 
@@ -97,7 +105,11 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
         ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris ->
         if (uris.isNotEmpty()) {
-            val title = if (uris.size == 1) "手機文件" else "手機文件（${uris.size} 個）"
+            val title = if (uris.size == 1) {
+                resources.getString(R.string.print_phone_document)
+            } else {
+                resources.getString(R.string.print_phone_documents, uris.size)
+            }
             selectedDestinationName = AppDestination.Home.name
             openPrint(title, UriPrintAdapter(context, uris, title))
         }
@@ -113,7 +125,7 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                 PendingExportKind.Jpeg -> viewModel.saveJpegs(request.documentId)
             }
         } else if (!granted) {
-            viewModel.reportMessage("Android 9 需要儲存權限才能寫入 Download 資料夾")
+            viewModel.reportMessage(resources.getString(R.string.event_android9_storage_permission))
         }
     }
 
@@ -150,9 +162,11 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             runCatching {
-                context.startActivity(Intent.createChooser(sendIntent, "分享 ${request.title}"))
+                context.startActivity(Intent.createChooser(sendIntent, resources.getString(R.string.documents_share) + " ${request.title}"))
             }.onFailure { error ->
-                viewModel.reportMessage("無法開啟分享選單：${error.message ?: "沒有可用的 App"}")
+                viewModel.reportMessage(
+                    resources.getString(R.string.event_share_open_failed, error.message ?: resources.getString(R.string.common_retry)),
+                )
             }
         }
     }
@@ -161,10 +175,10 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
         topBar = {
             if (selectedDestination != AppDestination.Home) {
                 TopAppBar(
-                    title = { Text(selectedDestination.label, style = MaterialTheme.typography.titleLarge) },
+                    title = { Text(stringResource(selectedDestination.labelRes), style = MaterialTheme.typography.titleLarge) },
                     navigationIcon = {
                         IconButton(onClick = { selectedDestinationName = AppDestination.Home.name }) {
-                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "回到首頁")
+                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back_home))
                         }
                     },
                     actions = {
@@ -175,7 +189,7 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                                 } else {
                                     Icons.Outlined.Wifi
                                 },
-                                contentDescription = "連線模式",
+                                contentDescription = stringResource(R.string.connection_mode),
                             )
                         }
                     },
@@ -194,7 +208,7 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                         selected = destination == selectedDestination,
                         onClick = { selectedDestinationName = destination.name },
                         icon = { Icon(destination.icon, contentDescription = null) },
-                        label = { Text(destination.label) },
+                        label = { Text(stringResource(destination.labelRes)) },
                     )
                 }
             }
@@ -249,6 +263,11 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                     uiState = uiState,
                     onModeChanged = viewModel::setIntegrationMode,
                     onFindDevices = viewModel::discoverDevices,
+                    selectedLanguage = selectedLanguage,
+                    onLanguageChanged = { language ->
+                        LanguageManager.setOverride(context, language)
+                        (context as? Activity)?.recreate()
+                    },
                 )
             }
         }

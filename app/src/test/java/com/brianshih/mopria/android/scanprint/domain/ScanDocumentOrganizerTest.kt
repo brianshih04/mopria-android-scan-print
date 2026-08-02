@@ -16,7 +16,7 @@ class ScanDocumentOrganizerTest {
         assertEquals("first", merged.id)
         assertEquals(listOf(1, 2), merged.pages.map(DocumentPage::pageNumber))
         assertEquals(listOf("p1", "p2"), merged.pages.map(DocumentPage::id))
-        assertTrue(merged.sourceLabel.endsWith("多頁 PDF"))
+        assertTrue(merged.sourceLabel.endsWith("Multi-page PDF"))
     }
 
     @Test

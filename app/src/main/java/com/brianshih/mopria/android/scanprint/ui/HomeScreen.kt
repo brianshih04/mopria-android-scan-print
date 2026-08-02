@@ -40,15 +40,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.JobKind
 import com.brianshih.mopria.android.scanprint.domain.JobRecord
 import com.brianshih.mopria.android.scanprint.domain.JobStatus
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
+import com.brianshih.mopria.android.scanprint.domain.ScanInputSource
 
 @Composable
 internal fun HomeScreen(
@@ -110,19 +113,19 @@ private fun DashboardHeader(uiState: MopriaUiState, onOpenSettings: () -> Unit) 
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Mopria", style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineSmall)
             Text(
                 when {
-                    uiState.isBusy -> "處理中"
-                    uiState.mockMode -> "模擬模式"
-                    else -> "實體裝置"
+                    uiState.isBusy -> stringResource(R.string.home_busy)
+                    uiState.mockMode -> stringResource(R.string.home_test_mode)
+                    else -> stringResource(R.string.home_physical_devices)
                 },
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         IconButton(onClick = onOpenSettings) {
-            Icon(Icons.Outlined.Tune, contentDescription = "連線模式")
+            Icon(Icons.Outlined.Tune, contentDescription = stringResource(R.string.connection_mode))
         }
     }
 }
@@ -130,6 +133,22 @@ private fun DashboardHeader(uiState: MopriaUiState, onOpenSettings: () -> Unit) 
 @Composable
 private fun ScanHeroCard(uiState: MopriaUiState, onClick: () -> Unit) {
     val activeJob = uiState.jobs.firstOrNull { it.id == uiState.activeJobId }
+    val activeDetail = activeJob?.detail
+    val scanSummary = if (activeDetail != null) {
+        activeDetail
+    } else {
+        var summary = stringResource(
+            R.string.scan_summary_format,
+            stringResource(uiState.scanSettings.inputSource.shortLabelRes),
+            uiState.scanSettings.resolutionDpi,
+            stringResource(uiState.scanSettings.colorMode.labelRes),
+        )
+        if (uiState.scanSettings.inputSource == ScanInputSource.Adf) {
+            summary = stringResource(R.string.scan_summary_adf_pages, summary, uiState.scanSettings.maxPages)
+        }
+        if (uiState.scanSettings.combineAsPdf) summary = stringResource(R.string.scan_summary_pdf, summary)
+        summary
+    }
     Card(
         onClick = onClick,
         modifier = Modifier
@@ -164,16 +183,9 @@ private fun ScanHeroCard(uiState: MopriaUiState, onClick: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                Text("掃描文件", style = MaterialTheme.typography.headlineMedium, color = Color.White)
+                Text(stringResource(R.string.home_scan_document), style = MaterialTheme.typography.headlineMedium, color = Color.White)
                 Text(
-                    activeJob?.detail
-                        ?: buildString {
-                            append("${uiState.scanSettings.inputSource.shortLabel} · ${uiState.scanSettings.resolutionDpi} dpi · ${uiState.scanSettings.colorMode.label}")
-                            if (uiState.scanSettings.inputSource == com.brianshih.mopria.android.scanprint.domain.ScanInputSource.Adf) {
-                                append(" · ${uiState.scanSettings.maxPages} 頁")
-                            }
-                            if (uiState.scanSettings.combineAsPdf) append(" · PDF")
-                        },
+                    scanSummary,
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color.White.copy(alpha = 0.82f),
                     maxLines = 1,
@@ -209,8 +221,8 @@ private fun PrintWidget(modifier: Modifier = Modifier, onClick: () -> Unit) {
                 }
             }
             Spacer(Modifier.weight(1f))
-            Text("列印", style = MaterialTheme.typography.titleLarge)
-            Text("PDF · JPG · PNG", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.home_print), style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.home_print_formats), style = MaterialTheme.typography.labelLarge)
         }
     }
 }
@@ -232,16 +244,16 @@ private fun DeviceWidget(
                 DeviceGauge(
                     icon = Icons.Outlined.DocumentScanner,
                     ready = scannerReady,
-                    description = if (scannerReady) "掃描器可使用" else "未找到掃描器",
+                    description = stringResource(if (scannerReady) R.string.home_scanner_ready else R.string.home_scanner_missing),
                 )
                 DeviceGauge(
                     icon = Icons.Outlined.Print,
                     ready = true,
-                    description = "系統列印可使用",
+                    description = stringResource(R.string.home_system_print_ready),
                 )
             }
             Spacer(Modifier.weight(1f))
-            Text("裝置", style = MaterialTheme.typography.titleLarge)
+            Text(stringResource(R.string.home_devices), style = MaterialTheme.typography.titleLarge)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Outlined.Search,
@@ -251,7 +263,9 @@ private fun DeviceWidget(
                 )
                 Spacer(Modifier.width(5.dp))
                 Text(
-                    if (uiState.isDiscovering) "搜尋中" else if (scannerReady) "已就緒" else "搜尋",
+                    if (uiState.isDiscovering) stringResource(R.string.home_searching)
+                    else if (scannerReady) stringResource(R.string.home_ready)
+                    else stringResource(R.string.home_search),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -289,13 +303,13 @@ private fun RecentJobsWidget(uiState: MopriaUiState, onOpenHistory: () -> Unit) 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.History, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(Modifier.width(10.dp))
-                Text("最近", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.home_recent), modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                 IconButton(onClick = onOpenHistory, enabled = uiState.jobs.isNotEmpty()) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = "工作紀錄")
+                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = stringResource(R.string.home_job_history))
                 }
             }
             if (uiState.jobs.isEmpty()) {
-                Text("尚無紀錄", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.home_no_history), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 uiState.jobs.take(2).forEachIndexed { index, job ->
                     if (index > 0) HorizontalDivider()
@@ -345,7 +359,7 @@ internal fun JobStatusPill(status: JobStatus) {
     }
     Surface(color = container, contentColor = content, shape = MaterialTheme.shapes.small) {
         Text(
-            text = status.label,
+            text = stringResource(status.labelRes),
             modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
             style = MaterialTheme.typography.labelMedium,
         )

@@ -8,7 +8,7 @@ Repository：`brianshih04/mopria-android-scan-print`
 
 ## 1. 接手摘要
 
-目前版本已完成可執行的 Android Compose App、Mock／Real 模式、eSCL v2.97 pull-scan client、Flatbed／ADF 多頁文件工作流、PDF／JPEG 文件庫，以及 Android Print Framework 列印入口。
+目前版本已完成可執行的 Android Compose App、Mock／Real 模式、eSCL v2.97 pull-scan client、Flatbed／ADF 多頁文件工作流、PDF／JPEG 文件庫、Android Print Framework 列印入口，以及 10 種語言與系統語系 fallback。
 
 自動測試與 API 36 emulator 已通過；唯一重要的產品級缺口是尚未連接真實 eSCL scanner 與 Mopria printer 做跨品牌驗收。請勿把 Mock／fixture 結果描述成 Mopria Certified 或廠牌相容證據。
 
@@ -42,6 +42,7 @@ adb shell am start -n com.brianshih.mopria.android.scanprint/.MainActivity
 | `domain/MockIntegrationProvider.kt` | 不依賴硬體的 deterministic scan／print fixture |
 | `domain/ScanDocumentOrganizer.kt` | Flatbed append 與 ADF split 純邏輯 |
 | `ui/MopriaViewModel.kt` | discovery／scan／export／print 協調及 Flatbed session state |
+| `ui/LanguageManager.kt` | 系統語系偵測、手動覆寫、中文 script／region 判斷與 English fallback |
 | `ui/ScanScreen.kt` | ADF max pages、Flatbed／ADF PDF 合併設定及下一頁 dialog |
 | `ui/DocumentsScreen.kt` | 掃描文件頁面、列印／分享／輸出操作 |
 | `ui/DocumentPageBitmapLoader.kt` | JPEG／PNG／PDF-backed 頁面取樣／render |
@@ -50,6 +51,14 @@ adb shell am start -n com.brianshih.mopria.android.scanprint/.MainActivity
 | `ui/UriPrintAdapter.kt` | 手機 PDF／JPEG／PNG 交給 Android Print Framework |
 
 Package root：`app/src/main/java/com/brianshih/mopria/android/scanprint/`。
+
+## 3.1 語系行為
+
+- 預設使用 Android 系統語系；支援 English、日、韓、西班牙、葡萄牙、德、法、俄、繁中、簡中。
+- `zh-TW`、`zh-HK`、`zh-MO` 或 `Hant` 會使用繁體中文；`zh-CN`、`zh-SG`、`zh-MY` 或 `Hans` 會使用簡體中文。
+- 不在支援清單的系統語系使用 English。
+- 設定頁的手動選擇儲存在 `mopria_settings/language_tag`；選擇「依系統設定」會移除覆寫值。
+- 新增翻譯時，先在 `res/values/strings.xml` 加入英文 fallback，再同步所有語系目錄；不要在 Compose、ViewModel 或 domain provider 新增可見硬編碼文字。
 
 ## 4. eSCL 行為摘要
 
@@ -78,14 +87,20 @@ Flatbed multi-page 是多個獨立 eSCL Platen job 的 App-level session，不�
 
 | 驗證 | 結果 |
 |---|---|
-| `:app:testDebugUnitTest` | 30 passed，0 failed |
-| `:app:lintDebug` | 0 errors，9 warnings |
+| `:app:testDebugUnitTest` | 34 passed，0 failed |
+| `:app:lintDebug` | 0 errors，34 warnings |
 | `:app:assembleDebug` | passed；APK 位於 `app/build/outputs/apk/debug/app-debug.apk` |
+| `:app:assembleRelease` | passed；`release/avi-print-scan.apk` 已簽署並通過 `apksigner verify` |
+| `LanguageManagerTest` | 覆蓋 10 種可選語系、未知 tag、繁／簡中文 script 與 region 判斷 |
 | `git diff --check` | passed |
 | ADF emulator | max pages 改為 6；合併選項產生一份 6 頁文件及 PDF |
 | Flatbed emulator | 2 個獨立 scan job；dialog 顯示第 1／2 頁；完成後一份 2 頁 PDF |
 | DocumentsUI／Print | 系統選檔返回 App 列印頁，再回首頁 |
 | Runtime | smoke flow 無 app fatal exception／OOM |
+
+APK SHA-256：`BE82F63EFDB607C60A4C081C8BE78B15252B374652FD0C43081780F4A99AF9AD`。
+
+語系 emulator smoke：清除 App data 後使用系統 en-US 驗證 English；設定頁可開啟 10 語言選單；手動選擇日本語與简体中文後，設定頁標題、操作說明與底部導覽即時更新。
 
 Lint warnings 為依賴版本與 Kotlin extension 建議，沒有 correctness／security error。Emulator screenshots 位於 ignored 的 `app/build/reports/emulator-smoke/`，不提交 Git。
 

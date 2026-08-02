@@ -19,6 +19,9 @@
 - 新增 `.workflow/escl-v2.97-compliance` 合規計畫、狀態與最終報告。
 - 新增 `HANDOFF.md`，記錄第三方接手所需架構、驗證與剩餘風險。
 - 新增 GitHub 可下載的 `release/avi-print-scan.apk` 及 7 張 API 36 emulator 主畫面 JPEG。
+- 新增 10 種語言資源：English、日本語、한국어、Español、Português、Deutsch、Français、Русский、繁體中文、简体中文。
+- 新增依 Android 系統語系自動選擇、未支援語系 fallback English，以及設定頁手動語言覆寫。
+- 新增 `LanguageManager` 語系判斷單元測試。
 
 ### Changed
 
@@ -32,6 +35,7 @@
 - Mock ADF 頁數改為使用 UI 設定，不再固定 3 頁。
 - 首頁掃描摘要會顯示 ADF 頁數與 PDF 合併狀態。
 - README 與開發計畫改為反映實際單 module 架構與目前驗證範圍。
+- UI、ViewModel 事件、文件 metadata 與設定頁改用 Android string resources，語言切換不需修改程式碼。
 
 ### Fixed
 
@@ -52,11 +56,12 @@
 
 ### Verification
 
-- 30 unit tests passed，0 failed。
-- Android lint：0 errors，9 non-blocking warnings。
+- 34 unit tests passed，0 failed。
+- Android lint：0 errors，34 non-blocking warnings。
 - Debug APK build passed。
 - Release APK build passed，並以 `apksigner verify` 驗證簽章。
 - API 36 emulator 通過 ADF 6 頁合併 PDF、Flatbed 2 頁逐頁合併、文件預覽／匯出、DocumentsUI 返回與列印頁返回流程。
+- API 36 emulator 語系 smoke 通過：系統 English、設定頁 10 語言清單、Japanese 與簡體中文手動切換。
 - Smoke flow logcat 無 app `FATAL EXCEPTION`。
 
 ## [0.1.0] - Initial prototype
