@@ -31,7 +31,7 @@ class MockIntegrationProvider : DeviceDiscovery, ScanAcquisitionProvider, PrintP
     override suspend fun scan(scanner: IntegrationDevice, settings: ScanSettings): MopriaDocument {
         delay(850)
         val timestamp = System.currentTimeMillis()
-        val pageCount = if (settings.inputSource == ScanInputSource.Flatbed) 1 else 3
+        val pageCount = if (settings.inputSource == ScanInputSource.Flatbed) 1 else settings.maxPages.coerceIn(1, 50)
         return MopriaDocument(
             id = "scan-$timestamp",
             name = "模擬掃描文件 ${timestamp.toString().takeLast(4)}",

@@ -5,7 +5,13 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Handler
 import android.os.Looper
+import android.os.ParcelFileDescriptor
+import android.graphics.pdf.PdfRenderer
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -51,18 +57,25 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
 
             fun addResolvedDevice(service: ServiceType, info: NsdServiceInfo) {
                 val host = info.host?.hostAddress ?: return
-                val key = "${service.kind}:${info.serviceName}:${info.serviceType}"
-                devices[key] = IntegrationDevice(
-                    id = "real-${key.hashCode()}",
-                    name = info.serviceName,
+                val metadata = EsclDiscovery.parse(info.attributes) ?: return
+                val identity = EsclDiscovery.identity(info.serviceName, metadata)
+                val key = "${service.kind}:$identity"
+                val candidate = IntegrationDevice(
+                    id = "real-${identity.hashCode()}",
+                    name = metadata.displayName ?: info.serviceName,
                     kind = service.kind,
-                    protocol = service.protocol,
+                    protocol = metadata.version?.let { "${service.protocol} $it" } ?: service.protocol,
                     isMock = false,
                     host = host,
                     port = info.port,
                     secure = service.secure,
                     serviceType = info.serviceType,
+                    resourcePath = metadata.resourcePath,
+                    uuid = metadata.uuid,
+                    esclVersion = metadata.version,
+                    advertisedFormats = metadata.documentFormats,
                 )
+                devices[key] = EsclDiscovery.preferred(devices[key], candidate)
             }
 
             fun resolveNext() {
@@ -134,39 +147,65 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
 
     override suspend fun scan(scanner: IntegrationDevice, settings: ScanSettings): MopriaDocument = withContext(Dispatchers.IO) {
         val baseUrl = scanner.eSclBaseUrl()
+        validateScannerReady(httpClient.fetchScannerStatus(baseUrl), settings.inputSource)
         val capabilitiesXml = httpClient.fetchCapabilities(baseUrl)
         val capabilities = EsclProtocol.parseCapabilities(capabilitiesXml)
-        val requestedSource = settings.inputSource.eSclValue
-        val inputSource = resolveInputSource(capabilities.inputSources, requestedSource)
-        val resolution = capabilities.resolutions.firstOrNull { it == settings.resolutionDpi }
-            ?: capabilities.resolutions.firstOrNull { it >= settings.resolutionDpi }
-            ?: capabilities.resolutions.lastOrNull()
-            ?: settings.resolutionDpi
-        val colorMode = capabilities.colorModes.firstOrNull { it.equals(settings.colorMode.eSclValue, true) }
-            ?: capabilities.colorModes.firstOrNull()
-            ?: settings.colorMode.eSclValue
-        val scanSettingsXml = EsclProtocol.buildScanSettings(
-            inputSource = inputSource,
-            resolution = resolution,
-            colorMode = colorMode,
-        )
-        val location = httpClient.createScanJob(baseUrl, scanSettingsXml)
+        val negotiated = EsclProtocol.negotiate(capabilities, settings)
+        val scanSettingsXml = EsclProtocol.buildScanSettings(negotiated)
         val scanId = System.currentTimeMillis()
         val directory = File(appContext.filesDir, "scans").apply { mkdirs() }
-        val pageFiles = mutableListOf<File>()
+        val payloads = mutableListOf<EsclDocumentPayload>()
+        var location: String? = null
+        var jobFinished = false
         try {
-            for (index in 0 until settings.inputSource.maxPages.coerceAtMost(MAX_SCAN_PAGES)) {
+            val jobLocation = httpClient.createScanJob(baseUrl, scanSettingsXml)
+            location = jobLocation
+            val jobUrl = EsclProtocol.scanJobUrl(baseUrl, jobLocation)
+            awaitJobReady(baseUrl, jobUrl)
+            var reachedEnd = false
+            val pageLimit = if (settings.inputSource == ScanInputSource.Flatbed) 1 else settings.maxPages.coerceIn(1, MAX_SCAN_PAGES)
+            pageLoop@
+            for (index in 0 until pageLimit) {
+                currentCoroutineContext().ensureActive()
                 val temporaryFile = File(directory, "real-scan-$scanId-page-${index + 1}.part")
-                val payload = httpClient.fetchNextDocument(
-                    EsclProtocol.nextDocumentUrl(baseUrl, location),
-                    temporaryFile,
-                ) ?: break
+                var interruptionRetries = 0
+                val payload: EsclDocumentPayload
+                while (true) {
+                    val fetched = try {
+                        httpClient.fetchNextDocument(
+                            EsclProtocol.nextDocumentUrl(baseUrl, jobLocation),
+                            temporaryFile,
+                        )
+                    } catch (error: EsclNextDocumentTimeoutException) {
+                        when (jobTransferState(baseUrl, jobUrl)) {
+                            JobTransferState.Completed -> {
+                                reachedEnd = true
+                                break@pageLoop
+                            }
+                            JobTransferState.Active -> {
+                                if (interruptionRetries >= NEXT_DOCUMENT_STATUS_RETRIES) throw error
+                                interruptionRetries += 1
+                                continue
+                            }
+                            JobTransferState.Missing -> throw error
+                        }
+                    } catch (error: EsclHttpException) {
+                        if (error.statusCode == HTTP_GONE && jobTransferState(baseUrl, jobUrl) == JobTransferState.Completed) {
+                            reachedEnd = true
+                            break@pageLoop
+                        }
+                        throw error
+                    }
+                    if (fetched == null) {
+                        reachedEnd = true
+                        break@pageLoop
+                    }
+                    payload = fetched
+                    break
+                }
                 val extension = when {
                     payload.contentType.contains("png") -> "png"
-                    payload.contentType.contains("pdf") -> {
-                        payload.file.delete()
-                        error("掃描器未依要求回傳 JPEG／PNG 影像")
-                    }
+                    payload.contentType.contains("pdf") -> "pdf"
                     else -> "jpg"
                 }
                 val finalFile = File(directory, "real-scan-$scanId-page-${index + 1}.$extension")
@@ -174,28 +213,57 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                     payload.file.delete()
                     error("無法保存掃描頁面 ${index + 1}")
                 }
-                pageFiles += finalFile
+                payloads += payload.copy(file = finalFile)
             }
+
+            if (reachedEnd || settings.inputSource == ScanInputSource.Flatbed || negotiated.numberOfPages != null) {
+                awaitJobCompletion(baseUrl, jobUrl)
+            } else {
+                httpClient.cancelScanJob(baseUrl, jobLocation)
+            }
+            jobFinished = true
+
+            require(payloads.isNotEmpty()) { "eSCL ScanJob 沒有回傳影像" }
+            val pages = payloads.flatMapIndexed { payloadIndex, payload ->
+                if (payload.contentType == "application/pdf") {
+                    val count = pdfPageCount(payload.file)
+                    (0 until count).map { pdfPageIndex ->
+                        DocumentPage(
+                            id = "$scanId-pdf-$payloadIndex-page-${pdfPageIndex + 1}",
+                            pageNumber = 0,
+                            title = "",
+                            pdfPath = payload.file.absolutePath,
+                            pdfPageIndex = pdfPageIndex,
+                        )
+                    }
+                } else {
+                    listOf(
+                        DocumentPage(
+                            id = "$scanId-image-$payloadIndex",
+                            pageNumber = 0,
+                            title = "",
+                            imagePath = payload.file.absolutePath,
+                        ),
+                    )
+                }
+            }
+                .take(pageLimit)
+                .mapIndexed { index, page -> page.copy(pageNumber = index + 1, title = "掃描頁 ${index + 1}") }
+
+            MopriaDocument(
+                id = "real-scan-$scanId",
+                name = "真實掃描文件 ${scanId.toString().takeLast(4)}",
+                sourceLabel = "${scanner.name} · eSCL · ${settings.inputSource.shortLabel} · ${resolutionLabel(negotiated)} · ${colorModeLabel(negotiated.colorMode)}",
+                pages = pages,
+                createdAt = scanId,
+            )
         } catch (error: Exception) {
-            pageFiles.forEach(File::delete)
+            if (!jobFinished && location != null) {
+                withContext(NonCancellable + Dispatchers.IO) { runCatching { httpClient.cancelScanJob(baseUrl, location) } }
+            }
+            payloads.map(EsclDocumentPayload::file).forEach(File::delete)
             throw error
         }
-        require(pageFiles.isNotEmpty()) { "eSCL ScanJob 沒有回傳影像" }
-
-        MopriaDocument(
-            id = "real-scan-$scanId",
-            name = "真實掃描文件 ${scanId.toString().takeLast(4)}",
-            sourceLabel = "${scanner.name} · eSCL · ${settings.inputSource.shortLabel} · ${resolution} dpi · ${colorModeLabel(colorMode)}",
-            pages = pageFiles.mapIndexed { index, file ->
-                DocumentPage(
-                    id = "$scanId-page-${index + 1}",
-                    pageNumber = index + 1,
-                    title = "掃描頁 ${index + 1}",
-                    imagePath = file.absolutePath,
-                )
-            },
-            createdAt = scanId,
-        )
     }
 
     override suspend fun print(printer: IntegrationDevice, document: MopriaDocument) {
@@ -204,10 +272,80 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
 
     private fun IntegrationDevice.eSclBaseUrl(): String {
         val resolvedHost = requireNotNull(host) { "掃描器缺少 resolved host" }
-            .let { value -> if (value.contains(":") && !value.startsWith("[") && !value.endsWith("]")) "[$value]" else value }
+            .let { value ->
+                val encoded = value.replace("%", "%25")
+                if (encoded.contains(":") && !encoded.startsWith("[") && !encoded.endsWith("]")) "[$encoded]" else encoded
+            }
         val resolvedPort = port ?: if (secure) 443 else 80
         val scheme = if (secure) "https" else "http"
-        return "$scheme://$resolvedHost:$resolvedPort/eSCL"
+        return "$scheme://$resolvedHost:$resolvedPort/${resourcePath.trim('/')}"
+    }
+
+    private fun validateScannerReady(status: EsclScannerStatus, source: ScanInputSource) {
+        require(status.state.equals("Idle", true)) {
+            val description = when {
+                status.state.equals("Processing", true) -> "掃描器忙碌中"
+                status.state.equals("Testing", true) -> "掃描器正在校正"
+                status.state.equals("Stopped", true) -> "掃描器已停止，請檢查設備"
+                status.state.equals("Down", true) -> "掃描器目前無法使用"
+                else -> "掃描器目前狀態為 ${status.state}"
+            }
+            description
+        }
+        if (source == ScanInputSource.Adf) {
+            val adfState = status.adfState ?: return
+            require(adfState.equals("ScannerAdfLoaded", true) || adfState.equals("ScannerAdfProcessing", true)) {
+                if (adfState.equals("ScannerAdfEmpty", true)) "ADF 尚未放入文件" else "ADF 狀態異常：$adfState"
+            }
+        }
+    }
+
+    private suspend fun awaitJobCompletion(baseUrl: String, jobUrl: String) {
+        repeat(JOB_STATUS_ATTEMPTS) {
+            val job = httpClient.fetchScannerStatus(baseUrl).jobFor(jobUrl)
+            when {
+                job == null -> return
+                job.state.equals("Completed", true) -> return
+                job.state.equals("Canceled", true) || job.state.equals("Aborted", true) -> {
+                    error("eSCL ScanJob ${job.state}：${job.stateReasons.joinToString().ifBlank { "unknown reason" }}")
+                }
+            }
+            delay(JOB_STATUS_POLL_MS)
+        }
+        error("等待 eSCL ScanJob 完成逾時")
+    }
+
+    private suspend fun awaitJobReady(baseUrl: String, jobUrl: String) {
+        repeat(JOB_READY_ATTEMPTS) {
+            val job = httpClient.fetchScannerStatus(baseUrl).jobFor(jobUrl)
+            when {
+                job == null -> Unit
+                job.state.equals("Pending", true) || job.state.equals("Processing", true) || job.state.equals("Completed", true) -> return
+                job.state.equals("Canceled", true) || job.state.equals("Aborted", true) -> {
+                    error("eSCL ScanJob ${job.state}：${job.stateReasons.joinToString().ifBlank { "unknown reason" }}")
+                }
+            }
+            delay(JOB_STATUS_POLL_MS)
+        }
+        error("等待 eSCL ScanJob 可傳輸逾時")
+    }
+
+    private fun jobTransferState(baseUrl: String, jobUrl: String): JobTransferState {
+        val job = httpClient.fetchScannerStatus(baseUrl).jobFor(jobUrl) ?: return JobTransferState.Missing
+        return when {
+            job.state.equals("Pending", true) || job.state.equals("Processing", true) -> JobTransferState.Active
+            job.state.equals("Completed", true) -> JobTransferState.Completed
+            job.state.equals("Canceled", true) || job.state.equals("Aborted", true) -> {
+                error("eSCL ScanJob ${job.state}：${job.stateReasons.joinToString().ifBlank { "unknown reason" }}")
+            }
+            else -> JobTransferState.Missing
+        }
+    }
+
+    private fun pdfPageCount(file: File): Int {
+        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+            PdfRenderer(descriptor).use { renderer -> renderer.pageCount }
+        }.also { require(it > 0) { "掃描器回傳的 PDF 沒有頁面" } }
     }
 
     private data class ServiceType(
@@ -222,22 +360,26 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         val info: NsdServiceInfo,
     )
 
-    private companion object {
-        const val DISCOVERY_TIMEOUT_MS = 3_500L
-        const val MAX_SCAN_PAGES = 20
+    private enum class JobTransferState { Active, Completed, Missing }
 
-        fun resolveInputSource(available: List<String>, requested: String): String {
-            if (available.isEmpty()) return requested
-            return available.firstOrNull { it.equals(requested, ignoreCase = true) }
-                ?: available.firstOrNull {
-                    requested.equals("ADF", ignoreCase = true) && it.equals("ADFDuplex", ignoreCase = true)
-                }
-                ?: error("掃描器不支援${if (requested.equals("Platen", true)) " Flatbed" else " ADF"}")
-        }
+    private companion object {
+        const val DISCOVERY_TIMEOUT_MS = 8_000L
+        const val MAX_SCAN_PAGES = 50
+        const val JOB_READY_ATTEMPTS = 60
+        const val JOB_STATUS_ATTEMPTS = 120
+        const val JOB_STATUS_POLL_MS = 500L
+        const val NEXT_DOCUMENT_STATUS_RETRIES = 3
+        const val HTTP_GONE = 410
 
         fun colorModeLabel(value: String): String = ScanColorMode.entries
             .firstOrNull { it.eSclValue.equals(value, ignoreCase = true) }
             ?.label
             ?: value
+
+        fun resolutionLabel(settings: EsclNegotiatedSettings): String = if (settings.resolution == settings.yResolution) {
+            "${settings.resolution} dpi"
+        } else {
+            "${settings.resolution}×${settings.yResolution} dpi"
+        }
     }
 }

@@ -31,11 +31,11 @@ class MockIntegrationProviderTest {
     @Test
     fun adfScanReturnsMultiplePagesWithSourceLabel() = runBlocking {
         val scanner = provider.discover().first { it.kind == DeviceKind.Scanner }
-        val document = provider.scan(scanner, ScanSettings(inputSource = ScanInputSource.Adf))
+        val document = provider.scan(scanner, ScanSettings(inputSource = ScanInputSource.Adf, maxPages = 4))
 
-        assertEquals(3, document.pages.size)
+        assertEquals(4, document.pages.size)
         assertTrue(document.sourceLabel.contains("ADF"))
-        assertEquals(listOf(1, 2, 3), document.pages.map { it.pageNumber })
+        assertEquals(listOf(1, 2, 3, 4), document.pages.map { it.pageNumber })
     }
 
     @Test

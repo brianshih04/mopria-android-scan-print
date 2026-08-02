@@ -1,5 +1,7 @@
 # UI/UX Redesign and Code Review
 
+Status: completed and integrated into `main`. Follow-up eSCL v2.97 work on 2026-08-02 preserved this UI architecture and added configurable ADF page limits plus Flatbed／ADF multi-page PDF controls.
+
 Goal: redesign the Android app so scan and print flows feel modern, clear, and easy to operate, then complete a repository-wide code review and fix material findings.
 
 ## Success criteria
@@ -30,4 +32,6 @@ Goal: redesign the Android app so scan and print flows feel modern, clear, and e
 ## Integration policy
 
 All implementation is performed in this working tree. Existing behavior is preserved unless a review finding proves it unsafe or confusing. Changes are verified before the workflow is marked complete.
+
+Final follow-up verification is recorded in `.workflow/escl-v2.97-compliance/final-report.md` and `HANDOFF.md`.
 

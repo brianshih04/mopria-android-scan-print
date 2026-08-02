@@ -198,7 +198,7 @@ class ScanExportService(private val context: Context) {
         val name = "${safeName(document.name)}-page-${index + 1}.jpg"
         return writePublicFile(name, "image/jpeg") { output ->
             if (copyOriginalJpeg(page.imagePath, output)) return@writePublicFile
-            val bitmap = loadBitmap(page.imagePath)
+            val bitmap = loadPageBitmap(page)
             try {
                 if (bitmap != null) {
                     check(bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "JPEG 壓縮失敗" }
@@ -283,7 +283,7 @@ class ScanExportService(private val context: Context) {
         canvas.drawText("Mopria Scan & Print", 54f, 76f, titlePaint)
         canvas.drawText(document.name, 54f, 112f, bodyPaint)
         canvas.drawLine(54f, 140f, 558f, 140f, linePaint)
-        val bitmap = loadBitmap(page.imagePath)
+        val bitmap = loadPageBitmap(page)
         if (bitmap != null) {
             val margin = 54f
             val top = 158f
@@ -315,6 +315,9 @@ class ScanExportService(private val context: Context) {
     private fun loadBitmap(path: String?): Bitmap? {
         return BitmapLoader.load(context, path, requestedWidth = 2048, requestedHeight = 2048)
     }
+
+    private fun loadPageBitmap(page: DocumentPage): Bitmap? =
+        DocumentPageBitmapLoader.load(context, page, requestedWidth = 2048, requestedHeight = 2048)
 
     private fun copyOriginalJpeg(path: String?, output: OutputStream): Boolean {
         if (path.isNullOrBlank()) return false

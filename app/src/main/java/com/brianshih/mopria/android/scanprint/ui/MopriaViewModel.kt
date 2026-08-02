@@ -22,6 +22,7 @@ import com.brianshih.mopria.android.scanprint.domain.PrintProvider
 import com.brianshih.mopria.android.scanprint.domain.RealIntegrationProvider
 import com.brianshih.mopria.android.scanprint.domain.ScanAcquisitionProvider
 import com.brianshih.mopria.android.scanprint.domain.ScanColorMode
+import com.brianshih.mopria.android.scanprint.domain.ScanDocumentOrganizer
 import com.brianshih.mopria.android.scanprint.domain.ScanInputSource
 import com.brianshih.mopria.android.scanprint.domain.ScanOutputFormat
 import com.brianshih.mopria.android.scanprint.domain.ScanSettings
@@ -111,6 +112,8 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             putString(KEY_SCAN_INPUT_SOURCE, settings.inputSource.name)
             putInt(KEY_SCAN_RESOLUTION, settings.resolutionDpi)
             putString(KEY_SCAN_COLOR_MODE, settings.colorMode.name)
+            putInt(KEY_SCAN_MAX_PAGES, settings.maxPages.coerceIn(MIN_SCAN_PAGES, MAX_SCAN_PAGES))
+            putBoolean(KEY_SCAN_COMBINE_PDF, settings.combineAsPdf)
         }
         _uiState.update { it.copy(scanSettings = settings) }
     }
@@ -132,7 +135,13 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 val scanner = devices.firstOrNull { it.kind == DeviceKind.Scanner }
                 if (scanner == null) {
-                    _uiState.update { it.copy(isDiscovering = false, devices = devices) }
+                    _uiState.update {
+                        it.copy(
+                            isDiscovering = false,
+                            devices = devices,
+                            awaitingNextFlatbedPage = it.pendingFlatbedDocumentId != null,
+                        )
+                    }
                     _events.tryEmit("${mode.label}沒有找到掃描器，請確認設備與手機在同一個區域網路")
                     return@launch
                 }
@@ -156,27 +165,106 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 }
                 updateJob(currentJobId, JobStatus.Running, 35, "正在建立掃描工作")
-                val document = providers.scan.scan(scanner, _uiState.value.scanSettings)
+                val settings = _uiState.value.scanSettings
+                val document = providers.scan.scan(scanner, settings)
                 updateJob(currentJobId, JobStatus.Running, 85, "正在整理頁面")
-                _uiState.update {
-                    it.copy(
-                        activeJobId = null,
-                        selectedDocumentId = document.id,
-                        documents = listOf(document) + it.documents,
-                    )
+                when {
+                    settings.inputSource == ScanInputSource.Flatbed && settings.combineAsPdf -> {
+                        val existingId = _uiState.value.pendingFlatbedDocumentId
+                        val existing = existingId?.let { id -> _uiState.value.documents.firstOrNull { it.id == id } }
+                        val merged = ScanDocumentOrganizer.appendFlatbedPage(existing, document)
+                        val reachedLimit = merged.pages.size >= MAX_SCAN_PAGES
+                        _uiState.update { state ->
+                            state.copy(
+                                activeJobId = null,
+                                selectedDocumentId = merged.id,
+                                documents = if (existing == null) {
+                                    listOf(merged) + state.documents
+                                } else {
+                                    state.documents.map { if (it.id == merged.id) merged else it }
+                                },
+                                pendingFlatbedDocumentId = merged.id.takeUnless { reachedLimit },
+                                awaitingNextFlatbedPage = !reachedLimit,
+                            )
+                        }
+                        updateJob(currentJobId, JobStatus.Completed, 100, "已取得第 ${merged.pages.size} 頁")
+                        if (reachedLimit) {
+                            _events.tryEmit("已達 $MAX_SCAN_PAGES 頁安全上限，正在合併 PDF")
+                            saveScan(merged.id, ScanOutputFormat.Pdf)
+                        } else {
+                            _events.tryEmit("第 ${merged.pages.size} 頁完成，請放入下一頁或完成 PDF")
+                        }
+                    }
+                    settings.inputSource == ScanInputSource.Adf && !settings.combineAsPdf -> {
+                        val separateDocuments = ScanDocumentOrganizer.splitPages(document)
+                        _uiState.update {
+                            it.copy(
+                                activeJobId = null,
+                                selectedDocumentId = separateDocuments.first().id,
+                                documents = separateDocuments + it.documents,
+                            )
+                        }
+                        updateJob(currentJobId, JobStatus.Completed, 100, "已取得 ${document.pages.size} 頁")
+                        _events.tryEmit("${mode.label}掃描完成：${document.pages.size} 頁已分開加入文件庫")
+                    }
+                    else -> {
+                        _uiState.update {
+                            it.copy(
+                                activeJobId = null,
+                                selectedDocumentId = document.id,
+                                documents = listOf(document) + it.documents,
+                            )
+                        }
+                        updateJob(currentJobId, JobStatus.Completed, 100, "已取得 ${document.pages.size} 頁")
+                        _events.tryEmit("${mode.label}掃描完成：${document.pages.size} 頁已加入文件庫")
+                        if (settings.inputSource == ScanInputSource.Adf && settings.combineAsPdf) {
+                            saveScan(document.id, ScanOutputFormat.Pdf)
+                        }
+                    }
                 }
-                updateJob(currentJobId, JobStatus.Completed, 100, "已取得 ${document.pages.size} 頁")
-                _events.tryEmit("${mode.label}掃描完成：${document.pages.size} 頁已加入文件庫")
             } catch (error: CancellationException) {
                 jobId?.let { updateJob(it, JobStatus.Cancelled, 0, "掃描已取消") }
-                _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
+                _uiState.update {
+                    it.copy(
+                        isDiscovering = false,
+                        activeJobId = null,
+                        awaitingNextFlatbedPage = it.pendingFlatbedDocumentId != null,
+                    )
+                }
                 throw error
             } catch (error: Exception) {
                 jobId?.let { updateJob(it, JobStatus.Failed, 0, error.message ?: "掃描失敗") }
-                _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
+                _uiState.update {
+                    it.copy(
+                        isDiscovering = false,
+                        activeJobId = null,
+                        awaitingNextFlatbedPage = it.pendingFlatbedDocumentId != null,
+                    )
+                }
                 _events.tryEmit("${mode.label}掃描失敗：${error.message ?: "請稍後重試"}")
             }
         }
+    }
+
+    fun continueFlatbedScan() {
+        val state = _uiState.value
+        if (state.isBusy || !state.awaitingNextFlatbedPage || state.pendingFlatbedDocumentId == null) return
+        _uiState.update { it.copy(awaitingNextFlatbedPage = false) }
+        scan()
+    }
+
+    fun finishFlatbedScan() {
+        val state = _uiState.value
+        if (state.isBusy || !state.awaitingNextFlatbedPage) return
+        val documentId = state.pendingFlatbedDocumentId ?: return
+        _uiState.update {
+            it.copy(
+                pendingFlatbedDocumentId = null,
+                awaitingNextFlatbedPage = false,
+                selectedDocumentId = documentId,
+            )
+        }
+        saveScan(documentId, ScanOutputFormat.Pdf)
     }
 
     fun createDemoDocument() {
@@ -418,6 +506,9 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         colorMode = preferences.getString(KEY_SCAN_COLOR_MODE, ScanColorMode.Color.name)
             ?.let { value -> runCatching { ScanColorMode.valueOf(value) }.getOrDefault(ScanColorMode.Color) }
             ?: ScanColorMode.Color,
+        maxPages = preferences.getInt(KEY_SCAN_MAX_PAGES, DEFAULT_SCAN_MAX_PAGES)
+            .coerceIn(MIN_SCAN_PAGES, MAX_SCAN_PAGES),
+        combineAsPdf = preferences.getBoolean(KEY_SCAN_COMBINE_PDF, false),
     )
 
     private fun discoveryMessage(mode: IntegrationMode, devices: List<IntegrationDevice>): String = when {
@@ -452,6 +543,11 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         const val KEY_SCAN_INPUT_SOURCE = "scan_input_source"
         const val KEY_SCAN_RESOLUTION = "scan_resolution"
         const val KEY_SCAN_COLOR_MODE = "scan_color_mode"
+        const val KEY_SCAN_MAX_PAGES = "scan_max_pages"
+        const val KEY_SCAN_COMBINE_PDF = "scan_combine_pdf"
+        const val MIN_SCAN_PAGES = 1
+        const val MAX_SCAN_PAGES = 50
+        const val DEFAULT_SCAN_MAX_PAGES = 20
         val SUPPORTED_RESOLUTIONS = setOf(150, 300, 600)
     }
 }

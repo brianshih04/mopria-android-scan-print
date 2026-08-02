@@ -221,6 +221,8 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                     uiState = uiState,
                     onScan = viewModel::scan,
                     onScanSettingsChanged = viewModel::updateScanSettings,
+                    onContinueFlatbed = viewModel::continueFlatbedScan,
+                    onFinishFlatbed = viewModel::finishFlatbedScan,
                 )
 
                 AppDestination.Print -> PrintScreen(

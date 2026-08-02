@@ -167,7 +167,13 @@ private fun ScanHeroCard(uiState: MopriaUiState, onClick: () -> Unit) {
                 Text("掃描文件", style = MaterialTheme.typography.headlineMedium, color = Color.White)
                 Text(
                     activeJob?.detail
-                        ?: "${uiState.scanSettings.inputSource.shortLabel} · ${uiState.scanSettings.resolutionDpi} dpi · ${uiState.scanSettings.colorMode.label}",
+                        ?: buildString {
+                            append("${uiState.scanSettings.inputSource.shortLabel} · ${uiState.scanSettings.resolutionDpi} dpi · ${uiState.scanSettings.colorMode.label}")
+                            if (uiState.scanSettings.inputSource == com.brianshih.mopria.android.scanprint.domain.ScanInputSource.Adf) {
+                                append(" · ${uiState.scanSettings.maxPages} 頁")
+                            }
+                            if (uiState.scanSettings.combineAsPdf) append(" · PDF")
+                        },
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color.White.copy(alpha = 0.82f),
                     maxLines = 1,

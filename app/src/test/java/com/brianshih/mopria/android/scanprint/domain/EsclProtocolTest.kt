@@ -1,72 +1,222 @@
 package com.brianshih.mopria.android.scanprint.domain
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EsclProtocolTest {
     @Test
-    fun parsesNamespacedScannerCapabilities() {
-        val capabilities = EsclProtocol.parseCapabilities(
-            """
-            <scan:ScannerCapabilities xmlns:scan="${EsclProtocol.XML_NAMESPACE}">
-              <scan:SupportedDocumentFormats>image/jpeg</scan:SupportedDocumentFormats>
-              <scan:DocumentFormatExt>application/pdf</scan:DocumentFormatExt>
-              <scan:ColorModes><scan:ColorMode>RGB24</scan:ColorMode><scan:ColorMode>Grayscale8</scan:ColorMode></scan:ColorModes>
-              <scan:SupportedResolutions><scan:XResolution>300</scan:XResolution><scan:XResolution>600</scan:XResolution></scan:SupportedResolutions>
-              <scan:InputSource>Platen</scan:InputSource>
-            </scan:ScannerCapabilities>
-            """.trimIndent(),
-        )
+    fun parsesSourceProfilesRangesAndReferences() {
+        val capabilities = EsclProtocol.parseCapabilities(CAPABILITIES_XML)
 
-        assertTrue(capabilities.documentFormats.contains("application/pdf"))
-        assertEquals(listOf("RGB24", "Grayscale8"), capabilities.colorModes)
-        assertEquals(listOf(300, 600), capabilities.resolutions)
-        assertEquals(listOf("Platen"), capabilities.inputSources)
+        assertEquals("2.97", capabilities.version)
+        assertEquals(listOf("Platen", "Feeder"), capabilities.inputSources)
+        assertTrue(capabilities.inputs.getValue("Feeder").selectSinglePage)
+
+        val platen = EsclProtocol.negotiate(
+            capabilities,
+            ScanSettings(ScanInputSource.Flatbed, resolutionDpi = 610, colorMode = ScanColorMode.Color),
+        )
+        assertEquals("image/jpeg", platen.documentFormat)
+        assertEquals(600, platen.resolution)
+        assertEquals(600, platen.yResolution)
+
+        val adf = EsclProtocol.negotiate(
+            capabilities,
+            ScanSettings(ScanInputSource.Adf, resolutionDpi = 600, colorMode = ScanColorMode.Grayscale),
+        )
+        assertEquals("Feeder", adf.inputSource)
+        assertEquals("application/pdf", adf.documentFormat)
+        assertEquals(20, adf.numberOfPages)
     }
 
     @Test
-    fun buildsScanSettingsAndResolvesNextDocumentUrl() {
-        val settings = EsclProtocol.buildScanSettings(
-            ScanSettings(
-                inputSource = ScanInputSource.Adf,
-                colorMode = ScanColorMode.Grayscale,
-                resolutionDpi = 600,
+    fun usesUserConfiguredAdfPageLimitAndCapsFutureProtocolVersion() {
+        val capabilities = EsclProtocol.parseCapabilities(CAPABILITIES_XML).copy(version = "3.1")
+        val negotiated = EsclProtocol.negotiate(
+            capabilities,
+            ScanSettings(ScanInputSource.Adf, resolutionDpi = 300, colorMode = ScanColorMode.Grayscale, maxPages = 7),
+        )
+
+        assertEquals("2.97", negotiated.version)
+        assertEquals(7, negotiated.numberOfPages)
+    }
+
+    @Test
+    fun rejectsOutOfRangeAdfPageLimit() {
+        val capabilities = EsclProtocol.parseCapabilities(CAPABILITIES_XML)
+
+        assertThrows(IllegalArgumentException::class.java) {
+            EsclProtocol.negotiate(capabilities, ScanSettings(inputSource = ScanInputSource.Adf, maxPages = 0))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            EsclProtocol.negotiate(capabilities, ScanSettings(inputSource = ScanInputSource.Adf, maxPages = 51))
+        }
+    }
+
+    @Test
+    fun buildsSchemaCorrectScanSettings() {
+        val xml = EsclProtocol.buildScanSettings(
+            EsclNegotiatedSettings(
+                version = "2.97",
+                inputSource = "Feeder",
+                documentFormat = "application/pdf",
+                resolution = 600,
+                colorMode = "BlackAndWhite1",
+                numberOfPages = 20,
             ),
         )
 
-        assertTrue(settings.contains("<scan:InputSource>ADF</scan:InputSource>"))
-        assertTrue(settings.contains("Grayscale8"))
-        assertTrue(settings.contains("<scan:XResolution>600</scan:XResolution>"))
-        assertEquals(
-            "http://192.0.2.1:80/eSCL/ScanJobs/123/NextDocument",
-            EsclProtocol.nextDocumentUrl("http://192.0.2.1:80/eSCL", "/eSCL/ScanJobs/123"),
-        )
+        assertTrue(xml.contains("xmlns:pwg=\"${EsclProtocol.PWG_NAMESPACE}\""))
+        assertTrue(xml.contains("<pwg:Version>2.97</pwg:Version>"))
+        assertTrue(xml.contains("<pwg:InputSource>Feeder</pwg:InputSource>"))
+        assertTrue(xml.contains("<scan:DocumentFormatExt>application/pdf</scan:DocumentFormatExt>"))
+        assertTrue(xml.contains("<scan:NumberOfPages>20</scan:NumberOfPages>"))
+        assertTrue(!xml.contains("<scan:InputSource>"))
     }
 
     @Test
-    fun detectsPlatenAndAdfCapabilityContainers() {
-        val capabilities = EsclProtocol.parseCapabilities(
+    fun usesLegacyDocumentFormatForVersion20() {
+        val xml = EsclProtocol.buildScanSettings(
+            EsclNegotiatedSettings("2.0", "Platen", "image/jpeg", 300, "RGB24"),
+        )
+        assertTrue(xml.contains("<pwg:DocumentFormat>image/jpeg</pwg:DocumentFormat>"))
+        assertTrue(!xml.contains("DocumentFormatExt"))
+    }
+
+    @Test
+    fun findsResolutionValidForDifferentXAxisAndYAxisRanges() {
+        val support = EsclResolutionSupport(
+            minDpi = 100,
+            maxDpi = 1200,
+            xRange = EsclAxisResolutionRange(75, 1200, 300, 25),
+            yRange = EsclAxisResolutionRange(100, 1200, 300, 50),
+        )
+        assertEquals(EsclResolution(125, 150), support.nearest(130))
+        assertEquals(1195, EsclAxisResolutionRange(75, 1200, 300, 10).nearest(1200))
+    }
+
+    @Test
+    fun emitsDifferentXAxisAndYAxisResolutionsWhenAdvertised() {
+        val xml = EsclProtocol.buildScanSettings(
+            EsclNegotiatedSettings("2.97", "Platen", "image/jpeg", 300, "RGB24", yResolution = 600),
+        )
+        assertTrue(xml.contains("<scan:XResolution>300</scan:XResolution>"))
+        assertTrue(xml.contains("<scan:YResolution>600</scan:YResolution>"))
+    }
+
+    @Test
+    fun parsesStatusWithArbitraryNamespacePrefixes() {
+        val status = EsclProtocol.parseScannerStatus(
             """
-            <scan:ScannerCapabilities xmlns:scan="${EsclProtocol.XML_NAMESPACE}">
-              <scan:Platen><scan:PlatenInputCaps /></scan:Platen>
-              <scan:Adf><scan:AdfSimplexInputCaps /></scan:Adf>
-            </scan:ScannerCapabilities>
+            <x:ScannerStatus xmlns:x="${EsclProtocol.XML_NAMESPACE}" xmlns:q="${EsclProtocol.PWG_NAMESPACE}">
+              <q:Version>2.97</q:Version><q:State>Processing</q:State><x:AdfState>ScannerAdfLoaded</x:AdfState>
+              <x:Jobs><x:JobInfo><q:JobUri>/custom/ScanJobs/123</q:JobUri><q:JobUuid>123</q:JobUuid>
+                <q:ImagesCompleted>2</q:ImagesCompleted><q:ImagesToTransfer>0</q:ImagesToTransfer>
+                <q:JobState>Completed</q:JobState><q:JobStateReasons><q:JobStateReason>JobCompletedSuccessfully</q:JobStateReason></q:JobStateReasons>
+              </x:JobInfo></x:Jobs>
+            </x:ScannerStatus>
             """.trimIndent(),
         )
 
-        assertTrue(capabilities.inputSources.contains("Platen"))
-        assertTrue(capabilities.inputSources.contains("ADF"))
+        assertEquals("Processing", status.state)
+        assertEquals("2.97", status.version)
+        assertEquals("ScannerAdfLoaded", status.adfState)
+        assertEquals("Completed", status.jobFor("http://192.0.2.1/custom/ScanJobs/123")?.state)
     }
 
     @Test
-    fun rejectsCrossOriginScanJobLocation() {
+    fun resolvesRelativeJobAndAllowsSameHostHttpsUpgrade() {
+        assertEquals(
+            "http://192.0.2.1:8080/custom/ScanJobs/123/NextDocument",
+            EsclProtocol.nextDocumentUrl("http://192.0.2.1:8080/custom", "/custom/ScanJobs/123"),
+        )
+        assertEquals(
+            "https://192.0.2.1/custom/ScanJobs/123",
+            EsclProtocol.scanJobUrl("http://192.0.2.1/custom", "https://192.0.2.1/custom/ScanJobs/123"),
+        )
+    }
+
+    @Test
+    fun rejectsCrossOriginOrDowngradedJobLocation() {
         assertThrows(IllegalArgumentException::class.java) {
-            EsclProtocol.nextDocumentUrl(
-                "http://192.0.2.1:80/eSCL",
-                "https://example.com/ScanJobs/123",
+            EsclProtocol.scanJobUrl("http://192.0.2.1/eSCL", "https://example.com/eSCL/ScanJobs/123")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            EsclProtocol.scanJobUrl("https://192.0.2.1/eSCL", "http://192.0.2.1/eSCL/ScanJobs/123")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            EsclProtocol.scanJobUrl("http://192.0.2.1/eSCL", "/admin/ScanJobs/123")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            EsclProtocol.scanJobUrl("http://192.0.2.1/eSCL", "/eSCL/ScanJobs/123?token=unsafe")
+        }
+    }
+
+    @Test
+    fun rejectsMissingVersionOrWrongNamespace() {
+        assertThrows(IllegalStateException::class.java) {
+            EsclProtocol.parseCapabilities("<scan:ScannerCapabilities xmlns:scan=\"${EsclProtocol.XML_NAMESPACE}\"/>")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            EsclProtocol.parseCapabilities("<scan:ScannerCapabilities xmlns:scan=\"urn:not-escl\"/>")
+        }
+    }
+
+    @Test
+    fun version21DoesNotTreatLegacyFormatAsDocumentFormatExt() {
+        val capabilities = EsclProtocol.parseCapabilities(
+            """
+            <scan:ScannerCapabilities xmlns:scan="${EsclProtocol.XML_NAMESPACE}" xmlns:pwg="${EsclProtocol.PWG_NAMESPACE}">
+              <pwg:Version>2.97</pwg:Version><scan:Platen><scan:PlatenInputCaps><scan:SettingProfiles><scan:SettingProfile>
+                <scan:ColorModes><scan:ColorMode>RGB24</scan:ColorMode></scan:ColorModes>
+                <scan:DocumentFormats><pwg:DocumentFormat>image/jpeg</pwg:DocumentFormat></scan:DocumentFormats>
+                <scan:SupportedResolutions><scan:DiscreteResolutions><scan:DiscreteResolution><scan:XResolution>300</scan:XResolution><scan:YResolution>300</scan:YResolution></scan:DiscreteResolution></scan:DiscreteResolutions></scan:SupportedResolutions>
+              </scan:SettingProfile></scan:SettingProfiles></scan:PlatenInputCaps></scan:Platen>
+            </scan:ScannerCapabilities>
+            """.trimIndent(),
+        )
+        assertThrows(IllegalStateException::class.java) {
+            EsclProtocol.negotiate(capabilities, ScanSettings())
+        }
+    }
+
+    @Test
+    fun rejectsDoctypeInProtocolXml() {
+        assertThrows(IllegalArgumentException::class.java) {
+            EsclProtocol.parseCapabilities(
+                "<!DOCTYPE x [<!ENTITY bad SYSTEM \"file:///etc/passwd\">]><ScannerCapabilities>&bad;</ScannerCapabilities>",
             )
         }
+    }
+
+    companion object {
+        private val CAPABILITIES_XML = """
+            <scan:ScannerCapabilities xmlns:scan="${EsclProtocol.XML_NAMESPACE}" xmlns:pwg="${EsclProtocol.PWG_NAMESPACE}">
+              <pwg:Version>2.97</pwg:Version>
+              <scan:SettingProfiles>
+                <scan:SettingProfile name="document-profile">
+                  <scan:ColorModes><scan:ColorMode>BlackAndWhite1</scan:ColorMode><scan:ColorMode>Grayscale8</scan:ColorMode></scan:ColorModes>
+                  <scan:DocumentFormats><scan:DocumentFormatExt>application/pdf</scan:DocumentFormatExt></scan:DocumentFormats>
+                  <scan:SupportedResolutions><scan:DiscreteResolutions>
+                    <scan:DiscreteResolution><scan:XResolution>300</scan:XResolution><scan:YResolution>300</scan:YResolution></scan:DiscreteResolution>
+                    <scan:DiscreteResolution default="true"><scan:XResolution>600</scan:XResolution><scan:YResolution>600</scan:YResolution></scan:DiscreteResolution>
+                  </scan:DiscreteResolutions></scan:SupportedResolutions>
+                </scan:SettingProfile>
+              </scan:SettingProfiles>
+              <scan:Platen><scan:PlatenInputCaps><scan:SettingProfiles><scan:SettingProfile>
+                <scan:ColorModes><scan:ColorMode>RGB24</scan:ColorMode></scan:ColorModes>
+                <scan:DocumentFormats><scan:DocumentFormatExt>image/jpeg</scan:DocumentFormatExt></scan:DocumentFormats>
+                <scan:SupportedResolutions><scan:ResolutionRange>
+                  <scan:XResolutionRange><scan:Min>75</scan:Min><scan:Max>1200</scan:Max><scan:Normal>300</scan:Normal><scan:Step>25</scan:Step></scan:XResolutionRange>
+                  <scan:YResolutionRange><scan:Min>75</scan:Min><scan:Max>1200</scan:Max><scan:Normal>300</scan:Normal><scan:Step>25</scan:Step></scan:YResolutionRange>
+                </scan:ResolutionRange></scan:SupportedResolutions>
+              </scan:SettingProfile></scan:SettingProfiles></scan:PlatenInputCaps></scan:Platen>
+              <scan:Adf><scan:AdfSimplexInputCaps><scan:SettingProfiles><scan:SettingProfile ref="document-profile"/></scan:SettingProfiles></scan:AdfSimplexInputCaps>
+                <scan:AdfOptions><scan:AdfOption>SelectSinglePage</scan:AdfOption></scan:AdfOptions>
+              </scan:Adf>
+            </scan:ScannerCapabilities>
+        """.trimIndent()
     }
 }

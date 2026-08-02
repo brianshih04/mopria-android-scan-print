@@ -126,7 +126,7 @@ class SystemPrintAdapter(
         canvas.drawText("Mopria Scan & Print", margin, height * 0.096f, titlePaint)
         canvas.drawText(document.name, margin, height * 0.141f, bodyPaint)
         canvas.drawLine(margin, height * 0.177f, width - margin, height * 0.177f, linePaint)
-        val bitmap = BitmapLoader.load(context, page.imagePath, requestedWidth = 2048, requestedHeight = 2048)
+        val bitmap = context?.let { DocumentPageBitmapLoader.load(it, page, requestedWidth = 2048, requestedHeight = 2048) }
         if (bitmap != null) {
             try {
                 val top = height * 0.20f

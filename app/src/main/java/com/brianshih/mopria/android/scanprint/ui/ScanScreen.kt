@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DocumentScanner
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -25,8 +27,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,13 +43,31 @@ import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
 import com.brianshih.mopria.android.scanprint.domain.ScanColorMode
 import com.brianshih.mopria.android.scanprint.domain.ScanInputSource
 import com.brianshih.mopria.android.scanprint.domain.ScanSettings
+import kotlin.math.roundToInt
 
 @Composable
 internal fun ScanScreen(
     uiState: MopriaUiState,
     onScan: () -> Unit,
     onScanSettingsChanged: (ScanSettings) -> Unit,
+    onContinueFlatbed: () -> Unit,
+    onFinishFlatbed: () -> Unit,
 ) {
+    if (uiState.awaitingNextFlatbedPage) {
+        val pageCount = uiState.pendingFlatbedDocumentId
+            ?.let { id -> uiState.documents.firstOrNull { it.id == id } }
+            ?.pages
+            ?.size
+            ?: 1
+        AlertDialog(
+            onDismissRequest = {},
+            icon = { Icon(Icons.Outlined.PictureAsPdf, contentDescription = null) },
+            title = { Text("第 $pageCount 頁完成") },
+            text = { Text("換上下一頁繼續掃描，或完成並儲存為單一 PDF。") },
+            confirmButton = { TextButton(onClick = onContinueFlatbed) { Text("下一頁") } },
+            dismissButton = { TextButton(onClick = onFinishFlatbed) { Text("完成 PDF") } },
+        )
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
@@ -98,7 +120,11 @@ private fun ScanComposerCard(
                 Column(Modifier.weight(1f)) {
                     Text("掃描設定", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "${settings.inputSource.shortLabel} · ${settings.resolutionDpi} dpi · ${settings.colorMode.label}",
+                        buildString {
+                            append("${settings.inputSource.shortLabel} · ${settings.resolutionDpi} dpi · ${settings.colorMode.label}")
+                            if (settings.inputSource == ScanInputSource.Adf) append(" · 最多 ${settings.maxPages} 頁")
+                            if (settings.combineAsPdf) append(" · PDF")
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -112,7 +138,38 @@ private fun ScanComposerCard(
                         source = source,
                         selected = source == settings.inputSource,
                         enabled = enabled,
+                        maxPages = settings.maxPages,
                         onClick = { onChanged(settings.copy(inputSource = source)) },
+                    )
+                }
+            }
+
+            FilterChip(
+                selected = settings.combineAsPdf,
+                onClick = { onChanged(settings.copy(combineAsPdf = !settings.combineAsPdf)) },
+                enabled = enabled,
+                leadingIcon = { Icon(Icons.Outlined.PictureAsPdf, contentDescription = null) },
+                label = {
+                    Text(if (settings.inputSource == ScanInputSource.Flatbed) "逐頁合併 PDF" else "合併為多頁 PDF")
+                },
+            )
+
+            if (settings.inputSource == ScanInputSource.Adf) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("頁數上限", style = MaterialTheme.typography.labelLarge)
+                        Text("${settings.maxPages} 頁", color = MaterialTheme.colorScheme.primary)
+                    }
+                    Slider(
+                        value = settings.maxPages.toFloat(),
+                        onValueChange = { onChanged(settings.copy(maxPages = it.roundToInt().coerceIn(1, 50))) },
+                        valueRange = 1f..50f,
+                        steps = 48,
+                        enabled = enabled,
                     )
                 }
             }
@@ -164,6 +221,7 @@ private fun SourceOption(
     source: ScanInputSource,
     selected: Boolean,
     enabled: Boolean,
+    maxPages: Int,
     onClick: () -> Unit,
 ) {
     Card(
@@ -193,7 +251,7 @@ private fun SourceOption(
             Column {
                 Text(source.label, style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    if (source == ScanInputSource.Flatbed) "單頁" else "多頁 · 最多 20 頁",
+                    if (source == ScanInputSource.Flatbed) "單頁" else "多頁 · 最多 $maxPages 頁",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

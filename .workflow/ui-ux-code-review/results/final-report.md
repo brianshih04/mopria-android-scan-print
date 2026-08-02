@@ -1,7 +1,7 @@
 # UI/UX and Code Review Report
 
 Date: 2026-08-02  
-Branch: `agent/real-integration-ui`
+Historical implementation branch: `agent/real-integration-ui`; integrated result now lives on `main`.
 
 ## Outcome
 
@@ -52,3 +52,7 @@ The app now uses an icon-first, widget-dashboard home inspired by the supplied m
 - `_uscan` commonly exposes cleartext local HTTP. The app's eSCL client only uses NSD-resolved scanner endpoints and rejects cross-origin job locations, but transport confidentiality is not guaranteed until `_uscans` certificate/TOFU handling is implemented.
 - Android target SDK 37 will require migration to the new local-network permission model.
 - Capability-driven option filtering, manual IP/URL, background/resumable scanning, large-document soak tests, and TalkBack manual testing remain future milestones.
+
+## 2026-08-02 follow-up
+
+The subsequent eSCL v2.97 pass retained the redesigned UI and added a user-configurable ADF limit (1–50), optional ADF multi-page PDF assembly, and a Flatbed next-page／finish-PDF dialog. The latest baseline is 30 unit tests, 0 lint errors, successful debug assembly, ADF 6-page and Flatbed 2-page emulator flows, and successful DocumentsUI／print-page return navigation. See `.workflow/escl-v2.97-compliance/final-report.md` for the protocol-focused report.

@@ -15,10 +15,9 @@ enum class ScanInputSource(
     val shortLabel: String,
     val description: String,
     val eSclValue: String,
-    val maxPages: Int,
 ) {
-    Flatbed("Flatbed 單頁", "Flatbed", "放在平面玻璃上，掃描一頁", "Platen", 1),
-    Adf("ADF 多頁", "ADF", "由自動送稿器連續掃描多頁", "ADF", 20),
+    Flatbed("Flatbed 單頁", "Flatbed", "放在平面玻璃上，掃描一頁", "Platen"),
+    Adf("ADF 多頁", "ADF", "由自動送稿器連續掃描多頁", "Feeder"),
 }
 
 enum class ScanColorMode(val label: String, val eSclValue: String) {
@@ -31,6 +30,8 @@ data class ScanSettings(
     val inputSource: ScanInputSource = ScanInputSource.Flatbed,
     val resolutionDpi: Int = 300,
     val colorMode: ScanColorMode = ScanColorMode.Color,
+    val maxPages: Int = 20,
+    val combineAsPdf: Boolean = false,
 )
 
 data class IntegrationDevice(
@@ -43,6 +44,10 @@ data class IntegrationDevice(
     val port: Int? = null,
     val secure: Boolean = false,
     val serviceType: String? = null,
+    val resourcePath: String = "eSCL",
+    val uuid: String? = null,
+    val esclVersion: String? = null,
+    val advertisedFormats: List<String> = emptyList(),
 )
 
 data class DocumentPage(
@@ -110,6 +115,8 @@ data class MopriaUiState(
     val lastExportPath: String? = null,
     val integrationMode: IntegrationMode = IntegrationMode.Mock,
     val scanSettings: ScanSettings = ScanSettings(),
+    val pendingFlatbedDocumentId: String? = null,
+    val awaitingNextFlatbedPage: Boolean = false,
 ) {
     val mockMode: Boolean
         get() = integrationMode == IntegrationMode.Mock

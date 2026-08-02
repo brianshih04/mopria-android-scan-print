@@ -1,5 +1,7 @@
 # Orchestration
 
+Status: completed. This file is retained as the historical execution record for the UI/UX pass.
+
 1. Capture the current UI and inspect all production and test sources.
 2. Record UX and code findings by severity and decide which are in scope.
 3. Build a compact Material 3 design system and redesign app shell, home, documents, history, and settings.
@@ -9,3 +11,5 @@
 7. Write the final report with accepted fixes, remaining physical-device risks, and verification evidence.
 
 No subagents are used because this goal did not authorize delegated work. Review packets are performed as isolated passes in the current task.
+
+The later eSCL compliance pass reused the same app shell and verified that scan settings, Flatbed next-page dialog, ADF page slider, documents, print picker return, and home return continue to work on the API 36 emulator.
