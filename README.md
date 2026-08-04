@@ -94,7 +94,7 @@ MopriaAndroidScanPrint/
 │     │  └─ res/                        App icon、多國語言字串、theme、備份與網路設定
 │     └─ test/                           domain 純邏輯與協定單元測試
 ├─ docs/screenshots/main-screens/       API 36 emulator 主畫面 JPEG
-├─ release/avi-print-scan.apk           可安裝測試 APK
+├─ （APK 由 GitHub Release v0.1.0 發布）  可安裝測試 APK（不在 repo 內）
 ├─ .workflow/                           規格合規與 UI review 工作紀錄
 ├─ build.gradle.kts                     root Gradle plugin 設定
 ├─ settings.gradle.kts                  module、plugin 與 Maven repository 設定
@@ -153,7 +153,7 @@ MopriaAndroidScanPrint/
 
 - `app/src/test/.../domain/`、`app/src/test/.../ui/`：測試 discovery、eSCL XML／HTTP、Mock provider、文件合併規則與語系 fallback；不需連接真實設備即可執行。
 - `docs/screenshots/main-screens/`：首頁、Flatbed、ADF、文件、列印檔案選擇器、紀錄與設定的 JPEG 參考畫面。
-- `release/avi-print-scan.apk`：以本機 debug keystore 簽署的 release build，供開發／emulator 測試；正式發布必須換產品簽章。
+- GitHub Release [v0.1.0](https://github.com/brianshih04/mopria-android-scan-print/releases/tag/v0.1.0)（asset `avi-print-scan.apk`）：以本機 debug keystore 簽署的 release build，供開發／emulator 測試；正式發布必須換產品簽章。
 - `app/build/`：Gradle 產生的暫存、測試報告與 APK 輸出，通常被 `.gitignore` 忽略，不應手動提交。
 
 目前未加入 Hilt、Room 或 WorkManager；文件資料與設定仍由目前的 ViewModel／本機儲存流程管理。
@@ -173,7 +173,7 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 
 ## GitHub 可下載成果
 
-- 可安裝測試 APK：[avi-print-scan.apk](release/avi-print-scan.apk)（release build，以本機 debug keystore 簽署，供開發／emulator 測試；正式發布前需改用產品簽章）。
+- 可安裝測試 APK：[avi-print-scan.apk](https://github.com/brianshih04/mopria-android-scan-print/releases/download/v0.1.0/avi-print-scan.apk)（release build，以本機 debug keystore 簽署，供開發／emulator 測試；正式發布前需改用產品簽章）。
 - APK SHA-256：`BE82F63EFDB607C60A4C081C8BE78B15252B374652FD0C43081780F4A99AF9AD`
 - 主畫面 JPEG：[`docs/screenshots/main-screens`](docs/screenshots/main-screens/)
   - [首頁](docs/screenshots/main-screens/01-home.jpg)
