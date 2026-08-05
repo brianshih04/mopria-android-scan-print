@@ -111,7 +111,7 @@ MopriaAndroidScanPrint/
 
 | 路徑 | 內容 |
 |---|---|
-| `app/build.gradle.kts` | `compileSdk/targetSdk 36`、`minSdk 28`、Kotlin JVM 17、Jetpack Compose、Lifecycle 與測試依賴。 |
+| `app/build.gradle.kts` | `compileSdk 37／targetSdk 36`、`minSdk 28`、Kotlin JVM 17、Jetpack Compose；release 啟用 R8 minify／resource shrinking。 |
 | `AndroidManifest.xml` | `INTERNET`、網路狀態與 Android 9 以下儲存權限；宣告 `MainActivity` 及用於分享檔案的 `FileProvider`。 |
 | `res/values/strings.xml`、`themes.xml` | App 名稱、Material theme 與基本 UI 資源。 |
 | `res/drawable/ic_launcher.xml` | App launcher icon。 |
@@ -187,6 +187,16 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 截圖來自 API 36 Android emulator；「列印檔案選擇器」是 Android DocumentsUI，其他畫面為本 App UI。
 
 ## 最新驗證紀錄
+
+2026-08-05 的建置／品質驗證：
+
+- 工具鏈：AGP 9.3.1、Gradle 9.5.0、JDK 25 daemon、`compileSdk 37`。
+- Release 啟用 R8 minify + resource shrinking；release APK 由 ~42 MB 縮至 ~2.2 MB。
+- Android lint：0 errors，0 warnings（Kotlin compiler warnings 亦清零）。
+- Unit tests：34 passed。
+- `:app:assembleDebug`／`:app:assembleRelease`：passed。
+- GitHub Actions CI：push／PR 自動跑 test + lint + assemble，Linux + JDK 25 環境綠燈。
+- 測試 APK 改由 [GitHub Release v0.1.0](https://github.com/brianshih04/mopria-android-scan-print/releases/tag/v0.1.0) 發布，不再進 repo。
 
 2026-08-02 的最終本機驗證：
 

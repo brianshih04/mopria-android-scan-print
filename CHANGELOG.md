@@ -2,7 +2,7 @@
 
 本專案依 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 的概念記錄重要變更；目前尚未建立 release tag。
 
-## [Unreleased] - 2026-08-02
+## [Unreleased] - 2026-08-05
 
 ### Added
 
@@ -22,6 +22,7 @@
 - 新增 10 種語言資源：English、日本語、한국어、Español、Português、Deutsch、Français、Русский、繁體中文、简体中文。
 - 新增依 Android 系統語系自動選擇、未支援語系 fallback English，以及設定頁手動語言覆寫。
 - 新增 `LanguageManager` 語系判斷單元測試。
+- 新增 GitHub Actions CI workflow（push／PR 自動跑 unit test、lint、`assembleDebug`）。
 
 ### Changed
 
@@ -36,6 +37,15 @@
 - 首頁掃描摘要會顯示 ADF 頁數與 PDF 合併狀態。
 - README 與開發計畫改為反映實際單 module 架構與目前驗證範圍。
 - UI、ViewModel 事件、文件 metadata 與設定頁改用 Android string resources，語言切換不需修改程式碼。
+- 工具鏈升級為 AGP 9.3.1、Gradle 9.5.0、JDK 25 daemon（對齊最新 Android Studio）。
+- `compileSdk` 由 36 升至 37；`core-ktx`、`activity-compose`、`lifecycle-*` 升至最新。
+- Release build 啟用 R8 minify 與 resource shrinking；release APK 由 ~42 MB 縮至 ~2.2 MB。
+- `gradlew` 補回 Linux 執行權限（原由 Windows commit 丟失）。
+
+### Removed
+
+- 移除未使用的 `androidTest` 依賴（espresso、`androidx.test.ext:junit`、Compose ui-test）與 8 條未引用的 string resources。
+- 測試 APK 不再 commit 進 repository，改由 [GitHub Release v0.1.0](https://github.com/brianshih04/mopria-android-scan-print/releases/tag/v0.1.0) 發布。
 
 ### Fixed
 
@@ -46,6 +56,8 @@
 - 修正多頁 PDF payload 無法以實際 PDF 頁數呈現在文件庫、列印與匯出流程的問題。
 - 修正取消、錯誤或 ADF 達 client 頁數上限時可能留下 scanner job 的問題。
 - 修正 MIME header 與實際 payload 不一致時仍可能被接受的問題。
+- 清除所有 lint 與 Kotlin compiler warnings（lint 36 → 0；compiler → 0）。
+- 修正 eSCL `Retry-After` 對 null／空白值的解析；修正文件中的機器專屬路徑與失效連結。
 
 ### Security
 
@@ -57,9 +69,10 @@
 ### Verification
 
 - 34 unit tests passed，0 failed。
-- Android lint：0 errors，34 non-blocking warnings。
+- Android lint：0 errors，0 warnings。
 - Debug APK build passed。
 - Release APK build passed，並以 `apksigner verify` 驗證簽章。
+- GitHub Actions CI 通過（`testDebugUnitTest` + `lintDebug` + `assembleDebug`，Linux + JDK 25）。
 - API 36 emulator 通過 ADF 6 頁合併 PDF、Flatbed 2 頁逐頁合併、文件預覽／匯出、DocumentsUI 返回與列印頁返回流程。
 - API 36 emulator 語系 smoke 通過：系統 English、設定頁 10 語言清單、Japanese 與簡體中文手動切換。
 - Smoke flow logcat 無 app `FATAL EXCEPTION`。

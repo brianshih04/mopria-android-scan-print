@@ -1,6 +1,6 @@
 # Development Handoff
 
-更新日期：2026-08-02
+更新日期：2026-08-05
 
 Repository：`brianshih04/mopria-android-scan-print`
 
@@ -88,9 +88,10 @@ Flatbed multi-page 是多個獨立 eSCL Platen job 的 App-level session，不�
 | 驗證 | 結果 |
 |---|---|
 | `:app:testDebugUnitTest` | 34 passed，0 failed |
-| `:app:lintDebug` | 0 errors，34 warnings |
+| `:app:lintDebug` | 0 errors，0 warnings |
 | `:app:assembleDebug` | passed；APK 位於 `app/build/outputs/apk/debug/app-debug.apk` |
-| `:app:assembleRelease` | passed；`release/avi-print-scan.apk` 已簽署並通過 `apksigner verify` |
+| `:app:assembleRelease` | passed；R8 minify 開啟，release APK ~2.2 MB（unsigned，產品簽章另以 `apksigner` 套用） |
+| GitHub Actions CI | push／PR 自動跑 `testDebugUnitTest` + `lintDebug` + `assembleDebug`，Linux + JDK 25 環境綠燈 |
 | `LanguageManagerTest` | 覆蓋 10 種可選語系、未知 tag、繁／簡中文 script 與 region 判斷 |
 | `git diff --check` | passed |
 | ADF emulator | max pages 改為 6；合併選項產生一份 6 頁文件及 PDF |
@@ -102,7 +103,7 @@ APK SHA-256：`BE82F63EFDB607C60A4C081C8BE78B15252B374652FD0C43081780F4A99AF9AD`
 
 語系 emulator smoke：清除 App data 後使用系統 en-US 驗證 English；設定頁可開啟 10 語言選單；手動選擇日本語與简体中文後，設定頁標題、操作說明與底部導覽即時更新。
 
-Lint warnings 為依賴版本與 Kotlin extension 建議，沒有 correctness／security error。Emulator screenshots 位於 ignored 的 `app/build/reports/emulator-smoke/`，不提交 Git。
+Lint warnings 已清零（原為依賴版本／extension／pluralization 建議，已升版或按設計停用 `OldTargetApi`／`PluralsCandidate`）；無 correctness／security error。Emulator screenshots 位於 ignored 的 `app/build/reports/emulator-smoke/`，不提交 Git。
 
 ## 7. 已知限制與風險
 

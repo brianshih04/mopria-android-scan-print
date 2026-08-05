@@ -6,12 +6,12 @@
 
 ### 從 GitHub 下載
 
-下載 repository 的 [`release/avi-print-scan.apk`](release/avi-print-scan.apk)。此 APK 是開發／emulator 測試版本，以 debug keystore 簽署；正式上架前需要產品簽章。
+從 [GitHub Release v0.1.0](https://github.com/brianshih04/mopria-android-scan-print/releases/download/v0.1.0/avi-print-scan.apk) 下載 `avi-print-scan.apk`。此 APK 是開發／emulator 測試版本，以 debug keystore 簽署；正式上架前需要產品簽章。
 
 ### 使用 Android Debug Bridge
 
 ```powershell
-adb install -r .\release\avi-print-scan.apk
+adb install -r avi-print-scan.apk
 adb shell am start -n com.brianshih.mopria.android.scanprint/.MainActivity
 ```
 
