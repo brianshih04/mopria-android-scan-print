@@ -160,17 +160,9 @@
     <string name="print_phone_documents">Documents du téléphone (%1$d)</string>
     <string name="format_pdf">PDF</string>
     <string name="format_jpeg">JPEG</string>
-    <string name="common_files">%1$d fichiers</string>
-    <string name="common_unknown">Inconnu</string>
-    <string name="common_back">Retour</string>
-    <string name="common_close">Fermer</string>
     <string name="document_demo_name">Document de démonstration %1$s</string>
     <string name="document_demo_source">Intégration simulée locale</string>
     <string name="document_demo_cover">Couverture et résumé</string>
     <string name="document_demo_content">Page de contenu</string>
-    <string name="document_demo_appendix">Annexe</string>
-    <string name="document_scan_name">Document numérisé %1$s</string>
-    <string name="document_flatbed_name">Document multipage à plat %1$s</string>
-    <string name="document_scan_page">Page numérisée %1$d</string>
     <string name="document_saved_page">Page enregistrée %1$d</string>
 </resources>

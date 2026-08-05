@@ -129,12 +129,8 @@
     <string name="settings_language_detail">Follow the system language or choose one</string>
 
     <string name="common_pages">%1$d pages</string>
-    <string name="common_files">%1$d files</string>
-    <string name="common_unknown">Unknown</string>
     <string name="common_retry">Please try again</string>
     <string name="common_no_documents">Please scan or create a document first</string>
-    <string name="common_back">Back</string>
-    <string name="common_close">Close</string>
 
     <string name="event_saved_documents_unavailable">Some saved documents could not be loaded</string>
     <string name="event_mode_changed">Switched to %1$s: %2$s</string>
@@ -180,9 +176,5 @@
     <string name="document_demo_source">Local mock integration</string>
     <string name="document_demo_cover">Cover and summary</string>
     <string name="document_demo_content">Content page</string>
-    <string name="document_demo_appendix">Appendix</string>
-    <string name="document_scan_name">Scanned document %1$s</string>
-    <string name="document_flatbed_name">Flatbed multi-page document %1$s</string>
-    <string name="document_scan_page">Scanned page %1$d</string>
     <string name="document_saved_page">Saved page %1$d</string>
 </resources>

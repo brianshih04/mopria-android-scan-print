@@ -160,17 +160,9 @@
     <string name="print_phone_documents">スマートフォンのドキュメント（%1$d件）</string>
     <string name="format_pdf">PDF</string>
     <string name="format_jpeg">JPEG</string>
-    <string name="common_files">%1$d件のファイル</string>
-    <string name="common_unknown">不明</string>
-    <string name="common_back">戻る</string>
-    <string name="common_close">閉じる</string>
     <string name="document_demo_name">デモドキュメント %1$s</string>
     <string name="document_demo_source">ローカルモック連携</string>
     <string name="document_demo_cover">表紙と概要</string>
     <string name="document_demo_content">内容ページ</string>
-    <string name="document_demo_appendix">付録</string>
-    <string name="document_scan_name">スキャンしたドキュメント %1$s</string>
-    <string name="document_flatbed_name">フラットベッド複数ページドキュメント %1$s</string>
-    <string name="document_scan_page">スキャンページ %1$d</string>
     <string name="document_saved_page">保存済みページ %1$d</string>
 </resources>

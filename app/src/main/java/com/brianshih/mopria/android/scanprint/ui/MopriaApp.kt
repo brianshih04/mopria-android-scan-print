@@ -6,7 +6,7 @@ import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
+import androidx.core.net.toUri
 import android.os.Build
 import android.print.PrintDocumentAdapter
 import android.print.PrintManager
@@ -154,7 +154,7 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
     }
     LaunchedEffect(viewModel, context) {
         viewModel.shareRequests.collect { request ->
-            val uri = Uri.parse(request.uri)
+            val uri = request.uri.toUri()
             val sendIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "application/pdf"
                 putExtra(Intent.EXTRA_STREAM, uri)

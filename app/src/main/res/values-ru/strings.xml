@@ -160,17 +160,9 @@
     <string name="print_phone_documents">Документы с телефона (%1$d)</string>
     <string name="format_pdf">PDF</string>
     <string name="format_jpeg">JPEG</string>
-    <string name="common_files">%1$d файлов</string>
-    <string name="common_unknown">Неизвестно</string>
-    <string name="common_back">Назад</string>
-    <string name="common_close">Закрыть</string>
     <string name="document_demo_name">Демонстрационный документ %1$s</string>
     <string name="document_demo_source">Локальная имитация интеграции</string>
     <string name="document_demo_cover">Обложка и краткое содержание</string>
     <string name="document_demo_content">Страница содержания</string>
-    <string name="document_demo_appendix">Приложение</string>
-    <string name="document_scan_name">Отсканированный документ %1$s</string>
-    <string name="document_flatbed_name">Многостраничный документ со стекла %1$s</string>
-    <string name="document_scan_page">Отсканированная страница %1$d</string>
     <string name="document_saved_page">Сохранённая страница %1$d</string>
 </resources>

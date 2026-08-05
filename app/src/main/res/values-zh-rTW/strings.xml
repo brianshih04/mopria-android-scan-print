@@ -128,12 +128,8 @@
     <string name="settings_language_detail">依系統語言，或自行選擇</string>
 
     <string name="common_pages">%1$d 頁</string>
-    <string name="common_files">%1$d 個檔案</string>
-    <string name="common_unknown">未知</string>
     <string name="common_retry">請再試一次</string>
     <string name="common_no_documents">請先掃描或建立文件</string>
-    <string name="common_back">返回</string>
-    <string name="common_close">關閉</string>
 
     <string name="event_saved_documents_unavailable">部分已儲存文件無法載入</string>
     <string name="event_mode_changed">已切換至 %1$s：%2$s</string>
@@ -179,9 +175,5 @@
     <string name="document_demo_source">本機模擬整合</string>
     <string name="document_demo_cover">封面與摘要</string>
     <string name="document_demo_content">內容頁</string>
-    <string name="document_demo_appendix">附錄</string>
-    <string name="document_scan_name">掃描文件 %1$s</string>
-    <string name="document_flatbed_name">平台多頁文件 %1$s</string>
-    <string name="document_scan_page">掃描頁 %1$d</string>
     <string name="document_saved_page">已儲存頁面 %1$d</string>
 </resources>

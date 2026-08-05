@@ -4,8 +4,9 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
-import android.net.Uri
 import android.os.ParcelFileDescriptor
+import androidx.core.graphics.createBitmap
+import androidx.core.net.toUri
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
 import java.io.File
 import kotlin.math.max
@@ -38,7 +39,7 @@ internal object DocumentPageBitmapLoader {
                         ).coerceAtLeast(0.01f)
                         val width = max(1, (pdfPage.width * scale).toInt())
                         val height = max(1, (pdfPage.height * scale).toInt())
-                        Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
+                        createBitmap(width, height).also { bitmap ->
                             bitmap.eraseColor(Color.WHITE)
                             pdfPage.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                         }
@@ -49,8 +50,8 @@ internal object DocumentPageBitmapLoader {
     }
 
     private fun openDescriptor(context: Context, path: String): ParcelFileDescriptor? = when {
-        path.startsWith("content://") -> context.contentResolver.openFileDescriptor(Uri.parse(path), "r")
-        path.startsWith("file://") -> Uri.parse(path).path?.let { ParcelFileDescriptor.open(File(it), ParcelFileDescriptor.MODE_READ_ONLY) }
+        path.startsWith("content://") -> context.contentResolver.openFileDescriptor(path.toUri(), "r")
+        path.startsWith("file://") -> path.toUri().path?.let { ParcelFileDescriptor.open(File(it), ParcelFileDescriptor.MODE_READ_ONLY) }
         else -> ParcelFileDescriptor.open(File(path), ParcelFileDescriptor.MODE_READ_ONLY)
     }
 }

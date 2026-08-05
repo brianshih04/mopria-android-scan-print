@@ -160,17 +160,9 @@
     <string name="print_phone_documents">휴대전화 문서(%1$d개)</string>
     <string name="format_pdf">PDF</string>
     <string name="format_jpeg">JPEG</string>
-    <string name="common_files">%1$d개 파일</string>
-    <string name="common_unknown">알 수 없음</string>
-    <string name="common_back">뒤로</string>
-    <string name="common_close">닫기</string>
     <string name="document_demo_name">데모 문서 %1$s</string>
     <string name="document_demo_source">로컬 모의 연동</string>
     <string name="document_demo_cover">표지 및 요약</string>
     <string name="document_demo_content">내용 페이지</string>
-    <string name="document_demo_appendix">부록</string>
-    <string name="document_scan_name">스캔 문서 %1$s</string>
-    <string name="document_flatbed_name">평판 다중 페이지 문서 %1$s</string>
-    <string name="document_scan_page">스캔 페이지 %1$d</string>
     <string name="document_saved_page">저장된 페이지 %1$d</string>
 </resources>

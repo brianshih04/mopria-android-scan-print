@@ -21,7 +21,7 @@ class LanguageManagerTest {
 
     @Test
     fun languageForMapsChineseScriptAndRegionCorrectly() {
-        assertEquals(AppLanguage.TraditionalChinese, LanguageManager.languageFor(Locale("zh", "TW")))
+        assertEquals(AppLanguage.TraditionalChinese, LanguageManager.languageFor(Locale.forLanguageTag("zh-TW")))
         assertEquals(AppLanguage.TraditionalChinese, LanguageManager.languageFor(Locale.Builder().setLanguage("zh").setScript("Hant").build()))
         assertEquals(AppLanguage.SimplifiedChinese, LanguageManager.languageFor(Locale.CHINA))
         assertEquals(AppLanguage.SimplifiedChinese, LanguageManager.languageFor(Locale.Builder().setLanguage("zh").setScript("Hans").build()))
