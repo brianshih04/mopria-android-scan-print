@@ -163,7 +163,7 @@ MopriaAndroidScanPrint/
 需要 JDK 17+、Android SDK 36 及可用的 Android SDK license。Android Studio 建議用於 Compose Preview、Logcat、Profiler 與 Emulator，但命令列即可建置。
 
 ```powershell
-cd E:\Projects\mopria-android-scan-print
+# 於專案根目錄執行（以下為 Windows PowerShell；macOS／Linux 改用 ./gradlew）
 .\gradlew.bat :app:testDebugUnitTest --max-workers=1 --no-daemon
 .\gradlew.bat :app:lintDebug :app:assembleDebug --max-workers=1 --no-daemon
 adb install -r .\app\build\outputs\apk\debug\app-debug.apk

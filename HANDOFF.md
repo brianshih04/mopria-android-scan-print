@@ -15,7 +15,7 @@ Repository：`brianshih04/mopria-android-scan-print`
 ## 2. 快速啟動
 
 ```powershell
-cd E:\Projects\mopria-android-scan-print
+# 於專案根目錄執行（以下為 Windows PowerShell；macOS／Linux 改用 ./gradlew）
 .\gradlew.bat :app:testDebugUnitTest --max-workers=1 --no-daemon
 .\gradlew.bat :app:lintDebug :app:assembleDebug --max-workers=1 --no-daemon
 adb install -r .\app\build\outputs\apk\debug\app-debug.apk
@@ -26,7 +26,7 @@ adb shell am start -n com.brianshih.mopria.android.scanprint/.MainActivity
 
 ## 2.1 GitHub 交付產物
 
-- 測試 APK：[`release/avi-print-scan.apk`](release/avi-print-scan.apk)
+- 測試 APK（GitHub Release v0.1.0）：[`avi-print-scan.apk`](https://github.com/brianshih04/mopria-android-scan-print/releases/download/v0.1.0/avi-print-scan.apk)
 - API 36 emulator 主畫面 JPEG：[`docs/screenshots/main-screens/`](docs/screenshots/main-screens/)
 - APK 使用本機 debug keystore 簽署，適合開發與 emulator 安裝；正式發布前必須換成產品簽章。
 
