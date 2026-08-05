@@ -218,12 +218,13 @@ class EsclHttpClient(
     }
 
     private fun retryDelayMs(value: String?): Long {
-        val seconds = value?.trim()?.toLongOrNull()
-        val millis = if (seconds != null) {
-            seconds.coerceIn(0L, MAX_RETRY_DELAY_MS / 1_000L) * 1_000L
-        } else {
-            runCatching {
-                val retryAt = ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant()
+        val trimmed = value?.trim()
+        val seconds = trimmed?.toLongOrNull()
+        val millis = when {
+            seconds != null -> seconds.coerceIn(0L, MAX_RETRY_DELAY_MS / 1_000L) * 1_000L
+            trimmed.isNullOrBlank() -> DEFAULT_RETRY_DELAY_MS
+            else -> runCatching {
+                val retryAt = ZonedDateTime.parse(trimmed, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant()
                 max(0L, retryAt.toEpochMilli() - Instant.now().toEpochMilli())
             }.getOrDefault(DEFAULT_RETRY_DELAY_MS)
         }
