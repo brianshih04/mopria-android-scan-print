@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.brianshih.mopria.android.scanprint"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.brianshih.mopria.android.scanprint"
@@ -45,7 +45,17 @@ android {
     kotlin {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            freeCompilerArgs.add("-Xannotation-default-target=param-property")
         }
+    }
+
+    lint {
+        // targetSdk is intentionally 36: targetSdk 37 requires the ACCESS_LOCAL_NETWORK
+        // permission migration for NSD scanner discovery (tracked in README).
+        disable += "OldTargetApi"
+        // Pluralizing count-bearing strings across all 10 locales is a tracked i18n
+        // follow-up; disabled rather than shipping partial/incorrect plural forms.
+        disable += "PluralsCandidate"
     }
 
     buildFeatures {
@@ -63,11 +73,11 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.03.01")
     implementation(composeBom)
 
-    implementation("androidx.core:core-ktx:1.17.0")
-    implementation("androidx.activity:activity-compose:1.11.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
+    implementation("androidx.core:core-ktx:1.19.0")
+    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
