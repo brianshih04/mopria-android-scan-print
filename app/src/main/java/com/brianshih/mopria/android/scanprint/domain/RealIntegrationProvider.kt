@@ -293,15 +293,21 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         }
     }
 
-    override suspend fun print(printer: IntegrationDevice, document: MopriaDocument) = withContext(Dispatchers.IO) {
-        val host = requireNotNull(printer.host) { "印表機缺少 host" }
+    override suspend fun print(printer: IntegrationDevice, document: MopriaDocument, options: PrintOptions?) = withContext(Dispatchers.IO) {
+        val host = requireNotNull(printer.host) { "printer missing resolved host" }
         val uri = IppDiscovery.printerUri(host, printer.port ?: IppDiscovery.DEFAULT_PORT, printer.resourcePath, printer.secure)
         val client = IppPrintClient(BoundedIppTransport())
-        val format = client.selectProducibleFormat(uri)
-            ?: throw PrintError.UnsupportedFormat(printer.advertisedFormats)
+        // One Get-Printer-Attributes drives both format negotiation and capability coercion, so a print
+        // never sends a job-template attribute the printer does not advertise.
+        val attributes = client.getPrinterAttributes(uri)
+        val format = IppDocumentFormat.select(
+            client.documentFormatsSupported(attributes),
+            IppDocumentFormat.producible,
+        ) ?: throw PrintError.UnsupportedFormat(printer.advertisedFormats)
+        val coercedOptions = options?.coerceTo(client.parseCapabilities(attributes))
         val rendered = renderPrintDocument(document, format)
         try {
-            val submission = client.send(uri, rendered)
+            val submission = client.send(uri, rendered, options = coercedOptions)
             client.awaitJobCompletion(uri, submission.jobId)
         } finally {
             rendered.delete()

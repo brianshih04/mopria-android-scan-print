@@ -271,6 +271,26 @@ class IppPrintClientTest {
         assertNull(coerced.orientation)
     }
 
+    @Test
+    fun sendIncludesJobTemplateAttributesInCreateJob() {
+        val server = stubPrinter(formats = listOf(IppDocumentFormat.PDF))
+        server.start()
+        try {
+            val client = IppPrintClient(BoundedIppTransport())
+            val rendered = RenderedPrintDocument(IppDocumentFormat.PDF, listOf(tempFile("%PDF-1.4".toByteArray())))
+            try {
+                client.send(server.uri, rendered, options = PrintOptions(copies = 3, colorMode = "color", quality = "normal"))
+            } finally {
+                rendered.delete()
+            }
+            // Create-Job must carry the job-template attributes derived from options.
+            assertEquals(3, server.createJobCopies)
+            assertEquals("color", server.createJobColorMode)
+        } finally {
+            server.stop()
+        }
+    }
+
     private fun stubPrinter(
         formats: List<String> = listOf(IppDocumentFormat.PDF),
         jobStates: List<JobState> = emptyList(),
@@ -288,6 +308,11 @@ class IppPrintClientTest {
             private set
         /** Content-Length header of the most recent request (fixed-length streaming sets this; chunked does not). */
         var lastRequestContentLength: String? = null
+            private set
+        /** job-template attributes captured from the Create-Job request, when send() passes options. */
+        var createJobCopies: Int? = null
+            private set
+        var createJobColorMode: String? = null
             private set
         private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         private val executor = Executors.newSingleThreadExecutor()
@@ -307,6 +332,10 @@ class IppPrintClientTest {
                 }
                 if (packet.operation.code == Operation.cancelJob.code) {
                     cancelCount += 1
+                }
+                if (packet.operation.code == Operation.createJob.code) {
+                    createJobCopies = packet.getValue(Tag.jobAttributes, Types.copies)
+                    createJobColorMode = packet.getValue(Tag.jobAttributes, Types.printColorMode)
                 }
                 val response = when (packet.operation.code) {
                     Operation.getPrinterAttributes.code ->

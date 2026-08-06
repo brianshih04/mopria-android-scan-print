@@ -47,7 +47,7 @@ class MockIntegrationProvider : DeviceDiscovery, ScanAcquisitionProvider, PrintP
         )
     }
 
-    override suspend fun print(printer: IntegrationDevice, document: MopriaDocument) {
+    override suspend fun print(printer: IntegrationDevice, document: MopriaDocument, options: PrintOptions?) {
         delay(900)
     }
 }

@@ -1,8 +1,11 @@
 package com.brianshih.mopria.android.scanprint.domain
 
+import com.hp.jipp.encoding.Attribute
 import com.hp.jipp.encoding.IppPacket
 import com.hp.jipp.encoding.Tag
 import com.hp.jipp.model.JobState
+import com.hp.jipp.model.Orientation
+import com.hp.jipp.model.PrintQuality
 import com.hp.jipp.model.Types
 import java.io.File
 import java.io.InputStream
@@ -160,12 +163,14 @@ class IppPrintClient(
         uri: URI,
         document: RenderedPrintDocument,
         jobName: String = "Mopria Scan & Print",
+        options: PrintOptions? = null,
     ): IppJobSubmission {
         val createRequest = IppPacket.createJob(uri)
             .putOperationAttributes(
                 Types.requestingUserName.of(userAgent),
                 Types.jobName.of(jobName),
             )
+            .let { builder -> jobTemplateAttributes(options).takeIf(List<*>::isNotEmpty)?.let { builder.putJobAttributes(*it.toTypedArray()) } ?: builder }
             .build()
         val createResponse = transport.send(uri, createRequest)
         if (!isSuccessful(createResponse)) throw PrintError.CreateJobFailed(createResponse.status.code)
@@ -241,6 +246,24 @@ class IppPrintClient(
         }
         withContext(NonCancellable) { runCatching { cancelJob(uri, jobId) } }
         throw PrintError.JobTimeout
+    }
+
+    /**
+     * Builds the job-template attributes for Create-Job from [options]. Each is included only when set;
+     * callers should pass [PrintOptions.coerceTo]-d options so values already match the printer's
+     * capabilities. Enum options (quality, orientation) are mapped from their IPP keyword to the typed
+     * jipp enum so Create-Job encodes the integer code the printer expects.
+     */
+    private fun jobTemplateAttributes(options: PrintOptions?): List<Attribute<*>> {
+        if (options == null) return emptyList()
+        return buildList {
+            options.copies?.let { add(Types.copies.of(it)) }
+            options.media?.let { add(Types.media.of(it)) }
+            options.sides?.let { add(Types.sides.of(it)) }
+            options.colorMode?.let { add(Types.printColorMode.of(it)) }
+            options.quality?.let { name -> PrintQuality.all.values.firstOrNull { it.name == name }?.let { add(Types.printQuality.of(it)) } }
+            options.orientation?.let { name -> Orientation.all.values.firstOrNull { it.name == name }?.let { add(Types.orientationRequested.of(it)) } }
+        }
     }
 
     /** IPP successful status codes occupy the 0x0000–0x00FF range (RFC 8011 §13). */
