@@ -297,15 +297,59 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
     override suspend fun print(printer: IntegrationDevice, document: MopriaDocument) = withContext(Dispatchers.IO) {
         val host = requireNotNull(printer.host) { "印表機缺少 host" }
         val uri = IppDiscovery.printerUri(host, printer.port ?: IppDiscovery.DEFAULT_PORT, printer.resourcePath, printer.secure)
-        val pdf = renderDocumentPdf(document)
+        val client = IppPrintClient(BoundedIppTransport())
+        val format = client.selectProducibleFormat(uri)
+            ?: error("IPP 印表機不支援本 App 可產生的格式（PDF／JPEG／PNG）；printer pdl=${printer.advertisedFormats}")
+        val rendered = renderPrintDocument(document, format)
         try {
-            val submission = pdf.inputStream().use { stream ->
-                IppPrintClient(BoundedIppTransport()).printSupported(uri, stream)
-                    ?: error("IPP 印表機不支援本 App 可產生的格式（PDF／JPEG）；printer pdl=${printer.advertisedFormats}")
-            }
-            require((submission.response.status.code and 0xFF00) == 0) { "IPP 列印失敗：${submission.response.status}" }
+            val submission = client.send(uri, rendered)
+            client.awaitJobCompletion(uri, submission.jobId)
         } finally {
-            pdf.delete()
+            rendered.delete()
+        }
+        Unit
+    }
+
+    /**
+     * Renders a [MopriaDocument] into the negotiated IPP [format] for submission.
+     *
+     * PDF → one multi-page file via Android `PdfDocument`. JPEG/PNG → one compressed image per page;
+     * each page becomes a separate Send-Document (see [IppPrintClient.send]). A page that cannot be
+     * decoded fails loudly rather than producing a blank sheet. TODO(P2.7): share sampling logic with
+     * `DocumentPageBitmapLoader` to bound memory for high-dpi scans.
+     */
+    private fun renderPrintDocument(document: MopriaDocument, format: String): RenderedPrintDocument = when (format) {
+        IppDocumentFormat.PDF -> RenderedPrintDocument(format, listOf(renderDocumentPdf(document)))
+        IppDocumentFormat.JPEG, IppDocumentFormat.PNG -> {
+            val extension = if (format == IppDocumentFormat.JPEG) "jpg" else "png"
+            val pages = document.pages.mapIndexed { index, page ->
+                renderPageImage(document.id, index, page, format, extension)
+            }
+            RenderedPrintDocument(format, pages)
+        }
+        else -> error("無法渲染為 $format；僅支援 PDF／JPEG／PNG")
+    }
+
+    private fun renderPageImage(
+        documentId: String,
+        index: Int,
+        page: DocumentPage,
+        format: String,
+        extension: String,
+    ): File {
+        val source = decodePageBitmap(page) ?: error("無法解碼頁面 ${index + 1}，無法產生 $format")
+        val output = createBitmap(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT)
+        try {
+            val canvas = Canvas(output)
+            canvas.drawColor(Color.WHITE)
+            drawFittedBitmap(canvas, source)
+            val compressFormat = if (format == IppDocumentFormat.JPEG) Bitmap.CompressFormat.JPEG else Bitmap.CompressFormat.PNG
+            val file = File(appContext.cacheDir, "ipp-print-$documentId-page-${index + 1}.$extension")
+            FileOutputStream(file).use { out -> output.compress(compressFormat, IPP_IMAGE_QUALITY, out) }
+            return file
+        } finally {
+            source.recycle()
+            output.recycle()
         }
     }
 
@@ -334,17 +378,22 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         canvas.drawColor(Color.WHITE)
         val bitmap = decodePageBitmap(page) ?: return
         try {
-            val scale = minOf(
-                (canvas.width - PDF_MARGIN * 2) / bitmap.width.toFloat(),
-                (canvas.height - PDF_MARGIN * 2) / bitmap.height.toFloat(),
-            ).coerceAtMost(MAX_BITMAP_SCALE)
-            val width = bitmap.width * scale
-            val height = bitmap.height * scale
-            val left = (canvas.width - width) / 2f
-            canvas.drawBitmap(bitmap, null, RectF(left, PDF_MARGIN.toFloat(), left + width, PDF_MARGIN + height), null)
+            drawFittedBitmap(canvas, bitmap)
         } finally {
             bitmap.recycle()
         }
+    }
+
+    /** Draws [bitmap] fitted within [PDF_MARGIN] on [canvas], preserving aspect ratio. */
+    private fun drawFittedBitmap(canvas: Canvas, bitmap: Bitmap) {
+        val scale = minOf(
+            (canvas.width - PDF_MARGIN * 2) / bitmap.width.toFloat(),
+            (canvas.height - PDF_MARGIN * 2) / bitmap.height.toFloat(),
+        ).coerceAtMost(MAX_BITMAP_SCALE)
+        val width = bitmap.width * scale
+        val height = bitmap.height * scale
+        val left = (canvas.width - width) / 2f
+        canvas.drawBitmap(bitmap, null, RectF(left, PDF_MARGIN.toFloat(), left + width, PDF_MARGIN + height), null)
     }
 
     private fun decodePageBitmap(page: DocumentPage): Bitmap? {
@@ -479,6 +528,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         const val PDF_PAGE_HEIGHT = 792
         const val PDF_MARGIN = 36
         const val MAX_BITMAP_SCALE = 1f
+        const val IPP_IMAGE_QUALITY = 90
         const val JOB_READY_ATTEMPTS = 60
         const val JOB_STATUS_ATTEMPTS = 120
         const val JOB_STATUS_POLL_MS = 500L
