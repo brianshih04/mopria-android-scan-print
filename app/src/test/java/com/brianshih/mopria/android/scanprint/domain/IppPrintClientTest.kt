@@ -6,6 +6,8 @@ import com.hp.jipp.encoding.IppPacket
 import com.hp.jipp.encoding.Tag
 import com.hp.jipp.model.JobState
 import com.hp.jipp.model.Operation
+import com.hp.jipp.model.Orientation
+import com.hp.jipp.model.PrintQuality
 import com.hp.jipp.model.Types
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
@@ -204,6 +206,69 @@ class IppPrintClientTest {
         } finally {
             server.stop()
         }
+    }
+
+    @Test
+    fun parsesPrinterCapabilitiesFromAttributes() {
+        val client = IppPrintClient(BoundedIppTransport())
+        val attributes = IppPacket.Builder(SUCCESS).putPrinterAttributes(
+            Types.copiesSupported.of(1..50),
+            Types.mediaSupported.of("iso_a4_210x297mm", "na_letter_8.5x11in"),
+            Types.sidesSupported.of(listOf("one-sided", "two-sided-long-edge")),
+            Types.printColorModeSupported.of(listOf("color", "monochrome")),
+            Types.printQualitySupported.of(listOf(PrintQuality.draft, PrintQuality.normal, PrintQuality.high)),
+            Types.orientationRequestedSupported.of(listOf(Orientation.portrait, Orientation.landscape)),
+        ).build()
+
+        val caps = client.parseCapabilities(attributes)
+
+        assertEquals(1..50, caps.copies)
+        assertEquals(listOf("iso_a4_210x297mm", "na_letter_8.5x11in"), caps.media)
+        assertEquals(listOf("one-sided", "two-sided-long-edge"), caps.sides)
+        assertEquals(listOf("color", "monochrome"), caps.colorModes)
+        assertEquals(listOf("draft", "normal", "high"), caps.qualities)
+        assertEquals(listOf("portrait", "landscape"), caps.orientations)
+        assertTrue(caps.hasAnyOption())
+    }
+
+    @Test
+    fun parseCapabilitiesDefaultsWhenNothingAdvertised() {
+        val client = IppPrintClient(BoundedIppTransport())
+        val attributes = IppPacket.Builder(SUCCESS).build()
+
+        val caps = client.parseCapabilities(attributes)
+
+        assertEquals(PrintCapabilities.EMPTY, caps)
+        assertTrue(!caps.hasAnyOption())
+    }
+
+    @Test
+    fun coerceToDropsUnsupportedPrintOptions() {
+        val caps = PrintCapabilities(
+            copies = 1..5,
+            media = listOf("iso_a4_210x297mm"),
+            sides = listOf("one-sided"),
+            colorModes = listOf("color"),
+            qualities = listOf("normal"),
+            orientations = listOf("portrait"),
+        )
+        val chosen = PrintOptions(
+            copies = 3,
+            media = "iso_a4_210x297mm",
+            sides = "two-sided-long-edge", // unsupported
+            colorMode = "monochrome",      // unsupported
+            quality = "normal",
+            orientation = "landscape",      // unsupported
+        )
+
+        val coerced = chosen.coerceTo(caps)
+
+        assertEquals(3, coerced.copies)
+        assertEquals("iso_a4_210x297mm", coerced.media)
+        assertEquals("normal", coerced.quality)
+        assertNull(coerced.sides)
+        assertNull(coerced.colorMode)
+        assertNull(coerced.orientation)
     }
 
     private fun stubPrinter(

@@ -117,6 +117,21 @@ class IppPrintClient(
         attributes.getStrings(Tag.printerAttributes, Types.documentFormatSupported)
 
     /**
+     * Parse the printable-option capabilities (copies, media, sides, color, quality, orientation) from a
+     * Get-Printer-Attributes response. Missing attributes yield empty lists / copies fixed at 1, so the
+     * caller can treat absent advertisements as "not configurable" without extra null handling.
+     */
+    fun parseCapabilities(attributes: IppPacket): PrintCapabilities = PrintCapabilities(
+        copies = attributes.getValue(Tag.printerAttributes, Types.copiesSupported) ?: (1..1),
+        media = attributes.getStrings(Tag.printerAttributes, Types.mediaSupported),
+        sides = attributes.getStrings(Tag.printerAttributes, Types.sidesSupported),
+        colorModes = attributes.getStrings(Tag.printerAttributes, Types.printColorModeSupported),
+        // Enum sets: getStrings returns "name(code)"; read the typed list and take the keyword name.
+        qualities = attributes.getValues(Tag.printerAttributes, Types.printQualitySupported).map { it.name },
+        orientations = attributes.getValues(Tag.printerAttributes, Types.orientationRequestedSupported).map { it.name },
+    )
+
+    /**
      * Query the printer and return the first [preferred] format it advertises, or null if none match.
      * Pair with [send]: the caller renders the document into the negotiated format, then submits via
      * [send] so the bytes always match the declared `document-format`. Default [preferred] is
