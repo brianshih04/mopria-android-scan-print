@@ -299,7 +299,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         val uri = IppDiscovery.printerUri(host, printer.port ?: IppDiscovery.DEFAULT_PORT, printer.resourcePath, printer.secure)
         val client = IppPrintClient(BoundedIppTransport())
         val format = client.selectProducibleFormat(uri)
-            ?: error("IPP 印表機不支援本 App 可產生的格式（PDF／JPEG／PNG）；printer pdl=${printer.advertisedFormats}")
+            ?: throw PrintError.UnsupportedFormat(printer.advertisedFormats)
         val rendered = renderPrintDocument(document, format)
         try {
             val submission = client.send(uri, rendered)
@@ -327,7 +327,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
             }
             RenderedPrintDocument(format, pages)
         }
-        else -> error("無法渲染為 $format；僅支援 PDF／JPEG／PNG")
+        else -> error("Unsupported render format: $format (expected PDF/JPEG/PNG)")
     }
 
     private fun renderPageImage(
@@ -337,7 +337,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         format: String,
         extension: String,
     ): File {
-        val source = decodePageBitmap(page) ?: error("無法解碼頁面 ${index + 1}，無法產生 $format")
+        val source = decodePageBitmap(page) ?: throw PrintError.PageRenderFailed(index + 1, format)
         val output = createBitmap(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT)
         try {
             val canvas = Canvas(output)

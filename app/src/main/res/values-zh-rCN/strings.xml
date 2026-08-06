@@ -181,4 +181,9 @@
     <string name="print_method_ipp">直接 IPP（实验性）</string>
     <string name="print_method_system_description">Android 打印框架 / Mopria</string>
     <string name="print_method_ipp_description">通过 IPP/IPPS 直接打印</string>
+    <string name="print_error_unsupported_format">打印机不支持 PDF、JPEG 或 PNG</string>
+    <string name="print_error_rejected">打印机拒绝了打印任务</string>
+    <string name="print_error_job_stopped">打印机已停止打印任务</string>
+    <string name="print_error_timeout">打印任务超时</string>
+    <string name="print_error_render_failed">无法准备要打印的页面</string>
 </resources>

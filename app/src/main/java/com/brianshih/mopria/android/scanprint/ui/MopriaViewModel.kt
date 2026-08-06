@@ -21,6 +21,7 @@ import com.brianshih.mopria.android.scanprint.domain.MockIntegrationProvider
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
 import com.brianshih.mopria.android.scanprint.domain.PrintMethod
+import com.brianshih.mopria.android.scanprint.domain.PrintError
 import com.brianshih.mopria.android.scanprint.domain.PrintProvider
 import com.brianshih.mopria.android.scanprint.domain.RealIntegrationProvider
 import com.brianshih.mopria.android.scanprint.domain.ScanAcquisitionProvider
@@ -365,12 +366,29 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 jobId?.let { updateJob(it, JobStatus.Cancelled, 0, text(R.string.event_print_cancelled)) }
                 _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
                 throw error
-            } catch (error: Exception) {
-                jobId?.let { updateJob(it, JobStatus.Failed, 0, error.message ?: text(R.string.event_print_failed, text(mode.labelRes), text(R.string.common_retry))) }
+            } catch (error: PrintError) {
+                val message = text(error.messageStringRes())
+                jobId?.let { updateJob(it, JobStatus.Failed, 0, message) }
                 _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
-                _events.tryEmit(text(R.string.event_print_failed, text(mode.labelRes), error.message ?: text(R.string.common_retry)))
+                _events.tryEmit(message)
+            } catch (error: Exception) {
+                val message = text(R.string.event_print_failed, text(mode.labelRes), text(R.string.common_retry))
+                jobId?.let { updateJob(it, JobStatus.Failed, 0, message) }
+                _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
+                _events.tryEmit(message)
             }
         }
+    }
+
+    /** Maps a localizable [PrintError] to the string resource that describes it for the user. */
+    private fun PrintError.messageStringRes(): Int = when (this) {
+        is PrintError.UnsupportedFormat -> R.string.print_error_unsupported_format
+        is PrintError.CreateJobFailed -> R.string.print_error_rejected
+        is PrintError.SendDocumentFailed -> R.string.print_error_rejected
+        is PrintError.JobCanceled -> R.string.print_error_job_stopped
+        is PrintError.JobAborted -> R.string.print_error_job_stopped
+        is PrintError.JobTimeout -> R.string.print_error_timeout
+        is PrintError.PageRenderFailed -> R.string.print_error_render_failed
     }
 
     fun export(documentId: String? = null) {

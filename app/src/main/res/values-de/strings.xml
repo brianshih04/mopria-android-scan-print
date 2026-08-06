@@ -170,4 +170,9 @@
     <string name="print_method_ipp">Direktes IPP (experimentell)</string>
     <string name="print_method_system_description">Android-Druckframework / Mopria</string>
     <string name="print_method_ipp_description">Direkt über IPP/IPPS drucken</string>
+    <string name="print_error_unsupported_format">Der Drucker unterstützt kein PDF, JPEG oder PNG</string>
+    <string name="print_error_rejected">Der Drucker hat den Druckauftrag abgelehnt</string>
+    <string name="print_error_job_stopped">Der Drucker hat den Druckauftrag gestoppt</string>
+    <string name="print_error_timeout">Der Druckauftrag hat ein Zeitlimit überschritten</string>
+    <string name="print_error_render_failed">Eine Seite für den Druck konnte nicht vorbereitet werden</string>
 </resources>

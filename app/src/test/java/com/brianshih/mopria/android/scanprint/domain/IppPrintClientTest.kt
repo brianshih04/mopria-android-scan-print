@@ -132,7 +132,7 @@ class IppPrintClientTest {
         server.start()
         try {
             val client = IppPrintClient(BoundedIppTransport())
-            assertThrows(IllegalStateException::class.java) {
+            assertThrows(PrintError.JobAborted::class.java) {
                 runBlocking {
                     client.awaitJobCompletion(server.uri, JOB_ID, pollIntervalMs = 5L, totalTimeoutMs = 5_000L)
                 }
@@ -153,7 +153,7 @@ class IppPrintClientTest {
         server.start()
         try {
             val client = IppPrintClient(BoundedIppTransport())
-            assertThrows(IllegalStateException::class.java) {
+            assertThrows(PrintError.JobCanceled::class.java) {
                 runBlocking {
                     client.awaitJobCompletion(server.uri, JOB_ID, pollIntervalMs = 5L, totalTimeoutMs = 5_000L)
                 }
@@ -174,7 +174,7 @@ class IppPrintClientTest {
         server.start()
         try {
             val client = IppPrintClient(BoundedIppTransport())
-            assertThrows(IllegalStateException::class.java) {
+            assertThrows(PrintError.JobTimeout::class.java) {
                 runBlocking {
                     client.awaitJobCompletion(server.uri, JOB_ID, pollIntervalMs = 5L, totalTimeoutMs = 60L)
                 }

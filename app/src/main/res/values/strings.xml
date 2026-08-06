@@ -182,4 +182,9 @@
     <string name="print_method_ipp">Direct IPP (experimental)</string>
     <string name="print_method_system_description">Android Print Framework / Mopria</string>
     <string name="print_method_ipp_description">Print directly via IPP/IPPS</string>
+    <string name="print_error_unsupported_format">The printer does not support PDF, JPEG, or PNG</string>
+    <string name="print_error_rejected">The printer rejected the print job</string>
+    <string name="print_error_job_stopped">The printer stopped the print job</string>
+    <string name="print_error_timeout">The print job timed out</string>
+    <string name="print_error_render_failed">Could not prepare a page for printing</string>
 </resources>

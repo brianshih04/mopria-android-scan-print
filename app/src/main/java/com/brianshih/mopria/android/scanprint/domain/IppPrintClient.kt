@@ -139,10 +139,9 @@ class IppPrintClient(
             )
             .build()
         val createResponse = transport.sendData(uri, IppPacketData(createRequest)).packet
-        require(isSuccessful(createResponse)) { "IPP Create-Job 失敗：${createResponse.status}" }
-        val jobId = requireNotNull(createResponse.getValue(Tag.jobAttributes, Types.jobId)) {
-            "IPP Create-Job 回應缺少 job-id"
-        }
+        if (!isSuccessful(createResponse)) throw PrintError.CreateJobFailed(createResponse.status.code)
+        val jobId = createResponse.getValue(Tag.jobAttributes, Types.jobId)
+            ?: throw PrintError.CreateJobFailed(createResponse.status.code)
 
         var lastResponse: IppPacket? = null
         document.files.forEachIndexed { index, file ->
@@ -157,7 +156,7 @@ class IppPrintClient(
             val response = file.inputStream().use { stream ->
                 transport.sendData(uri, IppPacketData(sendRequest, stream)).packet
             }
-            require(isSuccessful(response)) { "IPP Send-Document 失敗：${response.status}" }
+            if (!isSuccessful(response)) throw PrintError.SendDocumentFailed(response.status.code)
             lastResponse = response
         }
         return IppJobSubmission(jobId, requireNotNull(lastResponse))
@@ -202,18 +201,17 @@ class IppPrintClient(
             val attributes = getJobAttributes(uri, jobId)
             when (val state = attributes.getValue(Tag.jobAttributes, Types.jobState)) {
                 JobState.completed -> return attributes
-                JobState.canceled -> error("IPP 工作已取消（job $jobId）")
-                JobState.aborted -> {
-                    val reasons = attributes.getStrings(Tag.jobAttributes, Types.jobStateReasons).joinToString()
-                    error("IPP 工作已中止（job $jobId）：${reasons.ifBlank { "unknown reason" }}")
-                }
-                null -> error("IPP Get-Job-Attributes 回應缺少 job-state（job $jobId）")
+                JobState.canceled -> throw PrintError.JobCanceled
+                JobState.aborted -> throw PrintError.JobAborted(
+                    attributes.getStrings(Tag.jobAttributes, Types.jobStateReasons).joinToString(),
+                )
+                null -> throw PrintError.CreateJobFailed(attributes.status.code)
                 else -> Unit // pending / pendingHeld / processing / processingStopped → keep polling
             }
             delay(pollIntervalMs)
         }
         withContext(NonCancellable) { runCatching { cancelJob(uri, jobId) } }
-        error("IPP 工作完成逾時（job $jobId，已嘗試 Cancel-Job）")
+        throw PrintError.JobTimeout
     }
 
     /** IPP successful status codes occupy the 0x0000–0x00FF range (RFC 8011 §13). */
