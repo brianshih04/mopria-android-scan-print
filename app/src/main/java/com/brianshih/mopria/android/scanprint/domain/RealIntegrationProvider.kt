@@ -6,7 +6,6 @@ import android.net.nsd.NsdServiceInfo
 import android.os.Handler
 import android.os.Looper
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.RectF
@@ -405,7 +404,10 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
     private fun decodeImage(path: String): Bitmap? {
         val file = File(path.removePrefix("file://"))
         if (!file.isFile) return null
-        return runCatching { BitmapFactory.decodeFile(file.absolutePath) }.getOrNull()
+        // Sample down to the render canvas size so a high-dpi scan never fully loads into memory.
+        return runCatching {
+            SampledBitmapDecoder.decodeFile(file.absolutePath, PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT)
+        }.getOrNull()
     }
 
     private fun renderPdfPage(path: String, pageIndex: Int): Bitmap? {
