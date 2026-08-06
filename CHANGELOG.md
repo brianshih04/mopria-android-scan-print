@@ -23,7 +23,7 @@
 - 新增依 Android 系統語系自動選擇、未支援語系 fallback English，以及設定頁手動語言覆寫。
 - 新增 `LanguageManager` 語系判斷單元測試。
 - 新增 GitHub Actions CI workflow（push／PR 自動跑 unit test、lint、`assembleDebug`）。
-- 新增直接 IPP 列印 client（`IppPrintClient` + `IppDocumentFormat` + `BoundedIppTransport`）與 `jipp-core` 依賴,實作 PWG 標準流程 Get-Printer-Attributes → Create-Job → Send-Document → Get-Job-Attributes → Cancel-Job,並支援 PDF／JPEG／PNG／PWG-Raster／URF 多格式協商。**為協定層 spike,尚未接線**(discovery、`RealIntegrationProvider.print`、列印 UI 仍待補);App 實際列印仍走 Android Print Framework。
+- 新增直接 IPP 列印 client（`IppPrintClient` + `IppDocumentFormat` + `BoundedIppTransport`）與 `jipp-core` 依賴,實作 PWG 標準流程 Get-Printer-Attributes → Create-Job → Send-Document → Get-Job-Attributes → Cancel-Job,並支援 PDF／JPEG／PNG／PWG-Raster／URF 多格式協商。**已接線**:`IppDiscovery` 探索 `_ipp/_ipps` 印表機、`RealIntegrationProvider.print` 直接送件、ViewModel Real 模式路由(找不到 IPP 印表機時 fallback 系統列印);尚未以實體印表機驗證,capability 驅動列印選項 UI 仍待補。
 
 ### Changed
 
