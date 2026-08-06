@@ -22,7 +22,7 @@
 | App state | `MopriaViewModel` + `StateFlow`；目前為記憶體狀態與 SharedPreferences 設定 |
 | 掃描探索 | Android `NsdManager`，服務 `_uscan._tcp`／`_uscans._tcp` |
 | 掃描傳輸 | 自建 bounded eSCL HTTP client；系統 trust store；不使用 trust-all |
-| 列印 | Real 模式直接 IPP（`IppPrintClient`，找不到印表機時 fallback Android Print Framework）；尚未實機驗證 |
+| 列印 | Real 模式可切換：系統列印（Mopria，預設）或直接 IPP（`IppPrintClient`，opt-in，找不到印表機時 fallback 系統列印）；尚未實機驗證 |
 | 文件輸出 | Android `PdfDocument`、MediaStore、FileProvider、Sharesheet |
 | Mock／Real | 共用 domain model 與 UI，以 provider 切換實作 |
 | 多國語言 | Android string resources；系統語系自動選擇、English fallback、設定頁手動覆寫 |
@@ -75,7 +75,7 @@
 - 使用者認證、PIN、OAuth、client certificate UI。
 - 手動 IP／URL、QR／NFC 加入設備。
 - 工作持久化、程序死亡恢復、前景服務、背景續傳。
-- 自行實作直接 IPP／IPPS（進行中：`IppDiscovery` + `RealIntegrationProvider` + ViewModel 已接線，待實機驗證與 capability 列印選項 UI）。
+- 自行實作直接 IPP／IPPS（進行中：`IppDiscovery` + `RealIntegrationProvider` + ViewModel + 列印方式切換（預設系統列印）已接線，待實機驗證與 capability 列印選項 UI）。
 - Mopria Certified 或任何廠商品牌相容性宣稱。
 
 ## 5. 里程碑
