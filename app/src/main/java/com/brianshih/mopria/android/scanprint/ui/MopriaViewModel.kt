@@ -300,13 +300,6 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     _uiState.update { it.copy(documents = listOf(document) + it.documents) }
                 }
 
-                if (mode == IntegrationMode.Real) {
-                    _uiState.update { it.copy(selectedDocumentId = document.id) }
-                    _printRequests.emit(document)
-                    _events.tryEmit(text(R.string.event_print_opening))
-                    return@launch
-                }
-
                 _uiState.update { it.copy(isDiscovering = true) }
                 val providers = providersFor(mode)
                 val cachedDevices = _uiState.value.devices
@@ -317,6 +310,13 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 val printer = devices.firstOrNull { it.kind == DeviceKind.Printer }
                 if (printer == null) {
+                    if (mode == IntegrationMode.Real) {
+                        // No IPP printer discovered: fall back to the Android system print preview.
+                        _uiState.update { it.copy(isDiscovering = false, devices = devices, selectedDocumentId = document.id) }
+                        _printRequests.emit(document)
+                        _events.tryEmit(text(R.string.event_print_opening))
+                        return@launch
+                    }
                     _uiState.update { it.copy(isDiscovering = false, devices = devices) }
                     _events.tryEmit(text(R.string.event_no_printer, text(mode.labelRes)))
                     return@launch
