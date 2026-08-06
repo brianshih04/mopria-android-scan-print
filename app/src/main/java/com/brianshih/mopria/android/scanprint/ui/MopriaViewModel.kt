@@ -20,6 +20,7 @@ import com.brianshih.mopria.android.scanprint.domain.JobStatus
 import com.brianshih.mopria.android.scanprint.domain.MockIntegrationProvider
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
+import com.brianshih.mopria.android.scanprint.domain.PrintMethod
 import com.brianshih.mopria.android.scanprint.domain.PrintProvider
 import com.brianshih.mopria.android.scanprint.domain.RealIntegrationProvider
 import com.brianshih.mopria.android.scanprint.domain.ScanAcquisitionProvider
@@ -46,6 +47,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
     private val _uiState = MutableStateFlow(
         MopriaUiState(
             integrationMode = loadIntegrationMode(),
+            printMethod = loadPrintMethod(),
             scanSettings = loadScanSettings(),
         ),
     )
@@ -92,6 +94,12 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         }
         _events.tryEmit(text(R.string.event_mode_changed, text(mode.labelRes), text(mode.descriptionRes)))
         discoverDevices()
+    }
+
+    fun setPrintMethod(method: PrintMethod) {
+        if (_uiState.value.printMethod == method) return
+        preferences.edit { putString(KEY_PRINT_METHOD, method.name) }
+        _uiState.update { it.copy(printMethod = method) }
     }
 
     fun discoverDevices() {
@@ -300,6 +308,13 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     _uiState.update { it.copy(documents = listOf(document) + it.documents) }
                 }
 
+                if (mode == IntegrationMode.Real && _uiState.value.printMethod == PrintMethod.System) {
+                    _uiState.update { it.copy(selectedDocumentId = document.id) }
+                    _printRequests.emit(document)
+                    _events.tryEmit(text(R.string.event_print_opening))
+                    return@launch
+                }
+
                 _uiState.update { it.copy(isDiscovering = true) }
                 val providers = providersFor(mode)
                 val cachedDevices = _uiState.value.devices
@@ -504,6 +519,11 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         ?.let { value -> runCatching { IntegrationMode.valueOf(value) }.getOrDefault(IntegrationMode.Mock) }
         ?: IntegrationMode.Mock
 
+    private fun loadPrintMethod(): PrintMethod = preferences
+        .getString(KEY_PRINT_METHOD, PrintMethod.System.name)
+        ?.let { value -> runCatching { PrintMethod.valueOf(value) }.getOrDefault(PrintMethod.System) }
+        ?: PrintMethod.System
+
     private fun loadScanSettings(): ScanSettings = ScanSettings(
         inputSource = preferences.getString(KEY_SCAN_INPUT_SOURCE, ScanInputSource.Flatbed.name)
             ?.let { value -> runCatching { ScanInputSource.valueOf(value) }.getOrDefault(ScanInputSource.Flatbed) }
@@ -548,6 +568,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
     private companion object {
         const val PREFERENCES_NAME = "mopria_settings"
         const val KEY_INTEGRATION_MODE = "integration_mode"
+        const val KEY_PRINT_METHOD = "print_method"
         const val KEY_SCAN_INPUT_SOURCE = "scan_input_source"
         const val KEY_SCAN_RESOLUTION = "scan_resolution"
         const val KEY_SCAN_COLOR_MODE = "scan_color_mode"

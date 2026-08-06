@@ -177,4 +177,9 @@
     <string name="document_demo_cover">Cover and summary</string>
     <string name="document_demo_content">Content page</string>
     <string name="document_saved_page">Saved page %1$d</string>
+    <string name="print_method_title">Print method</string>
+    <string name="print_method_system">System print (Mopria)</string>
+    <string name="print_method_ipp">Direct IPP (experimental)</string>
+    <string name="print_method_system_description">Android Print Framework / Mopria</string>
+    <string name="print_method_ipp_description">Print directly via IPP/IPPS</string>
 </resources>

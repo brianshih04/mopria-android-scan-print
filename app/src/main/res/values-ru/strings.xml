@@ -165,4 +165,9 @@
     <string name="document_demo_cover">Обложка и краткое содержание</string>
     <string name="document_demo_content">Страница содержания</string>
     <string name="document_saved_page">Сохранённая страница %1$d</string>
+    <string name="print_method_title">Способ печати</string>
+    <string name="print_method_system">Системная печать (Mopria)</string>
+    <string name="print_method_ipp">Прямой IPP (экспериментальный)</string>
+    <string name="print_method_system_description">Платформа печати Android / Mopria</string>
+    <string name="print_method_ipp_description">Печать напрямую через IPP/IPPS</string>
 </resources>
