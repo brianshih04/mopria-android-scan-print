@@ -326,15 +326,14 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 val printer = devices.firstOrNull { it.kind == DeviceKind.Printer }
                 if (printer == null) {
-                    if (mode == IntegrationMode.Real) {
-                        // No IPP printer discovered: fall back to the Android system print preview.
-                        _uiState.update { it.copy(isDiscovering = false, devices = devices, selectedDocumentId = document.id) }
-                        _printRequests.emit(document)
-                        _events.tryEmit(text(R.string.event_print_opening))
-                        return@launch
-                    }
+                    // Direct IPP found no printer: do NOT silently fall back to system print — that
+                    // would mislead users into thinking Direct IPP was used. Surface an explicit error
+                    // and let them switch print method in Settings if they want system print.
                     _uiState.update { it.copy(isDiscovering = false, devices = devices) }
-                    _events.tryEmit(text(R.string.event_no_printer, text(mode.labelRes)))
+                    _events.tryEmit(
+                        if (mode == IntegrationMode.Real) text(R.string.event_no_ipp_printer)
+                        else text(R.string.event_no_printer, text(mode.labelRes)),
+                    )
                     return@launch
                 }
 

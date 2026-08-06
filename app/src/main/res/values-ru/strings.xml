@@ -175,4 +175,5 @@
     <string name="print_error_job_stopped">Принтер остановил задание печати</string>
     <string name="print_error_timeout">Время ожидания задания печати истекло</string>
     <string name="print_error_render_failed">Не удалось подготовить страницу для печати</string>
+    <string name="event_no_ipp_printer">Прямой IPP-принтер не найден. Попробуйте системную печать в настройках.</string>
 </resources>

@@ -186,4 +186,5 @@
     <string name="print_error_job_stopped">打印机已停止打印任务</string>
     <string name="print_error_timeout">打印任务超时</string>
     <string name="print_error_render_failed">无法准备要打印的页面</string>
+    <string name="event_no_ipp_printer">找不到 Direct IPP 打印机。请在设置中改用系统打印。</string>
 </resources>

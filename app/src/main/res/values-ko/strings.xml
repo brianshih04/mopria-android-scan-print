@@ -175,4 +175,5 @@
     <string name="print_error_job_stopped">프린터에서 인쇄 작업을 중지했습니다</string>
     <string name="print_error_timeout">인쇄 작업 시간이 초과되었습니다</string>
     <string name="print_error_render_failed">인쇄할 페이지를 준비할 수 없습니다</string>
+    <string name="event_no_ipp_printer">Direct IPP 프린터를 찾을 수 없습니다. 설정에서 시스템 인쇄를 사용해 보세요.</string>
 </resources>

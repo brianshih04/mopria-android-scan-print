@@ -175,4 +175,5 @@
     <string name="print_error_job_stopped">Der Drucker hat den Druckauftrag gestoppt</string>
     <string name="print_error_timeout">Der Druckauftrag hat ein Zeitlimit überschritten</string>
     <string name="print_error_render_failed">Eine Seite für den Druck konnte nicht vorbereitet werden</string>
+    <string name="event_no_ipp_printer">Kein Direct-IPP-Drucker gefunden. Versuche den Systemdruck in den Einstellungen.</string>
 </resources>

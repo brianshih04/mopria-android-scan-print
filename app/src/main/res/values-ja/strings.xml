@@ -175,4 +175,5 @@
     <string name="print_error_job_stopped">プリンターが印刷ジョブを停止しました</string>
     <string name="print_error_timeout">印刷ジョブがタイムアウトしました</string>
     <string name="print_error_render_failed">印刷するページを準備できませんでした</string>
+    <string name="event_no_ipp_printer">Direct IPP プリンターが見つかりません。設定でシステム印刷をお試しください。</string>
 </resources>

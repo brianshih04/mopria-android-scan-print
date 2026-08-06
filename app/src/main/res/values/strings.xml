@@ -187,4 +187,5 @@
     <string name="print_error_job_stopped">The printer stopped the print job</string>
     <string name="print_error_timeout">The print job timed out</string>
     <string name="print_error_render_failed">Could not prepare a page for printing</string>
+    <string name="event_no_ipp_printer">No Direct IPP printer found. Try System print in Settings.</string>
 </resources>

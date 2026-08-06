@@ -175,4 +175,5 @@
     <string name="print_error_job_stopped">A impressora interrompeu o trabalho de impressão</string>
     <string name="print_error_timeout">O trabalho de impressão atingiu o tempo limite</string>
     <string name="print_error_render_failed">Não foi possível preparar uma página para impressão</string>
+    <string name="event_no_ipp_printer">Nenhuma impressora IPP direta encontrada. Tente a impressão do sistema nas Configurações.</string>
 </resources>
