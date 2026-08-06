@@ -315,6 +315,17 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         Unit
     }
 
+    override suspend fun capabilities(printer: IntegrationDevice): PrintCapabilities? = withContext(Dispatchers.IO) {
+        val host = printer.host ?: return@withContext null
+        val uri = IppDiscovery.printerUri(host, printer.port ?: IppDiscovery.DEFAULT_PORT, printer.resourcePath, printer.secure)
+        // Best-effort: if Get-Printer-Attributes fails, treat the printer as having no configurable options
+        // rather than blocking the print. The sheet simply won't be shown.
+        runCatching {
+            val client = IppPrintClient(BoundedIppTransport())
+            client.parseCapabilities(client.getPrinterAttributes(uri))
+        }.getOrNull()
+    }
+
     /**
      * Renders a [MopriaDocument] into the negotiated IPP [format] for submission.
      *

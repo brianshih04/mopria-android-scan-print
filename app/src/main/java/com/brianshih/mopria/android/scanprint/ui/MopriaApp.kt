@@ -171,7 +171,8 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
         }
     }
 
-    Scaffold(
+    Box {
+        Scaffold(
         topBar = {
             if (selectedDestination != AppDestination.Home) {
                 TopAppBar(
@@ -272,5 +273,14 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                 )
             }
         }
+    }
+
+    uiState.directIppPrintPrompt?.let { prompt ->
+        PrintOptionsSheet(
+            prompt = prompt,
+            onConfirm = viewModel::confirmDirectIppPrint,
+            onDismiss = viewModel::dismissDirectIppPrintPrompt,
+        )
+    }
     }
 }

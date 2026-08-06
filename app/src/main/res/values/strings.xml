@@ -188,4 +188,12 @@
     <string name="print_error_timeout">The print job timed out</string>
     <string name="print_error_render_failed">Could not prepare a page for printing</string>
     <string name="event_no_ipp_printer">No Direct IPP printer found. Try System print in Settings.</string>
+    <string name="print_options_title">Print options</string>
+    <string name="print_options_copies">Copies</string>
+    <string name="print_options_color">Color</string>
+    <string name="print_options_sides">Sides</string>
+    <string name="print_options_quality">Quality</string>
+    <string name="print_options_media">Paper</string>
+    <string name="print_options_orientation">Orientation</string>
+    <string name="print_options_cancel">Cancel</string>
 </resources>

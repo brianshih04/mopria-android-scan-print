@@ -133,6 +133,7 @@ data class MopriaUiState(
     val scanSettings: ScanSettings = ScanSettings(),
     val pendingFlatbedDocumentId: String? = null,
     val awaitingNextFlatbedPage: Boolean = false,
+    val directIppPrintPrompt: DirectIppPrintPrompt? = null,
 ) {
     val mockMode: Boolean
         get() = integrationMode == IntegrationMode.Mock
@@ -146,3 +147,14 @@ data class MopriaUiState(
     val printers: List<IntegrationDevice>
         get() = devices.filter { it.kind == DeviceKind.Printer }
 }
+
+/**
+ * Pending Direct IPP print awaiting the user's option choices. Shown as a sheet; [confirmDirectIppPrint]
+ * submits with the chosen [options], [dismissDirectIppPrintPrompt] cancels.
+ */
+data class DirectIppPrintPrompt(
+    val document: MopriaDocument,
+    val printer: IntegrationDevice,
+    val capabilities: PrintCapabilities,
+    val options: PrintOptions = PrintOptions(),
+)

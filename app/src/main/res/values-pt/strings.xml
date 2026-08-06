@@ -176,4 +176,12 @@
     <string name="print_error_timeout">O trabalho de impressão atingiu o tempo limite</string>
     <string name="print_error_render_failed">Não foi possível preparar uma página para impressão</string>
     <string name="event_no_ipp_printer">Nenhuma impressora IPP direta encontrada. Tente a impressão do sistema nas Configurações.</string>
+    <string name="print_options_title">Opções de impressão</string>
+    <string name="print_options_copies">Cópias</string>
+    <string name="print_options_color">Cor</string>
+    <string name="print_options_sides">Lados</string>
+    <string name="print_options_quality">Qualidade</string>
+    <string name="print_options_media">Papel</string>
+    <string name="print_options_orientation">Orientação</string>
+    <string name="print_options_cancel">Cancelar</string>
 </resources>
