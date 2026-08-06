@@ -2,54 +2,69 @@ package com.brianshih.mopria.android.scanprint.domain
 
 import com.hp.jipp.encoding.IppInputStream
 import com.hp.jipp.encoding.IppOutputStream
-import com.hp.jipp.trans.IppClientTransport
-import com.hp.jipp.trans.IppPacketData
+import com.hp.jipp.encoding.IppPacket
 import java.io.ByteArrayOutputStream
-import java.io.DataOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 
 /**
- * Carries jipp IPP packets over HTTP with the app's transport discipline.
+ * Carries IPP packets over HTTP with the app's transport discipline, implementing [IppTransport].
  *
- * Mirrors [EsclHttpClient]: cleartext is permitted only because IPP printers on local networks
- * commonly expose `ipp://`; `ipps://` is sent through `HttpsURLConnection` using the Android system
- * trust store (no trust-all) and the platform's default TLS 1.2+ negotiation. IPP responses are
- * size-capped so a hostile or buggy printer cannot exhaust memory.
+ * Mirrors [EsclHttpClient]: cleartext is permitted only because IPP printers on local networks commonly
+ * expose `ipp://`; `ipps://` is sent through `HttpsURLConnection` using the Android system trust store
+ * (no trust-all) and the platform's default TLS negotiation. IPP responses are size-capped so a hostile
+ * or buggy printer cannot exhaust memory.
+ *
+ * Requests use fixed-length streaming (`Content-Length`) computed from the serialized IPP packet plus
+ * the known document length, rather than chunked transfer-encoding — some printer firmware rejects
+ * chunked requests (see DIRECT_IPP_FOLLOWUPS.md P2.8).
  */
 class BoundedIppTransport(
     private val connectTimeoutMs: Int = 8_000,
     private val readTimeoutMs: Int = 60_000,
     private val maxResponseBytes: Long = 2L * 1_048_576,
-) : IppClientTransport {
+) : IppTransport {
 
     @Throws(IOException::class)
-    override fun sendData(uri: URI, request: IppPacketData): IppPacketData {
-        val connection = openConnection(uri)
+    override fun send(uri: URI, packet: IppPacket): IppPacket {
+        val packetBytes = serialize(packet)
+        return transmit(uri, packetBytes, document = null, documentLength = 0L)
+    }
+
+    @Throws(IOException::class)
+    override fun send(uri: URI, packet: IppPacket, document: InputStream, contentLength: Long): IppPacket {
+        require(contentLength >= 0) { "contentLength must be >= 0" }
+        val packetBytes = serialize(packet)
+        return transmit(uri, packetBytes, document, documentLength = contentLength)
+    }
+
+    private fun transmit(uri: URI, packetBytes: ByteArray, document: InputStream?, documentLength: Long): IppPacket {
+        val connection = openConnection(uri, packetBytes.size + documentLength)
         return try {
-            DataOutputStream(connection.outputStream).use { output ->
-                IppOutputStream(output).apply {
-                    write(request.packet)
-                    flush()
-                }
-                request.data?.copyTo(output)
+            connection.outputStream.use { output ->
+                output.write(packetBytes)
+                output.flush()
+                document?.copyTo(output)
                 output.flush()
             }
             val code = connection.responseCode
             if (code !in 200..299) throw IOException("IPP HTTP $code for $uri")
-            val responseBytes = readBounded(connection)
-            responseBytes.inputStream().use { input ->
-                val ippInput = IppInputStream(input)
-                IppPacketData(ippInput.readPacket(), ippInput)
-            }
+            readBounded(connection).inputStream().use { IppInputStream(it).readPacket() }
         } finally {
             connection.disconnect()
         }
     }
 
-    private fun openConnection(uri: URI): HttpURLConnection =
+    private fun serialize(packet: IppPacket): ByteArray {
+        val buffer = ByteArrayOutputStream()
+        IppOutputStream(buffer).apply { write(packet); flush() }
+        return buffer.toByteArray()
+    }
+
+    private fun openConnection(uri: URI, contentLength: Long): HttpURLConnection =
         (URL(toHttpUrl(uri)).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             setRequestProperty("Content-Type", "application/ipp")
@@ -58,7 +73,7 @@ class BoundedIppTransport(
             useCaches = false
             instanceFollowRedirects = false
             doOutput = true
-            setChunkedStreamingMode(0)
+            setFixedLengthStreamingMode(contentLength)
         }
 
     private fun readBounded(connection: HttpURLConnection): ByteArray {
@@ -70,7 +85,7 @@ class BoundedIppTransport(
                 val read = input.read(chunk)
                 if (read < 0) break
                 total += read
-                require(total <= maxResponseBytes) { "IPP 回應超過 ${maxResponseBytes / 1_048_576} MB 上限" }
+                require(total <= maxResponseBytes) { "IPP response exceeded ${maxResponseBytes / 1_048_576} MB cap" }
                 buffer.write(chunk, 0, read)
             }
         }

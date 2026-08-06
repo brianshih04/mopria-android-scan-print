@@ -4,9 +4,8 @@ import com.hp.jipp.encoding.IppPacket
 import com.hp.jipp.encoding.Tag
 import com.hp.jipp.model.JobState
 import com.hp.jipp.model.Types
-import com.hp.jipp.trans.IppClientTransport
-import com.hp.jipp.trans.IppPacketData
 import java.io.File
+import java.io.InputStream
 import java.net.URI
 import java.util.Locale
 import kotlinx.coroutines.NonCancellable
@@ -38,6 +37,22 @@ data class RenderedPrintDocument(
     fun delete() {
         files.forEach { runCatching { it.delete() } }
     }
+}
+
+/**
+ * Length-aware IPP-over-HTTP transport.
+ *
+ * Carries jipp [IppPacket]s over HTTP with the app's transport discipline. The document [send] variant
+ * takes the exact [contentLength] so requests use fixed-length streaming (`Content-Length`), which every
+ * IPP printer accepts — unlike chunked transfer-encoding, which some firmware rejects (see
+ * DIRECT_IPP_FOLLOWUPS.md P2.8). Implemented by [BoundedIppTransport].
+ */
+interface IppTransport {
+    /** Send a control request (no document body); returns the parsed response packet. */
+    fun send(uri: URI, packet: IppPacket): IppPacket
+
+    /** Send a request carrying a document body of exactly [contentLength] bytes. */
+    fun send(uri: URI, packet: IppPacket, document: InputStream, contentLength: Long): IppPacket
 }
 
 /**
@@ -80,14 +95,13 @@ object IppDocumentFormat {
  *
  * jipp handles IPP binary encode/decode and auto-supplies the mandatory operation attributes
  * (`attributes-charset` "utf-8", `attributes-natural-language` "en-us") plus `printer-uri` from the
- * request factories; HTTP/TLS stays under the app's control via [IppClientTransport]
- * (see [BoundedIppTransport]).
+ * request factories; HTTP/TLS stays under the app's control via [IppTransport] (see [BoundedIppTransport]).
  *
  * Per PWG/RFC 8011: job-state 3 Pending, 4 Held, 5 Processing, 6 Stopped, 7 Canceled, 8 Aborted,
  * 9 Completed; printer-state 3 idle, 4 processing, 5 stopped.
  */
 class IppPrintClient(
-    private val transport: IppClientTransport,
+    private val transport: IppTransport,
     private val userAgent: String = "MopriaScanPrint/0.1",
 ) {
     /** Get-Printer-Attributes; inspect via [documentFormatsSupported] / [IppPacket.getValue]. */
@@ -95,7 +109,7 @@ class IppPrintClient(
         val request = IppPacket.getPrinterAttributes(uri)
             .putOperationAttributes(Types.requestingUserName.of(userAgent))
             .build()
-        return transport.sendData(uri, IppPacketData(request)).packet
+        return transport.send(uri, request)
     }
 
     /** Read `document-format-supported` (PWG) from a Get-Printer-Attributes response. */
@@ -138,7 +152,7 @@ class IppPrintClient(
                 Types.jobName.of(jobName),
             )
             .build()
-        val createResponse = transport.sendData(uri, IppPacketData(createRequest)).packet
+        val createResponse = transport.send(uri, createRequest)
         if (!isSuccessful(createResponse)) throw PrintError.CreateJobFailed(createResponse.status.code)
         val jobId = createResponse.getValue(Tag.jobAttributes, Types.jobId)
             ?: throw PrintError.CreateJobFailed(createResponse.status.code)
@@ -154,7 +168,7 @@ class IppPrintClient(
                 )
                 .build()
             val response = file.inputStream().use { stream ->
-                transport.sendData(uri, IppPacketData(sendRequest, stream)).packet
+                transport.send(uri, sendRequest, stream, file.length())
             }
             if (!isSuccessful(response)) throw PrintError.SendDocumentFailed(response.status.code)
             lastResponse = response
@@ -167,7 +181,7 @@ class IppPrintClient(
         val request = IppPacket.getJobAttributes(uri, jobId)
             .putOperationAttributes(Types.requestingUserName.of(userAgent))
             .build()
-        return transport.sendData(uri, IppPacketData(request)).packet
+        return transport.send(uri, request)
     }
 
     /** Cancel-Job for [jobId]; best-effort, callers should swallow non-fatal outcomes during cleanup. */
@@ -175,7 +189,7 @@ class IppPrintClient(
         val request = IppPacket.cancelJob(uri, jobId)
             .putOperationAttributes(Types.requestingUserName.of(userAgent))
             .build()
-        return transport.sendData(uri, IppPacketData(request)).packet
+        return transport.send(uri, request)
     }
 
     /**

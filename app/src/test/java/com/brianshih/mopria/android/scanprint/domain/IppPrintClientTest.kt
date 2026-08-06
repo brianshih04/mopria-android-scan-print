@@ -17,6 +17,7 @@ import java.util.concurrent.Executors
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -105,6 +106,27 @@ class IppPrintClientTest {
     }
 
     @Test
+    fun sendUsesFixedLengthStreamingNotChunked() {
+        val server = stubPrinter(formats = listOf(IppDocumentFormat.PDF))
+        server.start()
+        try {
+            val client = IppPrintClient(BoundedIppTransport())
+            val pdfBytes = "%PDF-1.4 fixture".toByteArray(Charsets.UTF_8)
+            val rendered = RenderedPrintDocument(IppDocumentFormat.PDF, listOf(tempFile(pdfBytes)))
+            try {
+                client.send(server.uri, rendered)
+            } finally {
+                rendered.delete()
+            }
+            // Fixed-length streaming advertises Content-Length; chunked would omit it. Some printer
+            // firmware rejects chunked Send-Document requests (DIRECT_IPP_FOLLOWUPS P2.8).
+            assertNotNull(server.lastRequestContentLength)
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
     fun awaitJobCompletionReturnsWhenJobReachesCompleted() {
         val server = stubPrinter(
             formats = listOf(IppDocumentFormat.PDF),
@@ -165,8 +187,7 @@ class IppPrintClientTest {
     }
 
     @Test
-    fun awaitJobCompletionCancelsJobOnTimeout() {
-        // Printer stays in processing forever; the client must give up and issue Cancel-Job.
+    fun awaitJobCompletionCancelsJobOnTimeout() {        // Printer stays in processing forever; the client must give up and issue Cancel-Job.
         val server = stubPrinter(
             formats = listOf(IppDocumentFormat.PDF),
             jobStates = listOf(JobState.processing),
@@ -200,12 +221,16 @@ class IppPrintClientTest {
         val sentDocuments = mutableListOf<SentDocument>()
         var cancelCount: Int = 0
             private set
+        /** Content-Length header of the most recent request (fixed-length streaming sets this; chunked does not). */
+        var lastRequestContentLength: String? = null
+            private set
         private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         private val executor = Executors.newSingleThreadExecutor()
         private var jobStateIndex = 0
 
         init {
             server.createContext("/ipp/print") { exchange ->
+                lastRequestContentLength = exchange.requestHeaders.getFirst("Content-Length")
                 val input = IppInputStream(exchange.requestBody)
                 val packet = input.readPacket()
                 if (packet.operation.code == Operation.sendDocument.code) {
