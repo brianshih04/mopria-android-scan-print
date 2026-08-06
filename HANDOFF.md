@@ -99,7 +99,7 @@ Flatbed multi-page 是多個獨立 eSCL Platen job 的 App-level session，不�
 | DocumentsUI／Print | 系統選檔返回 App 列印頁，再回首頁 |
 | Runtime | smoke flow 無 app fatal exception／OOM |
 
-APK SHA-256：`BE82F63EFDB607C60A4C081C8BE78B15252B374652FD0C43081780F4A99AF9AD`。
+APK SHA-256：`B9D8A90129EB5F666789C217A7EDC3C955EF6C3106E8BB12CEFEF7CFBB9BE863`。
 
 語系 emulator smoke：清除 App data 後使用系統 en-US 驗證 English；設定頁可開啟 10 語言選單；手動選擇日本語與简体中文後，設定頁標題、操作說明與底部導覽即時更新。
 

@@ -173,8 +173,8 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 
 ## GitHub 可下載成果
 
-- 可安裝測試 APK：[avi-print-scan.apk](https://github.com/brianshih04/mopria-android-scan-print/releases/download/v0.1.0/avi-print-scan.apk)（release build，以本機 debug keystore 簽署，供開發／emulator 測試；正式發布前需改用產品簽章）。
-- APK SHA-256：`BE82F63EFDB607C60A4C081C8BE78B15252B374652FD0C43081780F4A99AF9AD`
+- 可安裝測試 APK：[avi-print-scan.apk](https://github.com/brianshih04/mopria-android-scan-print/releases/download/v0.1.0/avi-print-scan.apk)（release build，R8 minified ~2.2 MB，以本機 debug keystore 簽署，供開發／emulator 測試；正式發布前需改用產品簽章）。
+- APK SHA-256：`B9D8A90129EB5F666789C217A7EDC3C955EF6C3106E8BB12CEFEF7CFBB9BE863`
 - 主畫面 JPEG：[`docs/screenshots/main-screens`](docs/screenshots/main-screens/)
   - [首頁](docs/screenshots/main-screens/01-home.jpg)
   - [Flatbed 掃描設定](docs/screenshots/main-screens/02-scan-flatbed.jpg)
