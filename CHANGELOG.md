@@ -61,6 +61,7 @@
 - 修正 MIME header 與實際 payload 不一致時仍可能被接受的問題。
 - 清除所有 lint 與 Kotlin compiler warnings（lint 36 → 0；compiler → 0）。
 - 修正 eSCL `Retry-After` 對 null／空白值的解析；修正文件中的機器專屬路徑與失效連結。
+- 修正 GitHub Actions Android SDK 安裝使用錯誤的 `platforms;android-37` package id，改用 `platforms;android-37.0`。
 
 ### Security
 

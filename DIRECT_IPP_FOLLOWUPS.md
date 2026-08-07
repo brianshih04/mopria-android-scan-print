@@ -57,10 +57,10 @@
 - [`app/build.gradle.kts`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/build.gradle.kts)
 - [`ci.yml`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/.github/workflows/ci.yml)
 
-此問題已修正。project 使用 `compileSdk 37`，CI 會明確安裝 Android 37 platform 與對應 build tools：
+此問題已修正。project 使用 `compileSdk 37`，CI 會明確安裝 Android 37.0 platform 與對應 build tools：
 
 ```yaml
-platforms;android-36 build-tools;36.0.0
+platforms;android-37.0 build-tools;37.0.0
 ```
 
 驗收方式是在乾淨 runner 或只安裝文件指定 SDK 的環境執行：

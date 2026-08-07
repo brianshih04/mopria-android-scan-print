@@ -14,8 +14,8 @@ git diff --check
 
 - `--max-workers=1 --no-daemon` 是本專案驗證時的固定用法，不要換成 `--parallel` 或 daemon。
 - 跑單一測試：`.\gradlew.bat :app:testDebugUnitTest --tests "*.EsclProtocolTest" --max-workers=1 --no-daemon`。
-- CI：`main` 沒有 workflow；`feat/direct-ipp*` 有 `.github/workflows/ci.yml`（push／PR 觸發）。先確認 branch 再決定是否仰賴 CI。
-- 各文件記錄的 unit test 數量（34／42／30）對應不同時間點與不同 branch，**不要把數字寫進 commit message 或新文件**；以實際 `testDebugUnitTest` 輸出為準。
+- CI workflow 位於 `.github/workflows/ci.yml`，對 `main` push 與 target `main` 的 pull request 觸發；Android 37.0 platform 的 package id 是 `platforms;android-37.0`，不是 `platforms;android-37`。
+- 文件中的測試數量可能對應不同時間點與 branch，**不要把過期數字寫進 commit message 或新文件**；以實際 `testDebugUnitTest` 輸出為準。
 
 ## 架構事實（檔名看不出來的）
 
@@ -42,14 +42,14 @@ git diff --check
 
 ## Branch 差異（最容易誤判的事）
 
-- `DIRECT_IPP_FOLLOWUPS.md` 描述的是 **`feat/direct-ipp` branch**（compileSdk 37、JDK 25、42 tests、有 direct IPP client、有 CI），**不是 `main`**。該文件的 P1/P2 清單在合併該 branch 前才適用，不要直接拿來改 main。
-- `main`：compileSdk/targetSdk 36、JDK 17、無 direct IPP、無 CI、列印走 Android Print Framework。
+- `DIRECT_IPP_FOLLOWUPS.md` 描述的是目前 Direct IPP 整合與 `feat/direct-ipp-fixes` 的剩餘風險；合併到 `main` 後仍應保留「未實機驗證就不宣稱」的限制。
+- `main` 的整合基礎已包含 Direct IPP、PWG-Raster 與 PCLm；此 branch 主要補 reliability hardening、capability options、localization、tests 與 handoff 文件。
 - 改動前先確認你在哪條 branch，並以 `app/build.gradle.kts` 為準，不要相信文件裡的 SDK 數字。
 
 ## 平台／環境 gotchas
 
 - `local.properties`（Android SDK 路徑）被 gitignore；新機器需自行建立，或由 Android Studio 產生。
-- JDK／SDK 隨 branch 不同：`main` = JDK 17／compileSdk 36；`feat/direct-ipp*` = JDK 25（見 `gradle/gradle-daemon-jvm.properties`）／compileSdk 37。以 `app/build.gradle.kts` 為準。
+- JDK／SDK：目前使用 JDK 25（見 `gradle/gradle-daemon-jvm.properties`）與 compileSdk 37；CI 對應 Android 37.0 platform 與 build-tools 37.0.0。以 `app/build.gradle.kts` 與 `.github/workflows/ci.yml` 為準。
 - `release/avi-print-scan.apk` 用**本機 debug keystore 簽署**，僅供 emulator／開發測試；正式發布前必須換產品簽章。
 - `targetSdk 36` 的 local network 存取仍由 `INTERNET` 涵蓋；**不要提前加入 `ACCESS_LOCAL_NETWORK`**，那是 target SDK 37+ 的遷移項目。
 - `app/build/` 是 gitignored 的建置產物；`.workflow/` 是過往 review／compliance 的歷史紀錄，不是活躍設定。
