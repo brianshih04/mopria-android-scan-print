@@ -14,7 +14,7 @@ Android 沒有一個同時提供 Mopria 掃描與列印的公開「Mopria API」
 | 列印 | Android `PrintManager` + `PrintDocumentAdapter` | 文件選擇、內容轉換、預覽入口與工作狀態 |
 | 印表機連線 | Android Default Print Service／Mopria Print Service | 印表機探索、IPP/IPPS、紙張、色彩、雙面與 spool |
 
-因此，eSCL／AirScan 是掃描協定；列印方面，Real 模式可在設定切換「系統列印（Mopria，預設）」與「直接 IPP」——前者走 Android Print Framework，後者透過 `IppPrintClient` 探索 `_ipp/_ipps` 並送件（找不到時 fallback 系統列印）；不支援 PDF 的印表機會自動 raster 化成 PWG-Raster（`jipp-pdl`）。直接 IPP 尚未以實體印表機驗證（見「下一階段」）。
+因此，eSCL／AirScan 是掃描協定；列印方面，Real 模式可在設定切換「系統列印（Mopria，預設）」與「直接 IPP」——前者走 Android Print Framework，後者透過 `IppPrintClient` 探索 `_ipp/_ipps` 並送件（找不到時 fallback 系統列印）；不支援 PDF 的印表機會自動 raster 化成 PWG-Raster／PCLm（`jipp-pdl`，DPI 依印表機 `printer-resolution-supported` 協商）。直接 IPP 尚未以實體印表機驗證（見「下一階段」）。
 
 ## 已完成的使用者功能
 

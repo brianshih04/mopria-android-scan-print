@@ -8,10 +8,13 @@ import com.hp.jipp.pdl.ColorSpace
 import com.hp.jipp.pdl.OutputSettings
 import com.hp.jipp.pdl.RenderableDocument
 import com.hp.jipp.pdl.RenderablePage
+import com.hp.jipp.pdl.pclm.PclmSettings
+import com.hp.jipp.pdl.pclm.PclmWriter
 import com.hp.jipp.pdl.pwg.PwgSettings
 import com.hp.jipp.pdl.pwg.PwgWriter
 import java.io.File
 import java.io.FileOutputStream
+import java.io.OutputStream
 import kotlin.math.roundToInt
 
 /**
@@ -27,8 +30,20 @@ import kotlin.math.roundToInt
 object IppRasterizer {
 
     /** Rasterize [pdf] to a PWG-Raster file at [dpi] in [colorSpace]; page size follows each PDF page. */
-    fun rasterizeToPwgRaster(pdf: File, dpi: Int, colorSpace: ColorSpace): File {
-        val output = File(pdf.parentFile, "${pdf.nameWithoutExtension}.pwg")
+    fun rasterizeToPwgRaster(pdf: File, dpi: Int, colorSpace: ColorSpace): File =
+        rasterize(pdf, "pwg", dpi) { document, out ->
+            PwgWriter(out, PwgSettings(output = OutputSettings(colorSpace = colorSpace))).use { it.write(document) }
+        }
+
+    /** Rasterize [pdf] to a PCLm file (a PDF subset) at [dpi] in [colorSpace] with [stripHeight]. */
+    fun rasterizeToPclm(pdf: File, dpi: Int, colorSpace: ColorSpace, stripHeight: Int): File =
+        rasterize(pdf, "pclm", dpi) { document, out ->
+            PclmWriter(out, PclmSettings(output = OutputSettings(colorSpace = colorSpace), stripHeight = stripHeight)).use { it.write(document) }
+        }
+
+    /** Open [pdf], render each page to a [RenderablePage] at [dpi], and let [write] emit it to [out]. */
+    private inline fun rasterize(pdf: File, ext: String, dpi: Int, write: (RenderableDocument, OutputStream) -> Unit): File {
+        val output = File(pdf.parentFile, "${pdf.nameWithoutExtension}.$ext")
         ParcelFileDescriptor.open(pdf, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
             PdfRenderer(descriptor).use { renderer ->
                 val pages = (0 until renderer.pageCount).map { index ->
@@ -45,11 +60,7 @@ object IppRasterizer {
                         override val dpi = dpi
                         override fun iterator() = pages.iterator()
                     }
-                    FileOutputStream(output).use { out ->
-                        PwgWriter(out, PwgSettings(output = OutputSettings(colorSpace = colorSpace))).use { writer ->
-                            writer.write(document)
-                        }
-                    }
+                    FileOutputStream(output).use { out -> write(document, out) }
                 } finally {
                     pages.forEach { it.release() }
                 }

@@ -301,6 +301,8 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         val client = IppPrintClient(BoundedIppTransport())
         val attributes = client.getPrinterAttributes(uri)
         val supported = client.documentFormatsSupported(attributes)
+        val colorSpace = chooseColorSpace(client.printColorModesSupported(attributes))
+        val dpi = client.preferredResolution(attributes)
         val pdf = renderDocumentPdf(document)
         try {
             val submission = when {
@@ -308,7 +310,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                     pdf.inputStream().use { client.print(uri, IppDocumentFormat.PDF, it) }
 
                 supported.any { it.equals(IppDocumentFormat.PWG_RASTER, ignoreCase = true) } -> {
-                    val raster = IppRasterizer.rasterizeToPwgRaster(pdf, RASTER_DPI, chooseColorSpace(client.printColorModesSupported(attributes)))
+                    val raster = IppRasterizer.rasterizeToPwgRaster(pdf, dpi, colorSpace)
                     try {
                         raster.inputStream().use { client.print(uri, IppDocumentFormat.PWG_RASTER, it) }
                     } finally {
@@ -316,7 +318,16 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                     }
                 }
 
-                else -> error("IPP 印表機不支援 PDF／PWG-Raster；printer pdl=$supported")
+                supported.any { it.equals(IppDocumentFormat.PCLM, ignoreCase = true) } -> {
+                    val raster = IppRasterizer.rasterizeToPclm(pdf, dpi, colorSpace, client.pclmStripHeightPreferred(attributes))
+                    try {
+                        raster.inputStream().use { client.print(uri, IppDocumentFormat.PCLM, it) }
+                    } finally {
+                        raster.delete()
+                    }
+                }
+
+                else -> error("IPP 印表機不支援 PDF／PWG-Raster／PCLm；printer pdl=$supported")
             }
             require((submission.response.status.code and 0xFF00) == 0) { "IPP 列印失敗：${submission.response.status}" }
         } finally {
@@ -498,7 +509,6 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         const val PDF_PAGE_HEIGHT = 792
         const val PDF_MARGIN = 36
         const val MAX_BITMAP_SCALE = 1f
-        const val RASTER_DPI = 300
         const val JOB_READY_ATTEMPTS = 60
         const val JOB_STATUS_ATTEMPTS = 120
         const val JOB_STATUS_POLL_MS = 500L
