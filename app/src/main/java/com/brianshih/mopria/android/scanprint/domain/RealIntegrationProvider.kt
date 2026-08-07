@@ -14,6 +14,7 @@ import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.core.graphics.createBitmap
+import com.hp.jipp.pdl.ColorSpace
 import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -297,17 +298,35 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
     override suspend fun print(printer: IntegrationDevice, document: MopriaDocument) = withContext(Dispatchers.IO) {
         val host = requireNotNull(printer.host) { "印表機缺少 host" }
         val uri = IppDiscovery.printerUri(host, printer.port ?: IppDiscovery.DEFAULT_PORT, printer.resourcePath, printer.secure)
+        val client = IppPrintClient(BoundedIppTransport())
+        val attributes = client.getPrinterAttributes(uri)
+        val supported = client.documentFormatsSupported(attributes)
         val pdf = renderDocumentPdf(document)
         try {
-            val submission = pdf.inputStream().use { stream ->
-                IppPrintClient(BoundedIppTransport()).printSupported(uri, stream)
-                    ?: error("IPP 印表機不支援本 App 可產生的格式（PDF／JPEG）；printer pdl=${printer.advertisedFormats}")
+            val submission = when {
+                supported.any { it.equals(IppDocumentFormat.PDF, ignoreCase = true) } ->
+                    pdf.inputStream().use { client.print(uri, IppDocumentFormat.PDF, it) }
+
+                supported.any { it.equals(IppDocumentFormat.PWG_RASTER, ignoreCase = true) } -> {
+                    val raster = IppRasterizer.rasterizeToPwgRaster(pdf, RASTER_DPI, chooseColorSpace(client.printColorModesSupported(attributes)))
+                    try {
+                        raster.inputStream().use { client.print(uri, IppDocumentFormat.PWG_RASTER, it) }
+                    } finally {
+                        raster.delete()
+                    }
+                }
+
+                else -> error("IPP 印表機不支援 PDF／PWG-Raster；printer pdl=$supported")
             }
             require((submission.response.status.code and 0xFF00) == 0) { "IPP 列印失敗：${submission.response.status}" }
         } finally {
             pdf.delete()
         }
     }
+
+    /** Pick the raster color space from advertised print-color-mode: RGB unless only monochrome/bi-level. */
+    private fun chooseColorSpace(modes: List<String>): ColorSpace =
+        if (modes.any { it.equals("color", ignoreCase = true) }) ColorSpace.Rgb else ColorSpace.Grayscale
 
     /**
      * Renders a [MopriaDocument] to a single multi-page PDF in the cache dir for IPP submission.
@@ -479,6 +498,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         const val PDF_PAGE_HEIGHT = 792
         const val PDF_MARGIN = 36
         const val MAX_BITMAP_SCALE = 1f
+        const val RASTER_DPI = 300
         const val JOB_READY_ATTEMPTS = 60
         const val JOB_STATUS_ATTEMPTS = 120
         const val JOB_STATUS_POLL_MS = 500L
