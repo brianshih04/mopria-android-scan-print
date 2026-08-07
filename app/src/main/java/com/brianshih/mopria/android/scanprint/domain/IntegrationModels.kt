@@ -16,6 +16,15 @@ enum class IntegrationMode(
     Real(R.string.mode_real, R.string.mode_real_description),
 }
 
+/** How Real-mode printing is delivered: Android Print Framework (Mopria) or direct IPP/IPPS. */
+enum class PrintMethod(
+    @StringRes val labelRes: Int,
+    @StringRes val descriptionRes: Int,
+) {
+    System(R.string.print_method_system, R.string.print_method_system_description),
+    Ipp(R.string.print_method_ipp, R.string.print_method_ipp_description),
+}
+
 enum class ScanInputSource(
     @StringRes val labelRes: Int,
     @StringRes val shortLabelRes: Int,
@@ -120,6 +129,7 @@ data class MopriaUiState(
     val selectedDocumentId: String? = null,
     val lastExportPath: String? = null,
     val integrationMode: IntegrationMode = IntegrationMode.Mock,
+    val printMethod: PrintMethod = PrintMethod.System,
     val scanSettings: ScanSettings = ScanSettings(),
     val pendingFlatbedDocumentId: String? = null,
     val awaitingNextFlatbedPage: Boolean = false,

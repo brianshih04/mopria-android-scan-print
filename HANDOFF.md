@@ -81,7 +81,7 @@ Flatbed multi-page 是多個獨立 eSCL Platen job 的 App-level session，不�
 - Mopria Alliance eSCL Technical Specification v2.97 PDF 只存在開發者本機，不在 Git，也不應被複製到 repository、issue 或 CI artifact。
 - 公開入口可連結 [Mopria eSCL Specification](https://mopria.org/mopria-escl-specification)。
 - ScanBridge／eSCLKt 為 GPL-3.0-or-later：本專案只參考可觀察行為，不複製或連結其程式碼。
-- HP JIPP 為 MIT，但目前沒有納入依賴；列印仍使用 Android Print Framework。
+- HP JIPP（MIT）已作為直接 IPP client（`IppPrintClient`）的編解碼依賴納入；Real 模式列印可在設定切換「系統列印（預設）」與「直接 IPP」（opt-in，找不到 IPP 印表機時 fallback 系統列印），尚未以實體印表機驗證。
 
 ## 6. 最新驗證證據
 

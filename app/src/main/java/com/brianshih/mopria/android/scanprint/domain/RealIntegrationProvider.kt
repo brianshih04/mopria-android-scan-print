@@ -5,8 +5,16 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Handler
 import android.os.Looper
-import android.os.ParcelFileDescriptor
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.RectF
+import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
+import androidx.core.graphics.createBitmap
+import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
@@ -27,6 +35,8 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
     private val serviceTypes = listOf(
         ServiceType("_uscan._tcp.", DeviceKind.Scanner, "eSCL / AirScan", secure = false),
         ServiceType("_uscans._tcp.", DeviceKind.Scanner, "eSCL / AirScan TLS", secure = true),
+        ServiceType("_ipp._tcp.", DeviceKind.Printer, "IPP", secure = false),
+        ServiceType("_ipps._tcp.", DeviceKind.Printer, "IPP / IPPS", secure = true),
     )
 
     @Suppress("DEPRECATION")
@@ -55,27 +65,45 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                 if (continuation.isActive) continuation.resume(devices.values.toList())
             }
 
+            fun buildDevice(
+                identity: String,
+                service: ServiceType,
+                info: NsdServiceInfo,
+                host: String,
+                resourcePath: String,
+                uuid: String?,
+                version: String?,
+                displayName: String?,
+                formats: List<String>,
+            ) = IntegrationDevice(
+                id = "real-${identity.hashCode()}",
+                name = displayName ?: info.serviceName,
+                kind = service.kind,
+                protocol = version?.let { "${service.protocol} $it" } ?: service.protocol,
+                isMock = false,
+                host = host,
+                port = info.port,
+                secure = service.secure,
+                serviceType = info.serviceType,
+                resourcePath = resourcePath,
+                uuid = uuid,
+                esclVersion = version,
+                advertisedFormats = formats,
+            )
+
             fun addResolvedDevice(service: ServiceType, info: NsdServiceInfo) {
                 val host = info.host?.hostAddress ?: return
-                val metadata = EsclDiscovery.parse(info.attributes) ?: return
-                val identity = EsclDiscovery.identity(info.serviceName, metadata)
-                val key = "${service.kind}:$identity"
-                val candidate = IntegrationDevice(
-                    id = "real-${identity.hashCode()}",
-                    name = metadata.displayName ?: info.serviceName,
-                    kind = service.kind,
-                    protocol = metadata.version?.let { "${service.protocol} $it" } ?: service.protocol,
-                    isMock = false,
-                    host = host,
-                    port = info.port,
-                    secure = service.secure,
-                    serviceType = info.serviceType,
-                    resourcePath = metadata.resourcePath,
-                    uuid = metadata.uuid,
-                    esclVersion = metadata.version,
-                    advertisedFormats = metadata.documentFormats,
-                )
-                devices[key] = EsclDiscovery.preferred(devices[key], candidate)
+                if (service.kind == DeviceKind.Printer) {
+                    val metadata = IppDiscovery.parse(info.attributes) ?: return
+                    val identity = IppDiscovery.identity(info.serviceName, metadata)
+                    val key = "${service.kind}:$identity"
+                    devices[key] = IppDiscovery.preferred(devices[key], buildDevice(identity, service, info, host, metadata.resourcePath, metadata.uuid, metadata.version, metadata.displayName, metadata.documentFormats))
+                } else {
+                    val metadata = EsclDiscovery.parse(info.attributes) ?: return
+                    val identity = EsclDiscovery.identity(info.serviceName, metadata)
+                    val key = "${service.kind}:$identity"
+                    devices[key] = EsclDiscovery.preferred(devices[key], buildDevice(identity, service, info, host, metadata.resourcePath, metadata.uuid, metadata.version, metadata.displayName, metadata.documentFormats))
+                }
             }
 
             fun resolveNext() {
@@ -266,8 +294,90 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         }
     }
 
-    override suspend fun print(printer: IntegrationDevice, document: MopriaDocument) {
-        error("Android Print Framework 必須由 Activity 開啟系統列印預覽")
+    override suspend fun print(printer: IntegrationDevice, document: MopriaDocument) = withContext(Dispatchers.IO) {
+        val host = requireNotNull(printer.host) { "印表機缺少 host" }
+        val uri = IppDiscovery.printerUri(host, printer.port ?: IppDiscovery.DEFAULT_PORT, printer.resourcePath, printer.secure)
+        val pdf = renderDocumentPdf(document)
+        try {
+            val submission = pdf.inputStream().use { stream ->
+                IppPrintClient(BoundedIppTransport()).printSupported(uri, stream)
+                    ?: error("IPP 印表機不支援本 App 可產生的格式（PDF／JPEG）；printer pdl=${printer.advertisedFormats}")
+            }
+            require((submission.response.status.code and 0xFF00) == 0) { "IPP 列印失敗：${submission.response.status}" }
+        } finally {
+            pdf.delete()
+        }
+    }
+
+    /**
+     * Renders a [MopriaDocument] to a single multi-page PDF in the cache dir for IPP submission.
+     * TODO: consolidate with `ScanExportService.drawPage`/`writePdf` into a shared renderer.
+     */
+    private fun renderDocumentPdf(document: MopriaDocument): File {
+        val output = File(appContext.cacheDir, "ipp-print-${document.id}.pdf")
+        val pdf = PdfDocument()
+        try {
+            document.pages.forEachIndexed { index, page ->
+                val info = PdfDocument.PageInfo.Builder(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT, index + 1).create()
+                val pdfPage = pdf.startPage(info)
+                drawPrintPage(pdfPage.canvas, page)
+                pdf.finishPage(pdfPage)
+            }
+            FileOutputStream(output).use { pdf.writeTo(it) }
+        } finally {
+            pdf.close()
+        }
+        return output
+    }
+
+    private fun drawPrintPage(canvas: Canvas, page: DocumentPage) {
+        canvas.drawColor(Color.WHITE)
+        val bitmap = decodePageBitmap(page) ?: return
+        try {
+            val scale = minOf(
+                (canvas.width - PDF_MARGIN * 2) / bitmap.width.toFloat(),
+                (canvas.height - PDF_MARGIN * 2) / bitmap.height.toFloat(),
+            ).coerceAtMost(MAX_BITMAP_SCALE)
+            val width = bitmap.width * scale
+            val height = bitmap.height * scale
+            val left = (canvas.width - width) / 2f
+            canvas.drawBitmap(bitmap, null, RectF(left, PDF_MARGIN.toFloat(), left + width, PDF_MARGIN + height), null)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private fun decodePageBitmap(page: DocumentPage): Bitmap? {
+        page.imagePath?.let { return decodeImage(it) }
+        val pdfPath = page.pdfPath ?: return null
+        return renderPdfPage(pdfPath, page.pdfPageIndex ?: 0)
+    }
+
+    private fun decodeImage(path: String): Bitmap? {
+        val file = File(path.removePrefix("file://"))
+        if (!file.isFile) return null
+        return runCatching { BitmapFactory.decodeFile(file.absolutePath) }.getOrNull()
+    }
+
+    private fun renderPdfPage(path: String, pageIndex: Int): Bitmap? {
+        val file = File(path.removePrefix("file://"))
+        if (!file.isFile) return null
+        return runCatching {
+            ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+                PdfRenderer(descriptor).use { renderer ->
+                    if (pageIndex !in 0 until renderer.pageCount) return null
+                    renderer.openPage(pageIndex).use { page ->
+                        val scale = minOf(PDF_PAGE_WIDTH.toFloat() / page.width, PDF_PAGE_HEIGHT.toFloat() / page.height)
+                        val width = (page.width * scale).toInt().coerceAtLeast(1)
+                        val height = (page.height * scale).toInt().coerceAtLeast(1)
+                        createBitmap(width, height).also { bitmap ->
+                            bitmap.eraseColor(Color.WHITE)
+                            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        }
+                    }
+                }
+            }
+        }.getOrNull()
     }
 
     private fun IntegrationDevice.eSclBaseUrl(): String {
@@ -365,6 +475,10 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
     private companion object {
         const val DISCOVERY_TIMEOUT_MS = 8_000L
         const val MAX_SCAN_PAGES = 50
+        const val PDF_PAGE_WIDTH = 612 // US Letter, points
+        const val PDF_PAGE_HEIGHT = 792
+        const val PDF_MARGIN = 36
+        const val MAX_BITMAP_SCALE = 1f
         const val JOB_READY_ATTEMPTS = 60
         const val JOB_STATUS_ATTEMPTS = 120
         const val JOB_STATUS_POLL_MS = 500L

@@ -14,7 +14,7 @@ Android 沒有一個同時提供 Mopria 掃描與列印的公開「Mopria API」
 | 列印 | Android `PrintManager` + `PrintDocumentAdapter` | 文件選擇、內容轉換、預覽入口與工作狀態 |
 | 印表機連線 | Android Default Print Service／Mopria Print Service | 印表機探索、IPP/IPPS、紙張、色彩、雙面與 spool |
 
-因此，eSCL／AirScan 是掃描協定；Mopria Print Service 背後通常使用 IPP/IPPS，但本 App 不自行實作直接 IPP 列印。
+因此，eSCL／AirScan 是掃描協定；列印方面，Real 模式可在設定切換「系統列印（Mopria，預設）」與「直接 IPP」——前者走 Android Print Framework，後者透過 `IppPrintClient` 探索 `_ipp/_ipps` 並送件（找不到時 fallback 系統列印）。直接 IPP 尚未以實體印表機驗證（見「下一階段」）。
 
 ## 已完成的使用者功能
 
@@ -73,7 +73,7 @@ App 使用 Android resource qualifiers 管理翻譯，不在 Compose 畫面中�
 - 接受 JPEG、PDF、PNG，並比對 MIME type 與檔案 signature；PDF 以 `PdfRenderer` 對應實際頁數。
 - HTTPS 使用 Android 系統 trust store，不使用 trust-all；TLS provider 必須具備 TLS 1.3。
 
-刻意未宣稱的範圍：Push Scan、Stored Job Requests、OCR／可搜尋 PDF、加密 PDF request、ScanBufferInfo、ADF duplex UI、使用者認證輸入、手動 IP／URL、直接 IPP、Mopria 認證。`426` 可升級為同 host HTTPS；同一 TCP connection 內的 RFC 2817 raw Upgrade 不在目前支援範圍。
+刻意未宣稱的範圍：Push Scan、Stored Job Requests、OCR／可搜尋 PDF、加密 PDF request、ScanBufferInfo、ADF duplex UI、使用者認證輸入、手動 IP／URL、Mopria 認證（直接 IPP 列印已接線為 Real 模式的 opt-in 選項，預設系統列印，尚未以實體印表機驗證，見 `IppPrintClient` 與「下一階段」）。`426` 可升級為同 host HTTPS；同一 TCP connection 內的 RFC 2817 raw Upgrade 不在目前支援範圍。
 
 Mopria 規格 PDF 是本機、受限制的研究來源，不會複製到此 repository。公開參考入口：[Mopria eSCL Specification](https://mopria.org/mopria-escl-specification)。
 
@@ -232,4 +232,4 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 - Brother Mobile Connect／Brother iPrint&Scan
 - FUJIFILM Print Utility
 - [Chrisimx/ScanBridge](https://github.com/Chrisimx/ScanBridge/tree/5d9e2b1ad63f95041e681ce39146dc25bc9fc648)（GPL-3.0-or-later；只參考行為，不複製程式碼）
-- [HPInc/jipp](https://github.com/HPInc/jipp/tree/f3a484ff539032194f5af164c6f57fbc4370b026)（MIT；目前不納入 MVP）
+- [HPInc/jipp](https://github.com/HPInc/jipp)（MIT；作為直接 IPP client（`IppPrintClient`）的二進位編解碼層依賴）

@@ -262,6 +262,7 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                 AppDestination.Settings -> SettingsScreen(
                     uiState = uiState,
                     onModeChanged = viewModel::setIntegrationMode,
+                    onPrintMethodChanged = viewModel::setPrintMethod,
                     onFindDevices = viewModel::discoverDevices,
                     selectedLanguage = selectedLanguage,
                     onLanguageChanged = { language ->

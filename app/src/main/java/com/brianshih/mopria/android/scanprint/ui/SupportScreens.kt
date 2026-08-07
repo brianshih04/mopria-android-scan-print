@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.IntegrationMode
+import com.brianshih.mopria.android.scanprint.domain.PrintMethod
 import com.brianshih.mopria.android.scanprint.domain.JobKind
 import com.brianshih.mopria.android.scanprint.domain.JobRecord
 import com.brianshih.mopria.android.scanprint.domain.JobStatus
@@ -168,6 +169,7 @@ private fun EmptyHistoryCard() {
 internal fun SettingsScreen(
     uiState: MopriaUiState,
     onModeChanged: (IntegrationMode) -> Unit,
+    onPrintMethodChanged: (PrintMethod) -> Unit,
     onFindDevices: () -> Unit,
     selectedLanguage: AppLanguage,
     onLanguageChanged: (AppLanguage) -> Unit,
@@ -198,6 +200,31 @@ internal fun SettingsScreen(
                     enabled = !uiState.isBusy,
                     onClick = { onModeChanged(IntegrationMode.Real) },
                 )
+            }
+        }
+        if (!uiState.mockMode) {
+            item {
+                Text(stringResource(R.string.print_method_title), style = MaterialTheme.typography.headlineSmall)
+            }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ModeOptionCard(
+                        title = stringResource(R.string.print_method_system),
+                        description = stringResource(R.string.print_method_system_description),
+                        icon = Icons.Outlined.Print,
+                        selected = uiState.printMethod == PrintMethod.System,
+                        enabled = !uiState.isBusy,
+                        onClick = { onPrintMethodChanged(PrintMethod.System) },
+                    )
+                    ModeOptionCard(
+                        title = stringResource(R.string.print_method_ipp),
+                        description = stringResource(R.string.print_method_ipp_description),
+                        icon = Icons.Outlined.Wifi,
+                        selected = uiState.printMethod == PrintMethod.Ipp,
+                        enabled = !uiState.isBusy,
+                        onClick = { onPrintMethodChanged(PrintMethod.Ipp) },
+                    )
+                }
             }
         }
         if (!uiState.mockMode) {

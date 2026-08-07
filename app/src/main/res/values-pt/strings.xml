@@ -165,4 +165,9 @@
     <string name="document_demo_cover">Capa e resumo</string>
     <string name="document_demo_content">Página de conteúdo</string>
     <string name="document_saved_page">Página guardada %1$d</string>
+    <string name="print_method_title">Método de impressão</string>
+    <string name="print_method_system">Impressão do sistema (Mopria)</string>
+    <string name="print_method_ipp">IPP direto (experimental)</string>
+    <string name="print_method_system_description">Estrutura de impressão do Android / Mopria</string>
+    <string name="print_method_ipp_description">Imprimir diretamente via IPP/IPPS</string>
 </resources>

@@ -165,4 +165,9 @@
     <string name="document_demo_cover">표지 및 요약</string>
     <string name="document_demo_content">내용 페이지</string>
     <string name="document_saved_page">저장된 페이지 %1$d</string>
+    <string name="print_method_title">인쇄 방식</string>
+    <string name="print_method_system">시스템 인쇄(Mopria)</string>
+    <string name="print_method_ipp">직접 IPP(실험적)</string>
+    <string name="print_method_system_description">Android Print Framework / Mopria</string>
+    <string name="print_method_ipp_description">IPP/IPPS로 직접 인쇄</string>
 </resources>
