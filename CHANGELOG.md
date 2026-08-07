@@ -74,7 +74,7 @@
 - 57 unit tests passed，0 failed。
 - Android lint：0 errors，0 warnings。
 - Debug APK build passed。
-- Release APK build passed，並以 `apksigner verify` 驗證簽章。
+- Release APK build passed；目前建置輸出為 unsigned APK，產品簽章需另行套用。
 - GitHub Actions CI 通過（`testDebugUnitTest` + `lintDebug` + `assembleDebug`，Linux + JDK 25）。
 - API 36 emulator 通過 ADF 6 頁合併 PDF、Flatbed 2 頁逐頁合併、文件預覽／匯出、DocumentsUI 返回與列印頁返回流程。
 - API 36 emulator 語系 smoke 通過：系統 English、設定頁 10 語言清單、Japanese 與簡體中文手動切換。
