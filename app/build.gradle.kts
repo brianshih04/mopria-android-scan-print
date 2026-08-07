@@ -80,6 +80,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
 
     implementation("com.hp.jipp:jipp-core:0.7.18")
+    implementation("com.hp.jipp:jipp-pdl:0.7.18")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")

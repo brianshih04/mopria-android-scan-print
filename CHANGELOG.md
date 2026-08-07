@@ -25,6 +25,7 @@
 - 新增 GitHub Actions CI workflow（push／PR 自動跑 unit test、lint、`assembleDebug`）。
 - 新增直接 IPP 列印 client（`IppPrintClient` + `IppDocumentFormat` + `BoundedIppTransport`）與 `jipp-core` 依賴,實作 PWG 標準流程 Get-Printer-Attributes → Create-Job → Send-Document → Get-Job-Attributes → Cancel-Job,並支援 PDF／JPEG／PNG／PWG-Raster／URF 多格式協商;`IppDiscovery` 探索 `_ipp/_ipps`、`RealIntegrationProvider.print` 直接送件、ViewModel Real 模式路由。尚未以實體印表機驗證,capability 驅動列印選項 UI 仍待補。
 - 新增「列印方式」設定(系統列印(Mopria)／直接 IPP),Real 模式可切換;**預設系統列印**,IPP 為 opt-in(找不到 IPP 印表機時 fallback 系統列印),使 IPP 程式碼可安全 merge 而 shipped 行為不變。
+- 直接 IPP 新增 PDF→PWG-Raster raster 化(`jipp-pdl`):印表機不支援 PDF 時自動轉成 PWG-Raster 再送件(`IppRasterizer`),色彩依 `print-color-mode-supported`(RGB／Grayscale),DPI 暫定 300。`jipp-pdl` 僅多帶 jipp-core＋kotlin-stdlib,release APK 約 +0.1 MB。
 
 ### Changed
 

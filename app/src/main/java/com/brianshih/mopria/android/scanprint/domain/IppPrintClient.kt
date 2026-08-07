@@ -22,11 +22,13 @@ object IppDocumentFormat {
     const val JPEG = "image/jpeg"
     const val PNG = "image/png"
     const val PWG_RASTER = "image/pwg-raster"
+    const val PCLM = "application/PCLm"
     const val URF = "image/urf"
     const val OCTET_STREAM = "application/octet-stream"
 
-    /** Formats this app can produce, in preference order (PDF first, then JPEG/PNG). */
-    val producible: List<String> = listOf(PDF, JPEG, PNG)
+    /** Formats this app can produce for IPP printing, in preference order: PDF natively, else PWG-Raster
+     *  (via [com.hp.jipp.pdl] rasterization), else PCLm. PWG-Raster is the IPP Everywhere mandate. */
+    val producible: List<String> = listOf(PDF, PWG_RASTER, PCLM)
 
     /**
      * Pick the first format in [preferred] that the printer advertises as [supported] (case-insensitive),
@@ -68,6 +70,10 @@ class IppPrintClient(
     fun documentFormatsSupported(attributes: IppPacket): List<String> =
         attributes.getStrings(Tag.printerAttributes, Types.documentFormatSupported)
 
+    /** Read `print-color-mode-supported` (PWG), e.g. color / monochrome / bi-level. */
+    fun printColorModesSupported(attributes: IppPacket): List<String> =
+        attributes.getStrings(Tag.printerAttributes, Types.printColorModeSupported)
+
     /**
      * Submit [document] in [documentFormat] via Create-Job + Send-Document. The caller should have
      * confirmed [documentFormat] against the printer ([documentFormatsSupported] + [IppDocumentFormat.select]);
@@ -106,15 +112,14 @@ class IppPrintClient(
     }
 
     /**
-     * Negotiate then print: query the printer's supported formats, select the best match from
-     * [preferred] (default what this app produces), then Create-Job + Send-Document. Returns null when
-     * the printer advertises none of [preferred]; callers may then convert the document (e.g. rasterize
-     * via jipp-pdl) or report an unsupported-printer error.
+     * Send [document] as-is when its format is supported (defaults to PDF, since the caller supplies a
+     * single pre-rendered PDF stream). Non-PDF printers requiring rasterization must be handled by the
+     * caller (see RealIntegrationProvider). Returns null when the printer advertises none of [preferred].
      */
     fun printSupported(
         uri: URI,
         document: InputStream,
-        preferred: Iterable<String> = IppDocumentFormat.producible,
+        preferred: Iterable<String> = listOf(IppDocumentFormat.PDF),
         jobName: String = "Mopria Scan & Print",
     ): IppJobSubmission? {
         val supported = documentFormatsSupported(getPrinterAttributes(uri))
