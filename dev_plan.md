@@ -75,7 +75,7 @@
 - 使用者認證、PIN、OAuth、client certificate UI。
 - 手動 IP／URL、QR／NFC 加入設備。
 - 工作持久化、程序死亡恢復、前景服務、背景續傳。
-- 自行實作直接 IPP／IPPS（進行中：`IppDiscovery` + `RealIntegrationProvider` + ViewModel + 列印方式切換（預設系統列印）已接線，待實機驗證與 capability 列印選項 UI）。
+- 自行實作直接 IPP／IPPS（進行中：`IppDiscovery` + `RealIntegrationProvider` + ViewModel + 列印方式切換（預設系統列印）+ PDF→PWG-Raster raster 化（`jipp-pdl`）已接線，待實機驗證與 capability 列印選項 UI）。
 - Mopria Certified 或任何廠商品牌相容性宣稱。
 
 ## 5. 里程碑
