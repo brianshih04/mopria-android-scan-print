@@ -74,6 +74,16 @@ class IppPrintClient(
     fun printColorModesSupported(attributes: IppPacket): List<String> =
         attributes.getStrings(Tag.printerAttributes, Types.printColorModeSupported)
 
+    /** Read `printer-resolution-supported` and pick a DPI: 300 if offered, else the first, else 300. */
+    fun preferredResolution(attributes: IppPacket): Int {
+        val resolutions = runCatching { attributes.getValues(Tag.printerAttributes, Types.printerResolutionSupported) }.getOrDefault(emptyList())
+        return resolutions.firstOrNull { it.x == 300 }?.x ?: resolutions.firstOrNull()?.x ?: 300
+    }
+
+    /** Read `pclm-strip-height-preferred` for PCLm output, falling back to 16 when absent. */
+    fun pclmStripHeightPreferred(attributes: IppPacket): Int =
+        runCatching { attributes.getValue(Tag.printerAttributes, Types.pclmStripHeightPreferred) }.getOrNull() ?: 16
+
     /**
      * Submit [document] in [documentFormat] via Create-Job + Send-Document. The caller should have
      * confirmed [documentFormat] against the printer ([documentFormatsSupported] + [IppDocumentFormat.select]);
