@@ -34,7 +34,8 @@ class IppRasterizerTest {
     }
 
     @Test
-    fun formatPreferencePrefersPdfThenPwgRasterThenPclm() {        val producible = IppDocumentFormat.producible // [PDF, PWG-Raster, PCLm]
+    fun formatPreferencePrefersPdfThenPwgRasterThenPclm() {
+        val producible = IppDocumentFormat.producible // [PDF, PWG-Raster, PCLm]
         assertEquals(IppDocumentFormat.PDF, IppDocumentFormat.select(listOf("application/pdf", "image/pwg-raster"), producible))
         assertEquals(IppDocumentFormat.PWG_RASTER, IppDocumentFormat.select(listOf("image/pwg-raster", "application/PCLm"), producible))
         assertEquals(IppDocumentFormat.PCLM, IppDocumentFormat.select(listOf("application/PCLm"), producible))

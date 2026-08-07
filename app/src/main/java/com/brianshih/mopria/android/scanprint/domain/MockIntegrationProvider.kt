@@ -47,7 +47,17 @@ class MockIntegrationProvider : DeviceDiscovery, ScanAcquisitionProvider, PrintP
         )
     }
 
-    override suspend fun print(printer: IntegrationDevice, document: MopriaDocument) {
+    override suspend fun print(printer: IntegrationDevice, document: MopriaDocument, options: PrintOptions?) {
         delay(900)
     }
+
+    /** Fixture capabilities so the Direct IPP options sheet is exercisable in Mock mode. */
+    override suspend fun capabilities(printer: IntegrationDevice): PrintCapabilities = PrintCapabilities(
+        copies = 1..10,
+        media = listOf("iso_a4_210x297mm", "na_letter_8.5x11in"),
+        sides = listOf("one-sided", "two-sided-long-edge"),
+        colorModes = listOf("color", "monochrome"),
+        qualities = listOf("draft", "normal", "high"),
+        orientations = listOf("portrait", "landscape"),
+    )
 }

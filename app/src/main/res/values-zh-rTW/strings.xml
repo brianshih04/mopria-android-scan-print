@@ -181,4 +181,18 @@
     <string name="print_method_ipp">直接 IPP（實驗性）</string>
     <string name="print_method_system_description">Android 列印框架 / Mopria</string>
     <string name="print_method_ipp_description">透過 IPP/IPPS 直接列印</string>
+    <string name="print_error_unsupported_format">印表機不支援 PDF、JPEG 或 PNG</string>
+    <string name="print_error_rejected">印表機拒絕了列印工作</string>
+    <string name="print_error_job_stopped">印表機已停止列印工作</string>
+    <string name="print_error_timeout">列印工作逾時</string>
+    <string name="print_error_render_failed">無法準備要列印的頁面</string>
+    <string name="event_no_ipp_printer">找不到 Direct IPP 印表機。請在設定中改用系統列印。</string>
+    <string name="print_options_title">列印選項</string>
+    <string name="print_options_copies">份數</string>
+    <string name="print_options_color">色彩</string>
+    <string name="print_options_sides">雙面</string>
+    <string name="print_options_quality">品質</string>
+    <string name="print_options_media">紙張</string>
+    <string name="print_options_orientation">方向</string>
+    <string name="print_options_cancel">取消</string>
 </resources>

@@ -170,4 +170,18 @@
     <string name="print_method_ipp">IPP direto (experimental)</string>
     <string name="print_method_system_description">Estrutura de impressão do Android / Mopria</string>
     <string name="print_method_ipp_description">Imprimir diretamente via IPP/IPPS</string>
+    <string name="print_error_unsupported_format">A impressora não oferece suporte a PDF, JPEG ou PNG</string>
+    <string name="print_error_rejected">A impressora rejeitou o trabalho de impressão</string>
+    <string name="print_error_job_stopped">A impressora interrompeu o trabalho de impressão</string>
+    <string name="print_error_timeout">O trabalho de impressão atingiu o tempo limite</string>
+    <string name="print_error_render_failed">Não foi possível preparar uma página para impressão</string>
+    <string name="event_no_ipp_printer">Nenhuma impressora IPP direta encontrada. Tente a impressão do sistema nas Configurações.</string>
+    <string name="print_options_title">Opções de impressão</string>
+    <string name="print_options_copies">Cópias</string>
+    <string name="print_options_color">Cor</string>
+    <string name="print_options_sides">Lados</string>
+    <string name="print_options_quality">Qualidade</string>
+    <string name="print_options_media">Papel</string>
+    <string name="print_options_orientation">Orientação</string>
+    <string name="print_options_cancel">Cancelar</string>
 </resources>

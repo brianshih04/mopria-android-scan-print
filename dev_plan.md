@@ -1,6 +1,6 @@
 # Development Plan
 
-更新日期：2026-08-05
+更新日期：2026-08-07
 
 ## 1. 產品目標
 
@@ -22,7 +22,7 @@
 | App state | `MopriaViewModel` + `StateFlow`；目前為記憶體狀態與 SharedPreferences 設定 |
 | 掃描探索 | Android `NsdManager`，服務 `_uscan._tcp`／`_uscans._tcp` |
 | 掃描傳輸 | 自建 bounded eSCL HTTP client；系統 trust store；不使用 trust-all |
-| 列印 | Real 模式可切換：系統列印（Mopria，預設）或直接 IPP（`IppPrintClient`，opt-in，找不到印表機時 fallback 系統列印）；尚未實機驗證 |
+| 列印 | Real 模式可切換：系統列印（Mopria，預設）或直接 IPP（`IppPrintClient`，opt-in，找不到印表機時顯示明確錯誤，不 silent fallback）；尚未實機驗證 |
 | 文件輸出 | Android `PdfDocument`、MediaStore、FileProvider、Sharesheet |
 | Mock／Real | 共用 domain model 與 UI，以 provider 切換實作 |
 | 多國語言 | Android string resources；系統語系自動選擇、English fallback、設定頁手動覆寫 |
@@ -75,7 +75,7 @@
 - 使用者認證、PIN、OAuth、client certificate UI。
 - 手動 IP／URL、QR／NFC 加入設備。
 - 工作持久化、程序死亡恢復、前景服務、背景續傳。
-- 自行實作直接 IPP／IPPS（進行中：`IppDiscovery` + `RealIntegrationProvider` + ViewModel + 列印方式切換（預設系統列印）+ PDF→PWG-Raster／PCLm raster 化（`jipp-pdl`，DPI 協商）已接線，待實機驗證與 capability 列印選項 UI）。
+- 自行實作直接 IPP／IPPS（已接線：`IppDiscovery` + `RealIntegrationProvider` + ViewModel + 列印方式切換、PDF／JPEG／PNG／PWG-Raster／PCLm、解析度／色彩協商、bounded 300 dpi source rendering、multi-document job capability、job polling、fixed-length HTTP 與 capability 列印選項；仍待實體設備驗證）。
 - Mopria Certified 或任何廠商品牌相容性宣稱。
 
 ## 5. 里程碑
@@ -84,7 +84,7 @@
 |---|---|---|
 | M0 App shell／Mock／Print Framework | 完成 | 可建置、Mock scan、文件輸出、系統列印預覽 |
 | M1 現代化 UI／UX | 完成 | 清楚導覽、scan/documents 分離、返回行為、縮圖與分享 |
-| M2 eSCL v2.97 pull-scan client | 程式與 fixture 完成 | 34 unit tests、lint、build；尚缺實機 |
+| M2 eSCL v2.97 pull-scan client | 程式與 fixture 完成 | 62 unit tests、lint、build；尚缺實機 |
 | M3 Flatbed／ADF 多頁 PDF | Mock／UI 完成 | Flatbed 2 頁、ADF 6 頁 emulator smoke |
 | M3.1 多國語言 | 完成 | 10 種 resource locale、系統偵測、English fallback、手動選擇與 JVM tests |
 | M4 實體跨品牌驗收 | 待辦 | 至少兩個 scanner 品牌與兩個 printer 品牌 |
@@ -125,6 +125,7 @@
 - HTTP 201、200、404、503、401、DELETE、TE、PDF／JPEG signature 與錯誤 status。
 - Mock Flatbed／ADF 頁數及文件 merge／split 規則。
 - 語系 tag、繁／簡中文 script／region 判斷與未知語系 fallback。
+- Direct IPP format negotiation、fixed-length transport、job lifecycle、multi-document capability／batching 與 print-resolution sizing。
 
 後續需補：
 

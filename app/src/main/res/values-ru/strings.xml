@@ -170,4 +170,18 @@
     <string name="print_method_ipp">Прямой IPP (экспериментальный)</string>
     <string name="print_method_system_description">Платформа печати Android / Mopria</string>
     <string name="print_method_ipp_description">Печать напрямую через IPP/IPPS</string>
+    <string name="print_error_unsupported_format">Принтер не поддерживает PDF, JPEG или PNG</string>
+    <string name="print_error_rejected">Принтер отклонил задание печати</string>
+    <string name="print_error_job_stopped">Принтер остановил задание печати</string>
+    <string name="print_error_timeout">Время ожидания задания печати истекло</string>
+    <string name="print_error_render_failed">Не удалось подготовить страницу для печати</string>
+    <string name="event_no_ipp_printer">Прямой IPP-принтер не найден. Попробуйте системную печать в настройках.</string>
+    <string name="print_options_title">Параметры печати</string>
+    <string name="print_options_copies">Копии</string>
+    <string name="print_options_color">Цвет</string>
+    <string name="print_options_sides">Стороны</string>
+    <string name="print_options_quality">Качество</string>
+    <string name="print_options_media">Бумага</string>
+    <string name="print_options_orientation">Ориентация</string>
+    <string name="print_options_cancel">Отмена</string>
 </resources>

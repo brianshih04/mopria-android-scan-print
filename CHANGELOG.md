@@ -2,7 +2,7 @@
 
 本專案依 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 的概念記錄重要變更；目前尚未建立 release tag。
 
-## [Unreleased] - 2026-08-05
+## [Unreleased] - 2026-08-07
 
 ### Added
 
@@ -23,10 +23,9 @@
 - 新增依 Android 系統語系自動選擇、未支援語系 fallback English，以及設定頁手動語言覆寫。
 - 新增 `LanguageManager` 語系判斷單元測試。
 - 新增 GitHub Actions CI workflow（push／PR 自動跑 unit test、lint、`assembleDebug`）。
-- 新增直接 IPP 列印 client（`IppPrintClient` + `IppDocumentFormat` + `BoundedIppTransport`）與 `jipp-core` 依賴,實作 PWG 標準流程 Get-Printer-Attributes → Create-Job → Send-Document → Get-Job-Attributes → Cancel-Job,並支援 PDF／JPEG／PNG／PWG-Raster／URF 多格式協商;`IppDiscovery` 探索 `_ipp/_ipps`、`RealIntegrationProvider.print` 直接送件、ViewModel Real 模式路由。尚未以實體印表機驗證,capability 驅動列印選項 UI 仍待補。
-- 新增「列印方式」設定(系統列印(Mopria)／直接 IPP),Real 模式可切換;**預設系統列印**,IPP 為 opt-in(找不到 IPP 印表機時 fallback 系統列印),使 IPP 程式碼可安全 merge 而 shipped 行為不變。
-- 直接 IPP 新增 PDF→PWG-Raster raster 化(`jipp-pdl`):印表機不支援 PDF 時自動轉成 PWG-Raster 再送件(`IppRasterizer`),色彩依 `print-color-mode-supported`(RGB／Grayscale),DPI 暫定 300。`jipp-pdl` 僅多帶 jipp-core＋kotlin-stdlib,release APK 約 +0.1 MB。
-- 直接 IPP 新增 PCLm 輸出與 DPI 協商:格式優先序 PDF → PWG-Raster → PCLm → fallback;DPI 改依 `printer-resolution-supported` 協商(偏好 300);PCLm 的 strip height 依 `pclm-strip-height-preferred`(fallback 16)。
+- 新增直接 IPP 列印 client（`IppPrintClient` + `IppDocumentFormat` + `BoundedIppTransport`）與 `jipp-core`／`jipp-pdl` 依賴，實作 Get-Printer-Attributes → Create-Job → Send-Document → Get-Job-Attributes polling → Cancel-Job timeout cleanup；支援 PDF／JPEG／PNG／PWG-Raster／PCLm，並使用 fixed-length HTTP body。
+- 新增 `IppDiscovery` 探索 `_ipp/_ipps`、`RealIntegrationProvider.print` 的 PDF raster 化、解析度／色彩／PCLm strip-height 協商，以及 capability-constrained job options。
+- 新增「列印方式」設定（系統列印／直接 IPP）；**預設系統列印**，Direct IPP 為 opt-in。找不到 IPP 印表機時顯示明確錯誤，不會默默切換到系統列印。
 
 ### Changed
 
@@ -45,10 +44,12 @@
 - `compileSdk` 由 36 升至 37；`core-ktx`、`activity-compose`、`lifecycle-*` 升至最新。
 - Release build 啟用 R8 minify 與 resource shrinking；release APK 由 ~42 MB 縮至 ~2.2 MB。
 - `gradlew` 補回 Linux 執行權限（原由 Windows commit 丟失）。
+- 恢復 Direct IPP 所需的 `androidTest` dependencies，並加入列印方式 persistence、MainActivity smoke 與 rasterizer smoke coverage。
+- Direct IPP 圖片列印改以紙張 point size 與協商 DPI 計算像素預算，來源 bitmap 最高 300 dpi，避免先降為約 72 dpi 後再放大列印。
+- JPEG／PNG 多頁列印會解析 `multiple-document-jobs-supported`；不支援多文件 job 時，改為逐頁建立單文件 job。
 
 ### Removed
 
-- 移除未使用的 `androidTest` 依賴（espresso、`androidx.test.ext:junit`、Compose ui-test）與 8 條未引用的 string resources。
 - 測試 APK 不再 commit 進 repository，改由 [GitHub Release v0.1.0](https://github.com/brianshih04/mopria-android-scan-print/releases/tag/v0.1.0) 發布。
 
 ### Fixed
@@ -62,6 +63,8 @@
 - 修正 MIME header 與實際 payload 不一致時仍可能被接受的問題。
 - 清除所有 lint 與 Kotlin compiler warnings（lint 36 → 0；compiler → 0）。
 - 修正 eSCL `Retry-After` 對 null／空白值的解析；修正文件中的機器專屬路徑與失效連結。
+- 修正 GitHub Actions Android SDK 安裝使用錯誤的 `platforms;android-37` package id，改用 `platforms;android-37.0`。
+- 修正 Direct IPP 列印前置 discovery／capability 例外可能留下 busy 狀態或成為未捕捉 coroutine exception。
 
 ### Security
 
@@ -72,13 +75,14 @@
 
 ### Verification
 
-- 34 unit tests passed，0 failed。
+- 62 unit tests passed，0 failed。
 - Android lint：0 errors，0 warnings。
 - Debug APK build passed。
-- Release APK build passed，並以 `apksigner verify` 驗證簽章。
+- Release APK build passed；目前建置輸出為 unsigned APK，產品簽章需另行套用。
 - GitHub Actions CI 通過（`testDebugUnitTest` + `lintDebug` + `assembleDebug`，Linux + JDK 25）。
 - API 36 emulator 通過 ADF 6 頁合併 PDF、Flatbed 2 頁逐頁合併、文件預覽／匯出、DocumentsUI 返回與列印頁返回流程。
 - API 36 emulator 語系 smoke 通過：系統 English、設定頁 10 語言清單、Japanese 與簡體中文手動切換。
+- API 36 emulator instrumentation tests：5 passed，0 failed。
 - Smoke flow logcat 無 app `FATAL EXCEPTION`。
 
 ## [0.1.0] - Initial prototype

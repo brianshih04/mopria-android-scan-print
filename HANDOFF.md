@@ -1,6 +1,6 @@
 # Development Handoff
 
-更新日期：2026-08-05
+更新日期：2026-08-07
 
 Repository：`brianshih04/mopria-android-scan-print`
 
@@ -10,7 +10,7 @@ Repository：`brianshih04/mopria-android-scan-print`
 
 目前版本已完成可執行的 Android Compose App、Mock／Real 模式、eSCL v2.97 pull-scan client、Flatbed／ADF 多頁文件工作流、PDF／JPEG 文件庫、Android Print Framework 列印入口，以及 10 種語言與系統語系 fallback。
 
-自動測試與 API 36 emulator 已通過；唯一重要的產品級缺口是尚未連接真實 eSCL scanner 與 Mopria printer 做跨品牌驗收。請勿把 Mock／fixture 結果描述成 Mopria Certified 或廠牌相容證據。
+自動測試與 API 36 emulator 已通過（62 JVM unit tests、5 個 instrumentation tests）；唯一重要的產品級缺口是尚未連接真實 eSCL scanner 與 Mopria printer 做跨品牌驗收。請勿把 Mock／fixture 結果描述成 Mopria Certified 或廠牌相容證據。
 
 ## 2. 快速啟動
 
@@ -81,25 +81,27 @@ Flatbed multi-page 是多個獨立 eSCL Platen job 的 App-level session，不�
 - Mopria Alliance eSCL Technical Specification v2.97 PDF 只存在開發者本機，不在 Git，也不應被複製到 repository、issue 或 CI artifact。
 - 公開入口可連結 [Mopria eSCL Specification](https://mopria.org/mopria-escl-specification)。
 - ScanBridge／eSCLKt 為 GPL-3.0-or-later：本專案只參考可觀察行為，不複製或連結其程式碼。
-- HP JIPP（MIT；`jipp-core` + `jipp-pdl`）已作為直接 IPP client 的依賴納入；Real 模式列印可在設定切換「系統列印（預設）」與「直接 IPP」（opt-in，找不到 IPP 印表機時 fallback 系統列印），不支援 PDF 的印表機並自動 raster 化成 PWG-Raster／PCLm（DPI 依 `printer-resolution-supported` 協商），尚未以實體印表機驗證。
+- HP JIPP（MIT；`jipp-core` + `jipp-pdl`）已作為直接 IPP client 依賴納入；Real 模式列印可在設定切換「系統列印（預設）」與「直接 IPP」。Direct IPP 支援 PDF、JPEG／PNG、PWG-Raster、PCLm、capability-constrained job options、固定長度 HTTP、job polling 與 timeout cancel；圖片 renderer 使用最高 300 dpi 的 bounded pixel budget，JPEG／PNG 多頁會依 `multiple-document-jobs-supported` 選擇單一多文件 job 或逐頁單文件 jobs。找不到 IPP 印表機時會顯示明確錯誤，不會 fallback。尚未以實體印表機驗證。
 
 ## 6. 最新驗證證據
 
 | 驗證 | 結果 |
 |---|---|
-| `:app:testDebugUnitTest` | 34 passed，0 failed |
+| `:app:testDebugUnitTest` | 62 passed，0 failed |
 | `:app:lintDebug` | 0 errors，0 warnings |
 | `:app:assembleDebug` | passed；APK 位於 `app/build/outputs/apk/debug/app-debug.apk` |
 | `:app:assembleRelease` | passed；R8 minify 開啟，release APK ~2.2 MB（unsigned，產品簽章另以 `apksigner` 套用） |
+| `:app:connectedDebugAndroidTest` | API 36 emulator：5 passed，0 failed |
 | GitHub Actions CI | push／PR 自動跑 `testDebugUnitTest` + `lintDebug` + `assembleDebug`，Linux + JDK 25 環境綠燈 |
 | `LanguageManagerTest` | 覆蓋 10 種可選語系、未知 tag、繁／簡中文 script 與 region 判斷 |
 | `git diff --check` | passed |
+| `DIRECT_IPP_FOLLOWUPS.md` | Direct IPP review findings、接手順序與驗收條件 |
 | ADF emulator | max pages 改為 6；合併選項產生一份 6 頁文件及 PDF |
 | Flatbed emulator | 2 個獨立 scan job；dialog 顯示第 1／2 頁；完成後一份 2 頁 PDF |
 | DocumentsUI／Print | 系統選檔返回 App 列印頁，再回首頁 |
 | Runtime | smoke flow 無 app fatal exception／OOM |
 
-APK SHA-256：`B9D8A90129EB5F666789C217A7EDC3C955EF6C3106E8BB12CEFEF7CFBB9BE863`。
+APK SHA-256：release APK 每次建置後需重新計算；GitHub Release 的舊 SHA-256 不代表目前合併版本。
 
 語系 emulator smoke：清除 App data 後使用系統 en-US 驗證 English；設定頁可開啟 10 語言選單；手動選擇日本語與简体中文後，設定頁標題、操作說明與底部導覽即時更新。
 

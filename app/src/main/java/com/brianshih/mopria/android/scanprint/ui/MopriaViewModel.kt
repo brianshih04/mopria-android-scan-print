@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.DeviceDiscovery
+import com.brianshih.mopria.android.scanprint.domain.DirectIppPrintPrompt
 import com.brianshih.mopria.android.scanprint.domain.DeviceKind
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
 import com.brianshih.mopria.android.scanprint.domain.IntegrationDevice
@@ -21,6 +22,8 @@ import com.brianshih.mopria.android.scanprint.domain.MockIntegrationProvider
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
 import com.brianshih.mopria.android.scanprint.domain.PrintMethod
+import com.brianshih.mopria.android.scanprint.domain.PrintError
+import com.brianshih.mopria.android.scanprint.domain.PrintOptions
 import com.brianshih.mopria.android.scanprint.domain.PrintProvider
 import com.brianshih.mopria.android.scanprint.domain.RealIntegrationProvider
 import com.brianshih.mopria.android.scanprint.domain.ScanAcquisitionProvider
@@ -299,7 +302,6 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
 
         viewModelScope.launch {
             val mode = _uiState.value.integrationMode
-            var jobId: String? = null
             try {
                 val document = documentId?.let { id -> _uiState.value.documents.firstOrNull { it.id == id } }
                     ?: _uiState.value.documents.firstOrNull()
@@ -325,52 +327,112 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 val printer = devices.firstOrNull { it.kind == DeviceKind.Printer }
                 if (printer == null) {
-                    if (mode == IntegrationMode.Real) {
-                        // No IPP printer discovered: fall back to the Android system print preview.
-                        _uiState.update { it.copy(isDiscovering = false, devices = devices, selectedDocumentId = document.id) }
-                        _printRequests.emit(document)
-                        _events.tryEmit(text(R.string.event_print_opening))
-                        return@launch
-                    }
+                    // Direct IPP found no printer: do NOT silently fall back to system print — that
+                    // would mislead users into thinking Direct IPP was used. Surface an explicit error
+                    // and let them switch print method in Settings if they want system print.
                     _uiState.update { it.copy(isDiscovering = false, devices = devices) }
-                    _events.tryEmit(text(R.string.event_no_printer, text(mode.labelRes)))
+                    _events.tryEmit(
+                        if (mode == IntegrationMode.Real) text(R.string.event_no_ipp_printer)
+                        else text(R.string.event_no_printer, text(mode.labelRes)),
+                    )
                     return@launch
                 }
+                _uiState.update { it.copy(isDiscovering = false, devices = devices) }
 
-                val currentJobId = "print-job-${System.currentTimeMillis()}"
-                jobId = currentJobId
-                val queuedJob = JobRecord(
-                    id = currentJobId,
-                    kind = JobKind.Print,
-                    title = document.name,
-                    targetLabel = printer.name,
-                    status = JobStatus.Queued,
-                    progress = 0,
-                )
-                _uiState.update {
-                    it.copy(
-                        isDiscovering = false,
-                        activeJobId = currentJobId,
-                        devices = devices,
-                        selectedDocumentId = document.id,
-                        jobs = listOf(queuedJob) + it.jobs,
-                    )
+                // Direct IPP: if the printer advertises configurable options, let the user choose first.
+                if (_uiState.value.printMethod == PrintMethod.Ipp) {
+                    val capabilities = providers.print.capabilities(printer)
+                    if (capabilities != null && capabilities.hasAnyOption()) {
+                        _uiState.update {
+                            it.copy(directIppPrintPrompt = DirectIppPrintPrompt(document, printer, capabilities))
+                        }
+                        return@launch
+                    }
                 }
-                updateJob(currentJobId, JobStatus.Running, 45, text(R.string.event_print_working))
-                providers.print.print(printer, document)
-                updateJob(currentJobId, JobStatus.Completed, 100, text(R.string.event_print_done))
-                _uiState.update { it.copy(activeJobId = null) }
-                _events.tryEmit(text(R.string.event_print_done))
+
+                submitDirectIpp(document, printer, options = null, mode)
             } catch (error: CancellationException) {
-                jobId?.let { updateJob(it, JobStatus.Cancelled, 0, text(R.string.event_print_cancelled)) }
                 _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
                 throw error
-            } catch (error: Exception) {
-                jobId?.let { updateJob(it, JobStatus.Failed, 0, error.message ?: text(R.string.event_print_failed, text(mode.labelRes), text(R.string.common_retry))) }
+            } catch (_: Exception) {
                 _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
-                _events.tryEmit(text(R.string.event_print_failed, text(mode.labelRes), error.message ?: text(R.string.common_retry)))
+                _events.tryEmit(text(R.string.event_print_failed, text(mode.labelRes), text(R.string.common_retry)))
             }
         }
+    }
+
+    /** User confirmed the Direct IPP options sheet — submit with the chosen [options]. */
+    fun confirmDirectIppPrint(options: PrintOptions) {
+        val prompt = _uiState.value.directIppPrintPrompt ?: return
+        _uiState.update { it.copy(directIppPrintPrompt = null) }
+        viewModelScope.launch {
+            submitDirectIpp(prompt.document, prompt.printer, options, _uiState.value.integrationMode)
+        }
+    }
+
+    /** User dismissed the Direct IPP options sheet. */
+    fun dismissDirectIppPrintPrompt() {
+        _uiState.update { it.copy(directIppPrintPrompt = null) }
+    }
+
+    private suspend fun submitDirectIpp(
+        document: MopriaDocument,
+        printer: IntegrationDevice,
+        options: PrintOptions?,
+        mode: IntegrationMode,
+    ) {
+        val providers = providersFor(mode)
+        var jobId: String? = null
+        try {
+            val currentJobId = "print-job-${System.currentTimeMillis()}"
+            jobId = currentJobId
+            val queuedJob = JobRecord(
+                id = currentJobId,
+                kind = JobKind.Print,
+                title = document.name,
+                targetLabel = printer.name,
+                status = JobStatus.Queued,
+                progress = 0,
+            )
+            _uiState.update {
+                it.copy(
+                    activeJobId = currentJobId,
+                    selectedDocumentId = document.id,
+                    jobs = listOf(queuedJob) + it.jobs,
+                )
+            }
+            updateJob(currentJobId, JobStatus.Running, 45, text(R.string.event_print_working))
+            providers.print.print(printer, document, options)
+            updateJob(currentJobId, JobStatus.Completed, 100, text(R.string.event_print_done))
+            _uiState.update { it.copy(activeJobId = null) }
+            _events.tryEmit(text(R.string.event_print_done))
+        } catch (error: CancellationException) {
+            jobId?.let { updateJob(it, JobStatus.Cancelled, 0, text(R.string.event_print_cancelled)) }
+            _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
+            throw error
+        } catch (error: PrintError) {
+            val message = text(error.messageStringRes())
+            jobId?.let { updateJob(it, JobStatus.Failed, 0, message) }
+            _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
+            _events.tryEmit(message)
+        } catch (error: Exception) {
+            val message = text(R.string.event_print_failed, text(mode.labelRes), text(R.string.common_retry))
+            jobId?.let { updateJob(it, JobStatus.Failed, 0, message) }
+            _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
+            _events.tryEmit(message)
+        }
+    }
+
+    /** Maps a localizable [PrintError] to the string resource that describes it for the user. */
+    private fun PrintError.messageStringRes(): Int = when (this) {
+        is PrintError.UnsupportedFormat -> R.string.print_error_unsupported_format
+        is PrintError.CreateJobFailed -> R.string.print_error_rejected
+        is PrintError.SendDocumentFailed -> R.string.print_error_rejected
+        is PrintError.MultipleDocumentsUnsupported -> R.string.print_error_rejected
+        is PrintError.JobCanceled -> R.string.print_error_job_stopped
+        is PrintError.JobAborted -> R.string.print_error_job_stopped
+        is PrintError.JobTimeout -> R.string.print_error_timeout
+        is PrintError.PageRenderFailed -> R.string.print_error_render_failed
     }
 
     fun export(documentId: String? = null) {

@@ -9,5 +9,8 @@ interface ScanAcquisitionProvider {
 }
 
 interface PrintProvider {
-    suspend fun print(printer: IntegrationDevice, document: MopriaDocument)
+    suspend fun print(printer: IntegrationDevice, document: MopriaDocument, options: PrintOptions? = null)
+
+    /** Printer capability surface for Direct IPP options, or null if not discoverable (e.g. system print). */
+    suspend fun capabilities(printer: IntegrationDevice): PrintCapabilities? = null
 }
