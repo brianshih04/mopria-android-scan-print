@@ -9,5 +9,5 @@ interface ScanAcquisitionProvider {
 }
 
 interface PrintProvider {
-    suspend fun print(printer: IntegrationDevice, document: MopriaDocument)
+    suspend fun print(printer: IntegrationDevice, document: MopriaDocument, options: PrintOptions = PrintOptions())
 }

@@ -1,6 +1,9 @@
 package com.brianshih.mopria.android.scanprint.domain
 
+import com.hp.jipp.encoding.Attribute
 import com.hp.jipp.encoding.IppPacket
+import com.hp.jipp.encoding.Resolution
+import com.hp.jipp.encoding.ResolutionUnit
 import com.hp.jipp.encoding.Tag
 import com.hp.jipp.model.Types
 import com.hp.jipp.trans.IppClientTransport
@@ -84,6 +87,22 @@ class IppPrintClient(
     fun pclmStripHeightPreferred(attributes: IppPacket): Int =
         runCatching { attributes.getValue(Tag.printerAttributes, Types.pclmStripHeightPreferred) }.getOrNull() ?: 16
 
+    /** Read `sides-supported` (PWG), e.g. one-sided / two-sided-long-edge. */
+    fun sidesSupported(attributes: IppPacket): List<String> =
+        attributes.getStrings(Tag.printerAttributes, Types.sidesSupported)
+
+    /** Read `copies-supported` (PWG) as an IntRange, or null if absent. */
+    fun copiesRangeSupported(attributes: IppPacket): IntRange? =
+        runCatching { attributes.getValue(Tag.printerAttributes, Types.copiesSupported) }.getOrNull()
+
+    /** Read `printer-resolution-supported` (PWG) as a list of DPI values. */
+    fun resolutionsSupported(attributes: IppPacket): List<Int> =
+        runCatching { attributes.getValues(Tag.printerAttributes, Types.printerResolutionSupported) }.getOrDefault(emptyList()).map { it.x }
+
+    /** Read `media-supported` (PWG), e.g. na_letter_8.5x11in / iso_a4_210x297mm. */
+    fun mediaSupported(attributes: IppPacket): List<String> =
+        attributes.getStrings(Tag.printerAttributes, Types.mediaSupported)
+
     /**
      * Submit [document] in [documentFormat] via Create-Job + Send-Document. The caller should have
      * confirmed [documentFormat] against the printer ([documentFormatsSupported] + [IppDocumentFormat.select]);
@@ -96,6 +115,7 @@ class IppPrintClient(
         uri: URI,
         documentFormat: String,
         document: InputStream,
+        options: PrintOptions = PrintOptions(),
         jobName: String = "Mopria Scan & Print",
     ): IppJobSubmission {
         val createRequest = IppPacket.createJob(uri)
@@ -103,6 +123,7 @@ class IppPrintClient(
                 Types.requestingUserName.of(userAgent),
                 Types.jobName.of(jobName),
             )
+            .putJobAttributes(options.jobTemplateAttributes())
             .build()
         val createResponse = transport.sendData(uri, IppPacketData(createRequest)).packet
         require(isSuccessful(createResponse)) { "IPP Create-Job 失敗：${createResponse.status}" }
@@ -134,7 +155,7 @@ class IppPrintClient(
     ): IppJobSubmission? {
         val supported = documentFormatsSupported(getPrinterAttributes(uri))
         val format = IppDocumentFormat.select(supported, preferred) ?: return null
-        return print(uri, format, document, jobName)
+        return print(uri, format, document, jobName = jobName)
     }
 
     /** Get-Job-Attributes for [jobId]; read job-state via [IppPacket.getValue] with [Types.jobState]. */
@@ -155,4 +176,24 @@ class IppPrintClient(
 
     /** IPP successful status codes occupy the 0x0000–0x00FF range (RFC 8011 §13). */
     private fun isSuccessful(packet: IppPacket): Boolean = (packet.status.code and 0xFF00) == 0
+}
+
+/**
+ * User-chosen IPP job-template options. All optional; null/1 means "let the printer decide".
+ * Sent as job-template attributes on Create-Job (print-color-mode, sides, copies, printer-resolution, media).
+ */
+data class PrintOptions(
+    val colorMode: String? = null,
+    val sides: String? = null,
+    val copies: Int = 1,
+    val resolutionDpi: Int? = null,
+    val media: String? = null,
+) {
+    fun jobTemplateAttributes(): List<Attribute<*>> = buildList {
+        colorMode?.let { add(Types.printColorMode.of(it)) }
+        sides?.let { add(Types.sides.of(it)) }
+        if (copies > 1) add(Types.copies.of(copies))
+        resolutionDpi?.let { add(Types.printerResolution.of(Resolution(it, it, ResolutionUnit.dotsPerInch))) }
+        media?.let { add(Types.media.of(it)) }
+    }
 }

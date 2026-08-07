@@ -96,6 +96,44 @@ class IppPrintClientTest {
         }
     }
 
+    @Test
+    fun sendsJobTemplateOptionsOnCreateJob() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        val executor = Executors.newSingleThreadExecutor()
+        val captured = OptionsCapture()
+
+        server.createContext("/ipp/print") { exchange ->
+            val packet = IppInputStream(exchange.requestBody.readBytes().inputStream()).readPacket()
+            if (packet.operation.code == Operation.createJob.code) {
+                captured.copies = packet.getValue(Tag.jobAttributes, Types.copies)
+                captured.sides = packet.getString(Tag.jobAttributes, Types.sides)
+                captured.colorMode = packet.getString(Tag.jobAttributes, Types.printColorMode)
+            }
+            val response = if (packet.operation.code == Operation.createJob.code) {
+                IppPacket.Builder(SUCCESS).putJobAttributes(Types.jobId.of(JOB_ID)).build()
+            } else {
+                IppPacket.Builder(SUCCESS).build()
+            }
+            respond(exchange, response)
+        }
+        server.executor = executor
+        server.start()
+
+        try {
+            val uri = URI.create("http://127.0.0.1:${server.address.port}/ipp/print")
+            val client = IppPrintClient(BoundedIppTransport())
+            val options = PrintOptions(colorMode = "monochrome", sides = "one-sided", copies = 3)
+            val submission = client.print(uri, IppDocumentFormat.PDF, ByteArrayInputStream("%PDF-1.4".toByteArray()), options)
+            assertEquals(SUCCESS, submission.response.status.code)
+            assertEquals(3, captured.copies)
+            assertEquals("one-sided", captured.sides)
+            assertEquals("monochrome", captured.colorMode)
+        } finally {
+            server.stop(0)
+            executor.shutdownNow()
+        }
+    }
+
     private fun respond(exchange: HttpExchange, packet: IppPacket) {
         val out = ByteArrayOutputStream()
         IppOutputStream(out).apply { write(packet); flush() }
@@ -109,6 +147,12 @@ class IppPrintClientTest {
         var charset: String? = null
         var documentFormat: String? = null
         var documentBytes: ByteArray = ByteArray(0)
+    }
+
+    private class OptionsCapture {
+        var copies: Int? = null
+        var sides: String? = null
+        var colorMode: String? = null
     }
 
     private companion object {

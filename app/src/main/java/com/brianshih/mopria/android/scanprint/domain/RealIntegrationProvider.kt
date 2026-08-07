@@ -295,24 +295,24 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         }
     }
 
-    override suspend fun print(printer: IntegrationDevice, document: MopriaDocument) = withContext(Dispatchers.IO) {
+    override suspend fun print(printer: IntegrationDevice, document: MopriaDocument, options: PrintOptions) = withContext(Dispatchers.IO) {
         val host = requireNotNull(printer.host) { "印表機缺少 host" }
         val uri = IppDiscovery.printerUri(host, printer.port ?: IppDiscovery.DEFAULT_PORT, printer.resourcePath, printer.secure)
         val client = IppPrintClient(BoundedIppTransport())
         val attributes = client.getPrinterAttributes(uri)
         val supported = client.documentFormatsSupported(attributes)
-        val colorSpace = chooseColorSpace(client.printColorModesSupported(attributes))
-        val dpi = client.preferredResolution(attributes)
+        val colorSpace = chooseColorSpace(client.printColorModesSupported(attributes), options.colorMode)
+        val dpi = options.resolutionDpi ?: client.preferredResolution(attributes)
         val pdf = renderDocumentPdf(document)
         try {
             val submission = when {
                 supported.any { it.equals(IppDocumentFormat.PDF, ignoreCase = true) } ->
-                    pdf.inputStream().use { client.print(uri, IppDocumentFormat.PDF, it) }
+                    pdf.inputStream().use { client.print(uri, IppDocumentFormat.PDF, it, options) }
 
                 supported.any { it.equals(IppDocumentFormat.PWG_RASTER, ignoreCase = true) } -> {
                     val raster = IppRasterizer.rasterizeToPwgRaster(pdf, dpi, colorSpace)
                     try {
-                        raster.inputStream().use { client.print(uri, IppDocumentFormat.PWG_RASTER, it) }
+                        raster.inputStream().use { client.print(uri, IppDocumentFormat.PWG_RASTER, it, options) }
                     } finally {
                         raster.delete()
                     }
@@ -321,7 +321,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                 supported.any { it.equals(IppDocumentFormat.PCLM, ignoreCase = true) } -> {
                     val raster = IppRasterizer.rasterizeToPclm(pdf, dpi, colorSpace, client.pclmStripHeightPreferred(attributes))
                     try {
-                        raster.inputStream().use { client.print(uri, IppDocumentFormat.PCLM, it) }
+                        raster.inputStream().use { client.print(uri, IppDocumentFormat.PCLM, it, options) }
                     } finally {
                         raster.delete()
                     }
@@ -335,9 +335,12 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         }
     }
 
-    /** Pick the raster color space from advertised print-color-mode: RGB unless only monochrome/bi-level. */
-    private fun chooseColorSpace(modes: List<String>): ColorSpace =
-        if (modes.any { it.equals("color", ignoreCase = true) }) ColorSpace.Rgb else ColorSpace.Grayscale
+    /** Pick the raster color space: honor a user-chosen print-color-mode, else infer from advertised modes. */
+    private fun chooseColorSpace(modes: List<String>, chosenColorMode: String? = null): ColorSpace {
+        val isColor = chosenColorMode?.let { it.equals("color", ignoreCase = true) }
+            ?: modes.any { it.equals("color", ignoreCase = true) }
+        return if (isColor) ColorSpace.Rgb else ColorSpace.Grayscale
+    }
 
     /**
      * Renders a [MopriaDocument] to a single multi-page PDF in the cache dir for IPP submission.
