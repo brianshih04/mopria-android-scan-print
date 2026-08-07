@@ -11,7 +11,7 @@
 - Fixes base：`d299bf3`
 - 變更內容：Direct IPP base、PWG-Raster／PCLm、capability options 與 review fixes
 - Android Studio bundled JDK：25.0.2
-- 已驗證：unit tests 57/57、lint、debug/release assemble、4 個 emulator instrumentation tests 均成功
+- 已驗證：unit tests 62/62、lint、debug/release assemble、5 個 emulator instrumentation tests 均成功
 - 尚未完成：實體 IPP/IPPS 印表機跨品牌驗證
 
 ## 目前接手重點
@@ -20,6 +20,9 @@
 - [x] 加入 IPP job polling、timeout 與 Cancel-Job cleanup。
 - [x] 使用 fixed-length HTTP streaming。
 - [x] 使用 sampled bitmap，避免一般圖片列印路徑直接載入完整高解析影像。
+- [x] 使用最高 300 dpi 的 bounded source-render budget，避免圖片先降為約 72 dpi 再放大列印。
+- [x] 遵守 `multiple-document-jobs-supported`；不支援時將 JPEG／PNG 頁面拆成單文件 jobs。
+- [x] 列印 discovery／capability 前置流程的例外會清除 busy state 並顯示本地化錯誤。
 - [x] Direct IPP 找不到印表機時顯示明確錯誤，不再 silent fallback。
 - [x] Direct IPP 錯誤訊息支援 string resources。
 - [x] 恢復 instrumentation test dependencies 與基本 UI smoke tests。
@@ -36,7 +39,7 @@
 - [`RealIntegrationProvider.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/RealIntegrationProvider.kt)
 - [`IppPrintClientTest.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/test/java/com/brianshih/mopria/android/scanprint/domain/IppPrintClientTest.kt)
 
-目前已完成格式與 payload 對齊：`IppDocumentFormat.producible` 依偏好順序提供 PDF、PWG-Raster、PCLm、JPEG、PNG；`RealIntegrationProvider` 會分別產生對應 bytes，且 image 多頁以多個 `Send-Document` 傳送。PWG-Raster／PCLm 由 `jipp-pdl` 從中介 PDF rasterize。
+目前已完成格式與 payload 對齊：`IppDocumentFormat.producible` 依偏好順序提供 PDF、PWG-Raster、PCLm、JPEG、PNG；`RealIntegrationProvider` 會分別產生對應 bytes。JPEG／PNG 多頁在 `multiple-document-jobs-supported=true` 時以多個 `Send-Document` 組成同一 job，否則逐頁建立單文件 job。PWG-Raster／PCLm 由 `jipp-pdl` 從中介 PDF rasterize。
 
 必要的 JVM tests 已涵蓋 PDF、JPEG 多頁、格式協商、fixed-length body、PWG/PCLm writer magic，以及中途 Send-Document 失敗時的 Cancel-Job cleanup。仍需以實體印表機驗證各品牌對 PCLm／PWG-Raster 的實際接受度。
 
@@ -100,7 +103,7 @@ platforms;android-37.0 build-tools;37.0.0
 
 ### 7. 避免 Direct IPP renderer 造成 OOM
 
-目前已完成大部分記憶體與錯誤處理：JPEG／PNG 使用 sampled decode，PDF page render 限制在列印畫布尺寸，decode 失敗會回報 `PageRenderFailed`，且多頁 image renderer 會逐頁產生並清理暫存檔。剩餘風險是 `IppRasterizer` 為 PCLm／PWG-Raster 暫時保留所有高 DPI 頁面 bitmap，後續應改成 swath／逐頁 streaming。
+目前已完成大部分記憶體與錯誤處理：JPEG／PNG 使用 `ImageDecoder` 精確限制輸出尺寸；Direct IPP source renderer 依 PDF point size 與協商 DPI 計算像素，最高 300 dpi（Letter 約 2550×3300），不再以 612×792 point 數值當作像素上限。decode 失敗會回報 `PageRenderFailed`，且多頁 image renderer 會逐頁產生並清理暫存檔。剩餘風險是 `IppRasterizer` 為 PCLm／PWG-Raster 暫時保留所有高 DPI 頁面 bitmap，後續應改成 swath／逐頁 streaming。
 
 ### 8. 驗證 HTTP streaming interoperability
 
@@ -112,13 +115,13 @@ capability-driven print options 已完成：從 `Get-Printer-Attributes` 解析 
 
 ### 10. 補 Android／emulator integration coverage
 
-目前已恢復 `androidTest` dependencies，emulator 已通過 4 個 instrumentation tests，包含 MainActivity smoke、print method persistence 與 PDF→PWG-Raster/PCLm Android rasterizer path；Direct IPP 真實網路與 no-printer UI 仍以實體／mock discovery test 擴充為後續工作。
+目前已恢復 `androidTest` dependencies，emulator 已通過 5 個 instrumentation tests，包含 MainActivity smoke、print method persistence、PDF→PWG-Raster/PCLm Android rasterizer path 與 bounded image decode；Direct IPP 真實網路與 no-printer UI 仍以實體／mock discovery test 擴充為後續工作。
 
 ## 文件與 release 同步
 
 以下內容需在實作完成後一起更新：
 
-- README、HANDOFF、CHANGELOG 的測試數量：目前實際為 57 JVM unit tests，另有 4 個 emulator instrumentation tests。
+- README、HANDOFF、CHANGELOG 的測試數量：目前實際為 62 JVM unit tests，另有 5 個 emulator instrumentation tests。
 - README 的環境需求：JDK 25 daemon、compileSdk 37、Android SDK 版本要一致。
 - CHANGELOG 可記載 Get-Job-Attributes／Cancel-Job lifecycle 已接線並有 JVM tests；實體 printer job lifecycle 仍待驗證。
 - 明確記載 Direct IPP 是否仍為 opt-in，以及找不到設備時是否允許 fallback。
@@ -140,5 +143,7 @@ capability-driven print options 已完成：從 `Get-Printer-Attributes` 解析 
 - [x] CI 在乾淨環境可取得正確 Android SDK 並通過 test、lint、debug assemble。
 - [ ] 至少一台 plain IPP 與一台 IPPS 實體設備完成驗證。
 - [x] Direct IPP 錯誤支援 English、繁中、簡中。
+- [x] JPEG／PNG 多頁不會對 single-document printer 傳送第二個 document payload。
+- [x] 一般圖片不會在 Direct IPP render 前被固定降為約 72 dpi。
 - [ ] 高解析度多頁 PCLm／PWG-Raster 文件不會因 bitmap allocation 造成 OOM。
 - [x] 相關 MD files、CHANGELOG、HANDOFF 已同步實際行為與驗證結果。

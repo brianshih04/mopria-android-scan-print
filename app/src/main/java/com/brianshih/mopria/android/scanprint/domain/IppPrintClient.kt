@@ -24,9 +24,9 @@ data class IppJobSubmission(val jobId: Int, val response: IppPacket)
  * One or more rendered files ready to submit as a single IPP job in [format].
  *
  * PDF documents are a single multi-page file (`files.size == 1`). Image formats (JPEG/PNG) are one file
- * per page; each page is sent as a separate Send-Document and only the final one carries
- * `last-document=true` so the printer finalizes the job. The caller owns these files and must call
- * [delete] after submission (success or failure).
+ * per page. A multi-document printer receives them as one job; a single-document printer receives one
+ * job per page via [jobBatches]. The caller owns these files and must call [delete] after submission
+ * (success or failure).
  */
 data class RenderedPrintDocument(
     val format: String,
@@ -41,6 +41,17 @@ data class RenderedPrintDocument(
         files.forEach { runCatching { it.delete() } }
     }
 }
+
+/**
+ * Creates submission views for the printer's multi-document capability. The returned objects reference
+ * the same files; only the original owner should call [RenderedPrintDocument.delete].
+ */
+internal fun RenderedPrintDocument.jobBatches(multipleDocumentsSupported: Boolean): List<RenderedPrintDocument> =
+    if (files.size <= 1 || multipleDocumentsSupported) {
+        listOf(this)
+    } else {
+        files.map { file -> copy(files = listOf(file)) }
+    }
 
 /**
  * Length-aware IPP-over-HTTP transport.
@@ -124,6 +135,10 @@ class IppPrintClient(
     fun printColorModesSupported(attributes: IppPacket): List<String> =
         attributes.getStrings(Tag.printerAttributes, Types.printColorModeSupported)
 
+    /** Whether the printer permits more than one Send-Document payload in a single job. */
+    fun multipleDocumentJobsSupported(attributes: IppPacket): Boolean =
+        attributes.getValue(Tag.printerAttributes, Types.multipleDocumentJobsSupported) == true
+
     /** Read `printer-resolution-supported` and prefer 300 DPI when advertised. */
     fun preferredResolution(attributes: IppPacket): Int {
         val resolutions = runCatching {
@@ -171,11 +186,15 @@ class IppPrintClient(
 
     /**
      * Submit [document] via Create-Job + one Send-Document per file. Each file is sent in
-     * [RenderedPrintDocument.format]; only the final Send-Document carries `last-document=true`, so a
-     * multi-page image job (one file per page) finalizes correctly while a single-file PDF job submits
-     * in one step. Create-Job or any Send-Document failure throws so a caller can stop early; a
-     * a partial transfer is followed by a best-effort Cancel-Job so a printer does not retain an
+     * [RenderedPrintDocument.format]; only the final Send-Document carries `last-document=true`, so an
+     * allowed multi-document image job finalizes correctly while a single-file PDF job submits in one
+     * step. Create-Job or any Send-Document failure throws so a caller can stop early; a partial
+     * transfer is followed by a best-effort Cancel-Job so a printer does not retain an
      * unfinished job when a later page or transport request fails.
+     *
+     * [multipleDocumentsSupported] must come from the printer's `multiple-document-jobs-supported`
+     * attribute. The check runs before Create-Job so a caller cannot accidentally leave an empty job on
+     * a single-document printer. `RealIntegrationProvider` submits separate jobs in that case.
      *
      * Two-step Create-Job + Send-Document (rather than Print-Job) is preferred per the PWG IPP guide
      * because the job-id is assigned *before* the document transfers, so Cancel-Job can stop a large
@@ -186,7 +205,11 @@ class IppPrintClient(
         document: RenderedPrintDocument,
         jobName: String = "Mopria Scan & Print",
         options: PrintOptions? = null,
+        multipleDocumentsSupported: Boolean = false,
     ): IppJobSubmission {
+        if (document.files.size > 1 && !multipleDocumentsSupported) {
+            throw PrintError.MultipleDocumentsUnsupported
+        }
         val createRequest = IppPacket.createJob(uri)
             .putOperationAttributes(
                 Types.requestingUserName.of(userAgent),

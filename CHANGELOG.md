@@ -45,6 +45,8 @@
 - Release build 啟用 R8 minify 與 resource shrinking；release APK 由 ~42 MB 縮至 ~2.2 MB。
 - `gradlew` 補回 Linux 執行權限（原由 Windows commit 丟失）。
 - 恢復 Direct IPP 所需的 `androidTest` dependencies，並加入列印方式 persistence、MainActivity smoke 與 rasterizer smoke coverage。
+- Direct IPP 圖片列印改以紙張 point size 與協商 DPI 計算像素預算，來源 bitmap 最高 300 dpi，避免先降為約 72 dpi 後再放大列印。
+- JPEG／PNG 多頁列印會解析 `multiple-document-jobs-supported`；不支援多文件 job 時，改為逐頁建立單文件 job。
 
 ### Removed
 
@@ -62,6 +64,7 @@
 - 清除所有 lint 與 Kotlin compiler warnings（lint 36 → 0；compiler → 0）。
 - 修正 eSCL `Retry-After` 對 null／空白值的解析；修正文件中的機器專屬路徑與失效連結。
 - 修正 GitHub Actions Android SDK 安裝使用錯誤的 `platforms;android-37` package id，改用 `platforms;android-37.0`。
+- 修正 Direct IPP 列印前置 discovery／capability 例外可能留下 busy 狀態或成為未捕捉 coroutine exception。
 
 ### Security
 
@@ -72,13 +75,14 @@
 
 ### Verification
 
-- 57 unit tests passed，0 failed。
+- 62 unit tests passed，0 failed。
 - Android lint：0 errors，0 warnings。
 - Debug APK build passed。
 - Release APK build passed；目前建置輸出為 unsigned APK，產品簽章需另行套用。
 - GitHub Actions CI 通過（`testDebugUnitTest` + `lintDebug` + `assembleDebug`，Linux + JDK 25）。
 - API 36 emulator 通過 ADF 6 頁合併 PDF、Flatbed 2 頁逐頁合併、文件預覽／匯出、DocumentsUI 返回與列印頁返回流程。
 - API 36 emulator 語系 smoke 通過：系統 English、設定頁 10 語言清單、Japanese 與簡體中文手動切換。
+- API 36 emulator instrumentation tests：5 passed，0 failed。
 - Smoke flow logcat 無 app `FATAL EXCEPTION`。
 
 ## [0.1.0] - Initial prototype

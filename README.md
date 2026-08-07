@@ -14,7 +14,7 @@ Android 沒有一個同時提供 Mopria 掃描與列印的公開「Mopria API」
 | 列印 | Android `PrintManager` + `PrintDocumentAdapter` | 文件選擇、內容轉換、預覽入口與工作狀態 |
 | 印表機連線 | Android Default Print Service／Mopria Print Service | 印表機探索、IPP/IPPS、紙張、色彩、雙面與 spool |
 
-因此，eSCL／AirScan 是掃描協定；列印方面，Real 模式可在設定切換「系統列印（Mopria，預設）」與「直接 IPP」——前者走 Android Print Framework，後者透過 `IppPrintClient` 探索 `_ipp/_ipps` 並送件；不支援 PDF 的印表機會依 capability 轉成 PWG-Raster 或 PCLm。Direct IPP 找不到印表機時會顯示明確錯誤，不會默默改走系統列印。直接 IPP 尚未以實體印表機驗證（見「下一階段」）。
+因此，eSCL／AirScan 是掃描協定；列印方面，Real 模式可在設定切換「系統列印（Mopria，預設）」與「直接 IPP」——前者走 Android Print Framework，後者透過 `IppPrintClient` 探索 `_ipp/_ipps` 並送件；不支援 PDF 的印表機會依 capability 轉成 PWG-Raster 或 PCLm。JPEG／PNG 多頁工作會遵守 `multiple-document-jobs-supported`，不支援多文件工作的印表機改為逐頁建立單文件 job。Direct IPP 找不到印表機時會顯示明確錯誤，不會默默改走系統列印。直接 IPP 尚未以實體印表機驗證（見「下一階段」）。
 
 ## 已完成的使用者功能
 
@@ -194,8 +194,9 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 - 工具鏈：AGP 9.3.1、Gradle 9.5.0、JDK 25 daemon、`compileSdk 37`。
 - Release 啟用 R8 minify + resource shrinking；release APK 由 ~42 MB 縮至 ~2.2 MB。
 - Android lint：0 errors，0 warnings（Kotlin compiler warnings 亦清零）。
-- Unit tests：57 passed。
+- Unit tests：62 passed。
 - `:app:assembleDebug`／`:app:assembleRelease`：passed。
+- API 36 emulator instrumentation：5 passed，包含 app launch、列印方式 persistence、PDF→PWG/PCLm 與 bounded image decode。
 - GitHub Actions CI：push／PR 自動跑 test + lint + assemble，Linux + JDK 25 環境綠燈。
 - 測試 APK 改由 [GitHub Release v0.1.0](https://github.com/brianshih04/mopria-android-scan-print/releases/tag/v0.1.0) 發布，不再進 repo。
 

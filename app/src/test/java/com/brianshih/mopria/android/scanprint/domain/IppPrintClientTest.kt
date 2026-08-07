@@ -61,7 +61,10 @@ class IppPrintClientTest {
 
     @Test
     fun sendsOneDocumentPerPageWithLastDocumentOnlyOnFinalImage() {
-        val server = stubPrinter(formats = listOf(IppDocumentFormat.JPEG))
+        val server = stubPrinter(
+            formats = listOf(IppDocumentFormat.JPEG),
+            multipleDocumentJobsSupported = true,
+        )
         server.start()
         try {
             val uri = server.uri
@@ -78,7 +81,7 @@ class IppPrintClientTest {
             )
             val rendered = RenderedPrintDocument(IppDocumentFormat.JPEG, pageBytes.map(::tempFile))
             try {
-                client.send(uri, rendered)
+                client.send(uri, rendered, multipleDocumentsSupported = true)
             } finally {
                 rendered.delete()
             }
@@ -89,6 +92,51 @@ class IppPrintClientTest {
             server.sentDocuments.map { it.documentBytes }.forEachIndexed { index, bytes -> assertArrayEquals(pageBytes[index], bytes) }
         } finally {
             server.stop()
+        }
+    }
+
+    @Test
+    fun rejectsMultipleDocumentsBeforeCreatingJobWhenPrinterDoesNotSupportThem() {
+        val server = stubPrinter(
+            formats = listOf(IppDocumentFormat.JPEG),
+            multipleDocumentJobsSupported = false,
+        )
+        server.start()
+        try {
+            val client = IppPrintClient(BoundedIppTransport())
+            val rendered = RenderedPrintDocument(
+                IppDocumentFormat.JPEG,
+                listOf(tempFile(byteArrayOf(1)), tempFile(byteArrayOf(2))),
+            )
+            try {
+                assertThrows(PrintError.MultipleDocumentsUnsupported::class.java) {
+                    client.send(server.uri, rendered, multipleDocumentsSupported = false)
+                }
+            } finally {
+                rendered.delete()
+            }
+            assertEquals(0, server.createJobCount)
+            assertTrue(server.sentDocuments.isEmpty())
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun splitsImagePagesIntoSingleDocumentJobsWhenRequired() {
+        val files = listOf(tempFile(byteArrayOf(1)), tempFile(byteArrayOf(2)), tempFile(byteArrayOf(3)))
+        val rendered = RenderedPrintDocument(IppDocumentFormat.JPEG, files)
+        try {
+            val split = rendered.jobBatches(multipleDocumentsSupported = false)
+            val combined = rendered.jobBatches(multipleDocumentsSupported = true)
+
+            assertEquals(3, split.size)
+            assertEquals(listOf(1, 1, 1), split.map { it.files.size })
+            assertEquals(files, split.flatMap { it.files })
+            assertEquals(1, combined.size)
+            assertEquals(files, combined.single().files)
+        } finally {
+            rendered.delete()
         }
     }
 
@@ -130,7 +178,11 @@ class IppPrintClientTest {
 
     @Test
     fun sendCancelsCreatedJobWhenDocumentTransferFails() {
-        val server = stubPrinter(formats = listOf(IppDocumentFormat.JPEG), sendDocumentFailureAt = 2)
+        val server = stubPrinter(
+            formats = listOf(IppDocumentFormat.JPEG),
+            sendDocumentFailureAt = 2,
+            multipleDocumentJobsSupported = true,
+        )
         server.start()
         try {
             val client = IppPrintClient(BoundedIppTransport())
@@ -140,7 +192,7 @@ class IppPrintClientTest {
             )
             try {
                 assertThrows(PrintError.SendDocumentFailed::class.java) {
-                    client.send(server.uri, rendered)
+                    client.send(server.uri, rendered, multipleDocumentsSupported = true)
                 }
             } finally {
                 rendered.delete()
@@ -266,6 +318,21 @@ class IppPrintClientTest {
     }
 
     @Test
+    fun readsMultipleDocumentJobCapabilityConservatively() {
+        val client = IppPrintClient(BoundedIppTransport())
+        val supported = IppPacket.Builder(SUCCESS).putPrinterAttributes(
+            Types.multipleDocumentJobsSupported.of(true),
+        ).build()
+        val unsupported = IppPacket.Builder(SUCCESS).putPrinterAttributes(
+            Types.multipleDocumentJobsSupported.of(false),
+        ).build()
+
+        assertTrue(client.multipleDocumentJobsSupported(supported))
+        assertTrue(!client.multipleDocumentJobsSupported(unsupported))
+        assertTrue(!client.multipleDocumentJobsSupported(IppPacket.Builder(SUCCESS).build()))
+    }
+
+    @Test
     fun coerceToDropsUnsupportedPrintOptions() {
         val caps = PrintCapabilities(
             copies = 1..5,
@@ -318,7 +385,8 @@ class IppPrintClientTest {
         formats: List<String> = listOf(IppDocumentFormat.PDF),
         jobStates: List<JobState> = emptyList(),
         sendDocumentFailureAt: Int? = null,
-    ): StubIppPrinter = StubIppPrinter(formats, jobStates, sendDocumentFailureAt)
+        multipleDocumentJobsSupported: Boolean = false,
+    ): StubIppPrinter = StubIppPrinter(formats, jobStates, sendDocumentFailureAt, multipleDocumentJobsSupported)
 
     private fun tempFile(bytes: ByteArray): File =
         File.createTempFile("ipp-test", ".bin").apply { writeBytes(bytes); deleteOnExit() }
@@ -327,6 +395,7 @@ class IppPrintClientTest {
         formats: List<String>,
         jobStates: List<JobState>,
         private val sendDocumentFailureAt: Int?,
+        private val multipleDocumentJobsSupported: Boolean,
     ) {
         val sentDocuments = mutableListOf<SentDocument>()
         var cancelCount: Int = 0
@@ -338,6 +407,8 @@ class IppPrintClientTest {
         var createJobCopies: Int? = null
             private set
         var createJobColorMode: String? = null
+            private set
+        var createJobCount: Int = 0
             private set
         private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         private val executor = Executors.newSingleThreadExecutor()
@@ -361,6 +432,7 @@ class IppPrintClientTest {
                     cancelCount += 1
                 }
                 if (packet.operation.code == Operation.createJob.code) {
+                    createJobCount += 1
                     createJobCopies = packet.getValue(Tag.jobAttributes, Types.copies)
                     createJobColorMode = packet.getValue(Tag.jobAttributes, Types.printColorMode)
                 }
@@ -372,6 +444,7 @@ class IppPrintClientTest {
                     Operation.getPrinterAttributes.code ->
                         IppPacket.Builder(SUCCESS).putPrinterAttributes(
                             Types.documentFormatSupported.of(formats),
+                            Types.multipleDocumentJobsSupported.of(multipleDocumentJobsSupported),
                         ).build()
                     Operation.createJob.code ->
                         IppPacket.Builder(SUCCESS).putJobAttributes(Types.jobId.of(JOB_ID)).build()

@@ -17,6 +17,9 @@ sealed class PrintError(message: String) : RuntimeException(message) {
     /** Send-Document failed. */
     class SendDocumentFailed(val status: Int) : PrintError("Send-Document failed: status=$status")
 
+    /** More than one document was supplied for a printer that only accepts single-document jobs. */
+    object MultipleDocumentsUnsupported : PrintError("printer does not support multiple-document jobs")
+
     /** Job reached the IPP `canceled` state. */
     object JobCanceled : PrintError("job canceled")
 

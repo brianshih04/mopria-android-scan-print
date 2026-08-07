@@ -308,11 +308,26 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         val dpi = client.preferredResolution(attributes)
         val colorSpace = chooseColorSpace(client.printColorModesSupported(attributes))
         val pclmStripHeight = client.pclmStripHeightPreferred(attributes)
+        val supportsMultipleDocuments = client.multipleDocumentJobsSupported(attributes)
         val coercedOptions = options?.coerceTo(client.parseCapabilities(attributes))
         val rendered = renderPrintDocument(document, format, dpi, colorSpace, pclmStripHeight)
         try {
-            val submission = client.send(uri, rendered, options = coercedOptions)
-            client.awaitJobCompletion(uri, submission.jobId)
+            val batches = rendered.jobBatches(supportsMultipleDocuments)
+            batches.forEachIndexed { index, batch ->
+                val jobName = if (batches.size == 1) {
+                    "Mopria Scan & Print"
+                } else {
+                    "Mopria Scan & Print (${index + 1}/${batches.size})"
+                }
+                val submission = client.send(
+                    uri = uri,
+                    document = batch,
+                    jobName = jobName,
+                    options = coercedOptions,
+                    multipleDocumentsSupported = supportsMultipleDocuments,
+                )
+                client.awaitJobCompletion(uri, submission.jobId)
+            }
         } finally {
             rendered.delete()
         }
@@ -339,8 +354,8 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
      *
      * PDF → one multi-page file via Android `PdfDocument`. JPEG/PNG → one compressed image per page;
      * PWG-Raster/PCLm → rasterized from the same PDF using `jipp-pdl`. Image pages become separate
-     * Send-Document requests (see [IppPrintClient.send]). A page that cannot be decoded fails loudly
-     * rather than producing a blank sheet.
+     * Send-Document payloads when supported, otherwise separate single-document jobs. A page that
+     * cannot be decoded fails loudly rather than producing a blank sheet.
      */
     private fun renderPrintDocument(
         document: MopriaDocument,
@@ -349,13 +364,13 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         colorSpace: ColorSpace,
         pclmStripHeight: Int,
     ): RenderedPrintDocument = when (format) {
-        IppDocumentFormat.PDF -> RenderedPrintDocument(format, listOf(renderDocumentPdf(document)))
+        IppDocumentFormat.PDF -> RenderedPrintDocument(format, listOf(renderDocumentPdf(document, dpi)))
         IppDocumentFormat.JPEG, IppDocumentFormat.PNG -> {
             val extension = if (format == IppDocumentFormat.JPEG) "jpg" else "png"
             val pages = buildList {
                 try {
                     document.pages.forEachIndexed { index, page ->
-                        add(renderPageImage(document.id, index, page, format, extension))
+                        add(renderPageImage(document.id, index, page, format, extension, dpi))
                     }
                 } catch (error: Throwable) {
                     forEach(File::delete)
@@ -365,7 +380,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
             RenderedPrintDocument(format, pages)
         }
         IppDocumentFormat.PWG_RASTER, IppDocumentFormat.PCLM -> {
-            val pdf = renderDocumentPdf(document)
+            val pdf = renderDocumentPdf(document, dpi)
             try {
                 val raster = when (format) {
                     IppDocumentFormat.PWG_RASTER -> IppRasterizer.rasterizeToPwgRaster(pdf, dpi, colorSpace)
@@ -386,13 +401,16 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         page: DocumentPage,
         format: String,
         extension: String,
+        dpi: Int,
     ): File {
-        val source = decodePageBitmap(page) ?: throw PrintError.PageRenderFailed(index + 1, format)
-        val output = createBitmap(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT)
+        val renderSize = PrintRenderSizing.page(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT, PDF_MARGIN, dpi)
+        val source = decodePageBitmap(page, renderSize.contentWidthPixels, renderSize.contentHeightPixels)
+            ?: throw PrintError.PageRenderFailed(index + 1, format)
+        val output = createBitmap(renderSize.pageWidthPixels, renderSize.pageHeightPixels)
         try {
             val canvas = Canvas(output)
             canvas.drawColor(Color.WHITE)
-            drawFittedBitmap(canvas, source)
+            drawFittedBitmap(canvas, source, renderSize.marginPixels.toFloat())
             val compressFormat = if (format == IppDocumentFormat.JPEG) Bitmap.CompressFormat.JPEG else Bitmap.CompressFormat.PNG
             val file = File(appContext.cacheDir, "ipp-print-$documentId-page-${index + 1}.$extension")
             try {
@@ -416,14 +434,15 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
      * Renders a [MopriaDocument] to a single multi-page PDF in the cache dir for IPP submission.
      * TODO: consolidate with `ScanExportService.drawPage`/`writePdf` into a shared renderer.
      */
-    private fun renderDocumentPdf(document: MopriaDocument): File {
+    private fun renderDocumentPdf(document: MopriaDocument, dpi: Int): File {
         val output = File(appContext.cacheDir, "ipp-print-${document.id}.pdf")
         val pdf = PdfDocument()
+        val renderSize = PrintRenderSizing.page(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT, PDF_MARGIN, dpi)
         try {
             document.pages.forEachIndexed { index, page ->
                 val info = PdfDocument.PageInfo.Builder(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT, index + 1).create()
                 val pdfPage = pdf.startPage(info)
-                drawPrintPage(pdfPage.canvas, page, index + 1)
+                drawPrintPage(pdfPage.canvas, page, index + 1, renderSize)
                 pdf.finishPage(pdfPage)
             }
             FileOutputStream(output).use { pdf.writeTo(it) }
@@ -436,44 +455,45 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         return output
     }
 
-    private fun drawPrintPage(canvas: Canvas, page: DocumentPage, pageNumber: Int) {
+    private fun drawPrintPage(canvas: Canvas, page: DocumentPage, pageNumber: Int, renderSize: PrintRenderSize) {
         canvas.drawColor(Color.WHITE)
-        val bitmap = decodePageBitmap(page) ?: throw PrintError.PageRenderFailed(pageNumber, IppDocumentFormat.PDF)
+        val bitmap = decodePageBitmap(page, renderSize.contentWidthPixels, renderSize.contentHeightPixels)
+            ?: throw PrintError.PageRenderFailed(pageNumber, IppDocumentFormat.PDF)
         try {
-            drawFittedBitmap(canvas, bitmap)
+            drawFittedBitmap(canvas, bitmap, PDF_MARGIN.toFloat())
         } finally {
             bitmap.recycle()
         }
     }
 
-    /** Draws [bitmap] fitted within [PDF_MARGIN] on [canvas], preserving aspect ratio. */
-    private fun drawFittedBitmap(canvas: Canvas, bitmap: Bitmap) {
+    /** Draws [bitmap] fitted within [margin] on [canvas], preserving aspect ratio. */
+    private fun drawFittedBitmap(canvas: Canvas, bitmap: Bitmap, margin: Float) {
         val scale = minOf(
-            (canvas.width - PDF_MARGIN * 2) / bitmap.width.toFloat(),
-            (canvas.height - PDF_MARGIN * 2) / bitmap.height.toFloat(),
+            (canvas.width - margin * 2) / bitmap.width.toFloat(),
+            (canvas.height - margin * 2) / bitmap.height.toFloat(),
         ).coerceAtMost(MAX_BITMAP_SCALE)
         val width = bitmap.width * scale
         val height = bitmap.height * scale
         val left = (canvas.width - width) / 2f
-        canvas.drawBitmap(bitmap, null, RectF(left, PDF_MARGIN.toFloat(), left + width, PDF_MARGIN + height), null)
+        canvas.drawBitmap(bitmap, null, RectF(left, margin, left + width, margin + height), null)
     }
 
-    private fun decodePageBitmap(page: DocumentPage): Bitmap? {
-        page.imagePath?.let { return decodeImage(it) }
+    private fun decodePageBitmap(page: DocumentPage, requestedWidth: Int, requestedHeight: Int): Bitmap? {
+        page.imagePath?.let { return decodeImage(it, requestedWidth, requestedHeight) }
         val pdfPath = page.pdfPath ?: return null
-        return renderPdfPage(pdfPath, page.pdfPageIndex ?: 0)
+        return renderPdfPage(pdfPath, page.pdfPageIndex ?: 0, requestedWidth, requestedHeight)
     }
 
-    private fun decodeImage(path: String): Bitmap? {
+    private fun decodeImage(path: String, requestedWidth: Int, requestedHeight: Int): Bitmap? {
         val file = File(path.removePrefix("file://"))
         if (!file.isFile) return null
-        // Sample down to the render canvas size so a high-dpi scan never fully loads into memory.
+        // Decode to the bounded print-resolution content area, not the 72-dpi PDF point dimensions.
         return runCatching {
-            SampledBitmapDecoder.decodeFile(file.absolutePath, PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT)
+            SampledBitmapDecoder.decodeFile(file.absolutePath, requestedWidth, requestedHeight)
         }.getOrNull()
     }
 
-    private fun renderPdfPage(path: String, pageIndex: Int): Bitmap? {
+    private fun renderPdfPage(path: String, pageIndex: Int, requestedWidth: Int, requestedHeight: Int): Bitmap? {
         val file = File(path.removePrefix("file://"))
         if (!file.isFile) return null
         return runCatching {
@@ -481,7 +501,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                 PdfRenderer(descriptor).use { renderer ->
                     if (pageIndex !in 0 until renderer.pageCount) return null
                     renderer.openPage(pageIndex).use { page ->
-                        val scale = minOf(PDF_PAGE_WIDTH.toFloat() / page.width, PDF_PAGE_HEIGHT.toFloat() / page.height)
+                        val scale = minOf(requestedWidth.toFloat() / page.width, requestedHeight.toFloat() / page.height)
                         val width = (page.width * scale).toInt().coerceAtLeast(1)
                         val height = (page.height * scale).toInt().coerceAtLeast(1)
                         createBitmap(width, height).also { bitmap ->

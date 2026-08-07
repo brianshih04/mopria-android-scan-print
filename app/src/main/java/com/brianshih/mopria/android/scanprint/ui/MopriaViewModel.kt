@@ -354,6 +354,9 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             } catch (error: CancellationException) {
                 _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
                 throw error
+            } catch (_: Exception) {
+                _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
+                _events.tryEmit(text(R.string.event_print_failed, text(mode.labelRes), text(R.string.common_retry)))
             }
         }
     }
@@ -425,6 +428,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         is PrintError.UnsupportedFormat -> R.string.print_error_unsupported_format
         is PrintError.CreateJobFailed -> R.string.print_error_rejected
         is PrintError.SendDocumentFailed -> R.string.print_error_rejected
+        is PrintError.MultipleDocumentsUnsupported -> R.string.print_error_rejected
         is PrintError.JobCanceled -> R.string.print_error_job_stopped
         is PrintError.JobAborted -> R.string.print_error_job_stopped
         is PrintError.JobTimeout -> R.string.print_error_timeout
