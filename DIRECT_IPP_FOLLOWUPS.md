@@ -2,17 +2,29 @@
 
 ## 文件目的
 
-本文件供接手開發者處理 `feat/direct-ipp` 的 code review findings。Direct IPP 目前已完成基本 discovery、IPP binary client 與 Real mode 接線，但仍應維持為 experimental opt-in，不要在完成本清單前改成預設列印方式。
+本文件供接手開發者處理 Direct IPP 的 code review findings。此次整合已將最新 `main` 的 PWG-Raster／PCLm 功能帶入 `feat/direct-ipp-fixes`，並保留格式 payload 一致、job polling、fixed-length streaming、OOM sampling、錯誤本地化、no-printer error 與 instrumentation tests；Direct IPP 仍應維持 experimental opt-in，直到實體設備驗證完成。
 
 ## 審查基準
 
-- Reviewed branch：[`feat/direct-ipp`](https://github.com/brianshih04/mopria-android-scan-print/tree/feat/direct-ipp)
-- Reviewed commit：`c8f47fd`
-- Compared with：`main` / `db35d13`
-- 變更規模：18 commits、37 files changed
+- Reviewed branch：[`feat/direct-ipp-fixes`](https://github.com/brianshih04/mopria-android-scan-print/tree/feat/direct-ipp-fixes)
+- Integration base：`origin/main` / `2b4bb05`
+- Fixes base：`d299bf3`
+- 變更內容：Direct IPP base、PWG-Raster／PCLm、capability options 與 review fixes
 - Android Studio bundled JDK：25.0.2
-- 已驗證：unit tests 42/42、lint、debug assemble、release/R8 assemble 均成功
+- 已驗證：unit tests 57/57、lint、debug/release assemble、4 個 emulator instrumentation tests 均成功
 - 尚未完成：實體 IPP/IPPS 印表機跨品牌驗證
+
+## 目前接手重點
+
+- [x] 修正 declared `document-format` 與實際 payload 不一致。
+- [x] 加入 IPP job polling、timeout 與 Cancel-Job cleanup。
+- [x] 使用 fixed-length HTTP streaming。
+- [x] 使用 sampled bitmap，避免一般圖片列印路徑直接載入完整高解析影像。
+- [x] Direct IPP 找不到印表機時顯示明確錯誤，不再 silent fallback。
+- [x] Direct IPP 錯誤訊息支援 string resources。
+- [x] 恢復 instrumentation test dependencies 與基本 UI smoke tests。
+- [ ] 實體設備驗證 IPP、IPPS、PWG-Raster、PCLm、job lifecycle 與憑證行為。
+- [ ] 進一步改善 `IppRasterizer` 多頁高 DPI 的 bitmap streaming，避免同時保留所有頁面。
 
 ## P1：合併或擴大測試前必須處理
 
@@ -20,78 +32,36 @@
 
 相關檔案：
 
-- [`IppPrintClient.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppPrintClient.kt)
-- [`RealIntegrationProvider.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/RealIntegrationProvider.kt)
-- [`IppPrintClientTest.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp/app/src/test/java/com/brianshih/mopria/android/scanprint/domain/IppPrintClientTest.kt)
+- [`IppPrintClient.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppPrintClient.kt)
+- [`RealIntegrationProvider.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/RealIntegrationProvider.kt)
+- [`IppPrintClientTest.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/test/java/com/brianshih/mopria/android/scanprint/domain/IppPrintClientTest.kt)
 
-目前 `IppDocumentFormat.producible` 宣稱支援 PDF、JPEG、PNG，`printSupported()` 也會依印表機 capability 選擇格式；但是 `RealIntegrationProvider.print()` 永遠只產生一份 PDF，然後把同一個 PDF stream 傳給選出的格式。
+目前已完成格式與 payload 對齊：`IppDocumentFormat.producible` 依偏好順序提供 PDF、PWG-Raster、PCLm、JPEG、PNG；`RealIntegrationProvider` 會分別產生對應 bytes，且 image 多頁以多個 `Send-Document` 傳送。PWG-Raster／PCLm 由 `jipp-pdl` 從中介 PDF rasterize。
 
-因此，若印表機只宣告 `image/jpeg`，request 可能會是：
-
-```text
-document-format = image/jpeg
-document bytes  = PDF
-```
-
-建議分兩階段處理：
-
-1. 短期：在尚未有 JPEG／PNG renderer 前，`producible` 只保留 `application/pdf`；如果印表機不支援 PDF，明確回報不支援。
-2. 長期：建立 `RenderedPrintDocument(format, file, contentType)`，依協商結果產生相同格式的 bytes，再傳給 `Send-Document`。
-
-必要測試：
-
-- printer 支援 PDF：送出 PDF，`document-format` 為 `application/pdf`。
-- printer 只支援 JPEG：不能送 PDF 偽裝成 JPEG，應產生 JPEG 或清楚失敗。
-- printer 同時支援 PDF/JPEG：確認 preference 與實際 bytes 相符。
-- 在 HTTP test server 驗證 IPP header、payload magic bytes 與 payload content type 一致。
+必要的 JVM tests 已涵蓋 PDF、JPEG 多頁、格式協商、fixed-length body、PWG/PCLm writer magic，以及中途 Send-Document 失敗時的 Cancel-Job cleanup。仍需以實體印表機驗證各品牌對 PCLm／PWG-Raster 的實際接受度。
 
 ### 2. 完成 IPP job lifecycle polling
 
 相關檔案：
 
-- [`IppPrintClient.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppPrintClient.kt)
-- [`RealIntegrationProvider.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/RealIntegrationProvider.kt)
-- [`MopriaViewModel.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp/app/src/main/java/com/brianshih/mopria/android/scanprint/ui/MopriaViewModel.kt)
+- [`IppPrintClient.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppPrintClient.kt)
+- [`RealIntegrationProvider.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/RealIntegrationProvider.kt)
+- [`MopriaViewModel.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/ui/MopriaViewModel.kt)
 
-`IppPrintClient` 已有 `getJobAttributes()` 與 `cancelJob()` helper，但 Real print flow 在 `Send-Document` 回應成功後就直接視為列印完成，沒有確認實際 job state。
-
-建議：
-
-- 建立可測試的 `awaitJobCompletion(uri, jobId)`。
-- 依 IPP job-state 處理：
-  - `3 Pending`、`4 Held`、`5 Processing`、`6 Stopped`：繼續 polling。
-  - `7 Canceled`：回報使用者取消。
-  - `8 Aborted`：回報印表機失敗原因。
-  - `9 Completed`：才標記成功。
-- 加入 polling interval、總 timeout 與 coroutine cancellation。
-- 傳送期間或 timeout 時，以 `NonCancellable` best-effort 執行 `Cancel-Job`。
-- 將 job state 映射到現有 `JobStatus`／progress，不要在 Send-Document 後立即顯示完成。
-
-必要測試：
-
-- Pending → Processing → Completed。
-- Processing → Aborted，確認工作變成 Failed。
-- Processing → Canceled，確認工作變成 Cancelled。
-- polling timeout 後執行 Cancel-Job。
-- HTTP／IPP error response 不得被誤判為成功。
+已完成 `awaitJobCompletion(uri, jobId)`：Pending／Held／Processing／Stopped 會 polling，Completed 才成功，Canceled／Aborted 會轉成 domain error，timeout 會在 `NonCancellable` 中 best-effort Cancel-Job；中途頁面傳輸失敗也會清理已建立的 job。相關狀態、timeout 與 HTTP／IPP error tests 已通過。
 
 ### 3. 修正 CI 的 Android SDK 版本
 
 相關檔案：
 
-- [`app/build.gradle.kts`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp/app/build.gradle.kts)
-- [`ci.yml`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp/.github/workflows/ci.yml)
+- [`app/build.gradle.kts`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/build.gradle.kts)
+- [`ci.yml`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/.github/workflows/ci.yml)
 
-目前 project 使用 `compileSdk 37`，但 CI 只明確安裝：
+此問題已修正。project 使用 `compileSdk 37`，CI 會明確安裝 Android 37 platform 與對應 build tools：
 
 ```yaml
 platforms;android-36 build-tools;36.0.0
 ```
-
-請選擇並保持一致：
-
-- 維持 `compileSdk 37`：CI 安裝 Android 37 platform 及對應 build tools。
-- 或將 project 降回 `compileSdk 36`：同步修改 README、CI 與開發環境說明。
 
 驗收方式是在乾淨 runner 或只安裝文件指定 SDK 的環境執行：
 
@@ -103,9 +73,9 @@ platforms;android-36 build-tools;36.0.0
 
 相關檔案：
 
-- [`IppDiscovery.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppDiscovery.kt)
-- [`IppTransport.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppTransport.kt)
-- [`RealIntegrationProvider.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/RealIntegrationProvider.kt)
+- [`IppDiscovery.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppDiscovery.kt)
+- [`IppTransport.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppTransport.kt)
+- [`RealIntegrationProvider.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih04/mopria/android/scanprint/domain/RealIntegrationProvider.kt)
 
 目前 `_ipps._tcp` discovery 會優先於 `_ipp._tcp`，並使用 Android system trust store。實體印表機常見 self-signed certificate、hostname 與 resolved IP 不一致，可能造成 TLS 或 hostname verification 失敗。
 
@@ -122,98 +92,53 @@ platforms;android-36 build-tools;36.0.0
 
 ### 5. Direct IPP 找不到印表機時不要默默切換
 
-目前選擇 Direct IPP 後，若找不到 IPP printer，ViewModel 會直接開啟 Android system print preview。這會讓使用者以為仍在使用 Direct IPP。
-
-建議提供明確選項：
-
-- 「找不到 Direct IPP 印表機」錯誤及重新探索。
-- 「改用系統列印」明確按鈕。
-- 或在設定中增加「Direct IPP 不可用時自動 fallback」開關，預設關閉。
+此問題已修正：選擇 Direct IPP 後找不到印表機會回傳明確的本地化錯誤，不會自動開啟 Android system print preview。若產品未來要允許 fallback，必須增加明確的使用者操作或設定，不能在 provider 內隱式切換。
 
 ### 6. 將 Direct IPP 錯誤訊息移至 string resources
 
-新 IPP code 仍有硬編碼中文，例如 HTTP／Create-Job／格式不支援／列印失敗等訊息。English、簡中及其他語系可能看到繁中錯誤。
-
-請將可見錯誤移到 `strings.xml`，至少同步：
-
-- English fallback
-- `values-zh-rTW`
-- `values-zh-rCN`
-
-ViewModel 應只接收可本地化的 error type 或 resource id，不要依賴 provider 產生的硬編碼顯示文字。
+此問題已修正：`PrintError` 只攜帶結構化錯誤，ViewModel 映射到 string resources；English、繁中、簡中及其餘語系均有資源，provider 不產生可見的硬編碼訊息。
 
 ### 7. 避免 Direct IPP renderer 造成 OOM
 
-`RealIntegrationProvider` 的 IPP PDF renderer 使用完整 `BitmapFactory.decodeFile()`，沒有尺寸取樣或記憶體上限。高 dpi 掃描的大圖可能讓 emulator 或手機 OOM。
-
-請重用或抽取現有 `DocumentPageBitmapLoader` 的取樣邏輯，並確認：
-
-- JPEG／PNG 使用 bounds decode 與 `inSampleSize`。
-- PDF page render 有最大像素／尺寸限制。
-- 多頁列印逐頁處理，不同時保留所有 bitmap。
-- decode 失敗時回報錯誤，不要靜默產生空白頁。
+目前已完成大部分記憶體與錯誤處理：JPEG／PNG 使用 sampled decode，PDF page render 限制在列印畫布尺寸，decode 失敗會回報 `PageRenderFailed`，且多頁 image renderer 會逐頁產生並清理暫存檔。剩餘風險是 `IppRasterizer` 為 PCLm／PWG-Raster 暫時保留所有高 DPI 頁面 bitmap，後續應改成 swath／逐頁 streaming。
 
 ### 8. 驗證 HTTP streaming interoperability
 
-[`IppTransport.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppTransport.kt) 使用 `setChunkedStreamingMode(0)`。HTTP chunked 對規格上可能可行，但部分印表機 firmware 只接受明確 `Content-Length`。
-
-請在 HTTP test server 與至少兩個品牌實體印表機驗證：
-
-- request 是否使用 chunked transfer。
-- Create-Job、Send-Document 是否都能接受。
-- 大型 PDF 是否能正確串流。
-- 若設備不接受 chunked，針對已知 document length 改用 fixed-length streaming；不要為了方便把整個文件無限制讀入記憶體。
+[`IppTransport.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppTransport.kt) 已改用已知長度的 fixed-length HTTP body，不再使用 chunked streaming；JVM test server 已驗證 `Content-Length`。仍需在至少兩個品牌實體印表機確認 Create-Job／Send-Document 的 interoperability。
 
 ### 9. 補 capability-driven print options
 
-目前 Direct IPP 主要使用印表機預設值，尚未將下列 capability 暴露給使用者：
-
-- media／paper size
-- copies
-- color mode
-- sides／duplex
-- print quality
-
-先從 `Get-Printer-Attributes` 解析 capability，再決定 UI 與 IPP job attributes。不要在未確認 capability 前硬送不支援的 attribute。
+capability-driven print options 已完成：從 `Get-Printer-Attributes` 解析 copies、media、sides、color mode、quality、orientation，UI 只送經 `coerceTo` 後符合 printer capability 的 job-template attributes。實體印表機仍需確認不同品牌對各 option 的語意。
 
 ### 10. 補 Android／emulator integration coverage
 
-branch 移除了 `androidTest` dependencies，目前 CI 只有 JVM unit test、lint、assemble。應至少補：
-
-- print method settings persistence。
-- Direct IPP 選擇與 no-printer error flow。
-- system print fallback flow。
-- Documents → print／share 返回流程。
-- 語系切換後 Direct IPP 錯誤訊息。
+目前已恢復 `androidTest` dependencies，emulator 已通過 4 個 instrumentation tests，包含 MainActivity smoke、print method persistence 與 PDF→PWG-Raster/PCLm Android rasterizer path；Direct IPP 真實網路與 no-printer UI 仍以實體／mock discovery test 擴充為後續工作。
 
 ## 文件與 release 同步
 
 以下內容需在實作完成後一起更新：
 
-- README、HANDOFF、CHANGELOG 的測試數量：目前實際為 42 tests，不是 34。
+- README、HANDOFF、CHANGELOG 的測試數量：目前實際為 57 JVM unit tests，另有 4 個 emulator instrumentation tests。
 - README 的環境需求：JDK 25 daemon、compileSdk 37、Android SDK 版本要一致。
-- CHANGELOG 不應宣稱已完成 Get-Job-Attributes／Cancel-Job lifecycle，除非 Real flow 已實際呼叫並測試。
+- CHANGELOG 可記載 Get-Job-Attributes／Cancel-Job lifecycle 已接線並有 JVM tests；實體 printer job lifecycle 仍待驗證。
 - 明確記載 Direct IPP 是否仍為 opt-in，以及找不到設備時是否允許 fallback。
 - 說明 APK 位於 GitHub Release，而不是 repository 的 `release/` 目錄。
 - 保持 Mopria eSCL specification PDF 不進入 repository。
 
 ## 建議接手順序
 
-1. 修正 document-format／payload mismatch，或暫時只支援 PDF。
-2. 加入 IPP job polling、timeout、cancel 與狀態測試。
-3. 修正 CI compileSdk／build-tools 版本並重新跑 GitHub Actions。
-4. 使用真實 IPP／IPPS 印表機測試 discovery、TLS、列印與 job lifecycle。
-5. 修正 fallback、錯誤本地化與 bitmap memory handling。
-6. 補 print options、Android integration tests、README／HANDOFF／CHANGELOG。
-7. 所有驗證通過後，才考慮將 Direct IPP 從 experimental opt-in 改成其他預設策略。
+1. 使用真實 IPP／IPPS 印表機測試 discovery、TLS、格式、選項與 job lifecycle。
+2. 針對 PCLm／PWG-Raster 高 DPI 多頁工作，將目前全頁 bitmap 改為 swath／逐頁 streaming。
+3. 補充 Direct IPP no-printer、TLS error、選項與文件列印流程的 emulator／mock coverage。
+4. 所有實體驗證通過後，再評估是否改變 Direct IPP 的 experimental opt-in 策略。
 
 ## 完成條件
 
-- [ ] PDF／JPEG／PNG 的宣告格式與實際 bytes 永遠一致。
-- [ ] 列印完成狀態來自 IPP job state，而不是只看 Send-Document response。
-- [ ] IPP job failure、cancel、timeout 都能正確反映在工作紀錄。
-- [ ] CI 在乾淨環境可取得正確 Android SDK 並通過 test、lint、debug assemble。
+- [x] PDF／JPEG／PNG／PWG-Raster／PCLm 的宣告格式與實際 bytes 一致。
+- [x] 列印完成狀態來自 IPP job state，而不是只看 Send-Document response。
+- [x] IPP job failure、cancel、timeout 都能轉成 domain/UI error。
+- [x] CI 在乾淨環境可取得正確 Android SDK 並通過 test、lint、debug assemble。
 - [ ] 至少一台 plain IPP 與一台 IPPS 實體設備完成驗證。
-- [ ] Direct IPP 錯誤支援 English、繁中、簡中。
-- [ ] 高解析度多頁文件不會因 bitmap allocation 造成 OOM。
-- [ ] 相關 MD files、CHANGELOG、HANDOFF 已同步實際行為與驗證結果。
+- [x] Direct IPP 錯誤支援 English、繁中、簡中。
+- [ ] 高解析度多頁 PCLm／PWG-Raster 文件不會因 bitmap allocation 造成 OOM。
+- [x] 相關 MD files、CHANGELOG、HANDOFF 已同步實際行為與驗證結果。

@@ -13,6 +13,7 @@ import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.core.graphics.createBitmap
+import com.hp.jipp.pdl.ColorSpace
 import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -304,8 +305,11 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
             client.documentFormatsSupported(attributes),
             IppDocumentFormat.producible,
         ) ?: throw PrintError.UnsupportedFormat(printer.advertisedFormats)
+        val dpi = client.preferredResolution(attributes)
+        val colorSpace = chooseColorSpace(client.printColorModesSupported(attributes))
+        val pclmStripHeight = client.pclmStripHeightPreferred(attributes)
         val coercedOptions = options?.coerceTo(client.parseCapabilities(attributes))
-        val rendered = renderPrintDocument(document, format)
+        val rendered = renderPrintDocument(document, format, dpi, colorSpace, pclmStripHeight)
         try {
             val submission = client.send(uri, rendered, options = coercedOptions)
             client.awaitJobCompletion(uri, submission.jobId)
@@ -314,6 +318,10 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         }
         Unit
     }
+
+    /** Pick RGB when the printer supports color; otherwise use grayscale for raster formats. */
+    private fun chooseColorSpace(modes: List<String>): ColorSpace =
+        if (modes.any { it.equals("color", ignoreCase = true) }) ColorSpace.Rgb else ColorSpace.Grayscale
 
     override suspend fun capabilities(printer: IntegrationDevice): PrintCapabilities? = withContext(Dispatchers.IO) {
         val host = printer.host ?: return@withContext null
@@ -330,20 +338,46 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
      * Renders a [MopriaDocument] into the negotiated IPP [format] for submission.
      *
      * PDF → one multi-page file via Android `PdfDocument`. JPEG/PNG → one compressed image per page;
-     * each page becomes a separate Send-Document (see [IppPrintClient.send]). A page that cannot be
-     * decoded fails loudly rather than producing a blank sheet. TODO(P2.7): share sampling logic with
-     * `DocumentPageBitmapLoader` to bound memory for high-dpi scans.
+     * PWG-Raster/PCLm → rasterized from the same PDF using `jipp-pdl`. Image pages become separate
+     * Send-Document requests (see [IppPrintClient.send]). A page that cannot be decoded fails loudly
+     * rather than producing a blank sheet.
      */
-    private fun renderPrintDocument(document: MopriaDocument, format: String): RenderedPrintDocument = when (format) {
+    private fun renderPrintDocument(
+        document: MopriaDocument,
+        format: String,
+        dpi: Int,
+        colorSpace: ColorSpace,
+        pclmStripHeight: Int,
+    ): RenderedPrintDocument = when (format) {
         IppDocumentFormat.PDF -> RenderedPrintDocument(format, listOf(renderDocumentPdf(document)))
         IppDocumentFormat.JPEG, IppDocumentFormat.PNG -> {
             val extension = if (format == IppDocumentFormat.JPEG) "jpg" else "png"
-            val pages = document.pages.mapIndexed { index, page ->
-                renderPageImage(document.id, index, page, format, extension)
+            val pages = buildList {
+                try {
+                    document.pages.forEachIndexed { index, page ->
+                        add(renderPageImage(document.id, index, page, format, extension))
+                    }
+                } catch (error: Throwable) {
+                    forEach(File::delete)
+                    throw error
+                }
             }
             RenderedPrintDocument(format, pages)
         }
-        else -> error("Unsupported render format: $format (expected PDF/JPEG/PNG)")
+        IppDocumentFormat.PWG_RASTER, IppDocumentFormat.PCLM -> {
+            val pdf = renderDocumentPdf(document)
+            try {
+                val raster = when (format) {
+                    IppDocumentFormat.PWG_RASTER -> IppRasterizer.rasterizeToPwgRaster(pdf, dpi, colorSpace)
+                    IppDocumentFormat.PCLM -> IppRasterizer.rasterizeToPclm(pdf, dpi, colorSpace, pclmStripHeight)
+                    else -> error("Unsupported raster format: $format")
+                }
+                RenderedPrintDocument(format, listOf(raster))
+            } finally {
+                pdf.delete()
+            }
+        }
+        else -> error("Unsupported render format: $format (expected PDF/JPEG/PNG/PWG-Raster/PCLm)")
     }
 
     private fun renderPageImage(
@@ -361,7 +395,16 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
             drawFittedBitmap(canvas, source)
             val compressFormat = if (format == IppDocumentFormat.JPEG) Bitmap.CompressFormat.JPEG else Bitmap.CompressFormat.PNG
             val file = File(appContext.cacheDir, "ipp-print-$documentId-page-${index + 1}.$extension")
-            FileOutputStream(file).use { out -> output.compress(compressFormat, IPP_IMAGE_QUALITY, out) }
+            try {
+                FileOutputStream(file).use { out ->
+                    check(output.compress(compressFormat, IPP_IMAGE_QUALITY, out)) {
+                        "Could not encode page ${index + 1} as $format"
+                    }
+                }
+            } catch (error: Throwable) {
+                file.delete()
+                throw error
+            }
             return file
         } finally {
             source.recycle()
@@ -380,19 +423,22 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
             document.pages.forEachIndexed { index, page ->
                 val info = PdfDocument.PageInfo.Builder(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT, index + 1).create()
                 val pdfPage = pdf.startPage(info)
-                drawPrintPage(pdfPage.canvas, page)
+                drawPrintPage(pdfPage.canvas, page, index + 1)
                 pdf.finishPage(pdfPage)
             }
             FileOutputStream(output).use { pdf.writeTo(it) }
+        } catch (error: Throwable) {
+            output.delete()
+            throw error
         } finally {
             pdf.close()
         }
         return output
     }
 
-    private fun drawPrintPage(canvas: Canvas, page: DocumentPage) {
+    private fun drawPrintPage(canvas: Canvas, page: DocumentPage, pageNumber: Int) {
         canvas.drawColor(Color.WHITE)
-        val bitmap = decodePageBitmap(page) ?: return
+        val bitmap = decodePageBitmap(page) ?: throw PrintError.PageRenderFailed(pageNumber, IppDocumentFormat.PDF)
         try {
             drawFittedBitmap(canvas, bitmap)
         } finally {

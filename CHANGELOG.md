@@ -2,7 +2,7 @@
 
 本專案依 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 的概念記錄重要變更；目前尚未建立 release tag。
 
-## [Unreleased] - 2026-08-05
+## [Unreleased] - 2026-08-07
 
 ### Added
 
@@ -23,8 +23,9 @@
 - 新增依 Android 系統語系自動選擇、未支援語系 fallback English，以及設定頁手動語言覆寫。
 - 新增 `LanguageManager` 語系判斷單元測試。
 - 新增 GitHub Actions CI workflow（push／PR 自動跑 unit test、lint、`assembleDebug`）。
-- 新增直接 IPP 列印 client（`IppPrintClient` + `IppDocumentFormat` + `BoundedIppTransport`）與 `jipp-core` 依賴,實作 PWG 標準流程 Get-Printer-Attributes → Create-Job → Send-Document → Get-Job-Attributes → Cancel-Job,並支援 PDF／JPEG／PNG／PWG-Raster／URF 多格式協商;`IppDiscovery` 探索 `_ipp/_ipps`、`RealIntegrationProvider.print` 直接送件、ViewModel Real 模式路由。尚未以實體印表機驗證,capability 驅動列印選項 UI 仍待補。
-- 新增「列印方式」設定(系統列印(Mopria)／直接 IPP),Real 模式可切換;**預設系統列印**,IPP 為 opt-in(找不到 IPP 印表機時 fallback 系統列印),使 IPP 程式碼可安全 merge 而 shipped 行為不變。
+- 新增直接 IPP 列印 client（`IppPrintClient` + `IppDocumentFormat` + `BoundedIppTransport`）與 `jipp-core`／`jipp-pdl` 依賴，實作 Get-Printer-Attributes → Create-Job → Send-Document → Get-Job-Attributes polling → Cancel-Job timeout cleanup；支援 PDF／JPEG／PNG／PWG-Raster／PCLm，並使用 fixed-length HTTP body。
+- 新增 `IppDiscovery` 探索 `_ipp/_ipps`、`RealIntegrationProvider.print` 的 PDF raster 化、解析度／色彩／PCLm strip-height 協商，以及 capability-constrained job options。
+- 新增「列印方式」設定（系統列印／直接 IPP）；**預設系統列印**，Direct IPP 為 opt-in。找不到 IPP 印表機時顯示明確錯誤，不會默默切換到系統列印。
 
 ### Changed
 
@@ -43,10 +44,10 @@
 - `compileSdk` 由 36 升至 37；`core-ktx`、`activity-compose`、`lifecycle-*` 升至最新。
 - Release build 啟用 R8 minify 與 resource shrinking；release APK 由 ~42 MB 縮至 ~2.2 MB。
 - `gradlew` 補回 Linux 執行權限（原由 Windows commit 丟失）。
+- 恢復 Direct IPP 所需的 `androidTest` dependencies，並加入列印方式 persistence、MainActivity smoke 與 rasterizer smoke coverage。
 
 ### Removed
 
-- 移除未使用的 `androidTest` 依賴（espresso、`androidx.test.ext:junit`、Compose ui-test）與 8 條未引用的 string resources。
 - 測試 APK 不再 commit 進 repository，改由 [GitHub Release v0.1.0](https://github.com/brianshih04/mopria-android-scan-print/releases/tag/v0.1.0) 發布。
 
 ### Fixed
@@ -70,7 +71,7 @@
 
 ### Verification
 
-- 34 unit tests passed，0 failed。
+- 57 unit tests passed，0 failed。
 - Android lint：0 errors，0 warnings。
 - Debug APK build passed。
 - Release APK build passed，並以 `apksigner verify` 驗證簽章。

@@ -129,6 +129,29 @@ class IppPrintClientTest {
     }
 
     @Test
+    fun sendCancelsCreatedJobWhenDocumentTransferFails() {
+        val server = stubPrinter(formats = listOf(IppDocumentFormat.JPEG), sendDocumentFailureAt = 2)
+        server.start()
+        try {
+            val client = IppPrintClient(BoundedIppTransport())
+            val rendered = RenderedPrintDocument(
+                IppDocumentFormat.JPEG,
+                listOf(tempFile(byteArrayOf(1)), tempFile(byteArrayOf(2))),
+            )
+            try {
+                assertThrows(PrintError.SendDocumentFailed::class.java) {
+                    client.send(server.uri, rendered)
+                }
+            } finally {
+                rendered.delete()
+            }
+            assertEquals(1, server.cancelCount)
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
     fun awaitJobCompletionReturnsWhenJobReachesCompleted() {
         val server = stubPrinter(
             formats = listOf(IppDocumentFormat.PDF),
@@ -294,7 +317,8 @@ class IppPrintClientTest {
     private fun stubPrinter(
         formats: List<String> = listOf(IppDocumentFormat.PDF),
         jobStates: List<JobState> = emptyList(),
-    ): StubIppPrinter = StubIppPrinter(formats, jobStates)
+        sendDocumentFailureAt: Int? = null,
+    ): StubIppPrinter = StubIppPrinter(formats, jobStates, sendDocumentFailureAt)
 
     private fun tempFile(bytes: ByteArray): File =
         File.createTempFile("ipp-test", ".bin").apply { writeBytes(bytes); deleteOnExit() }
@@ -302,6 +326,7 @@ class IppPrintClientTest {
     private class StubIppPrinter(
         formats: List<String>,
         jobStates: List<JobState>,
+        private val sendDocumentFailureAt: Int?,
     ) {
         val sentDocuments = mutableListOf<SentDocument>()
         var cancelCount: Int = 0
@@ -317,6 +342,7 @@ class IppPrintClientTest {
         private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         private val executor = Executors.newSingleThreadExecutor()
         private var jobStateIndex = 0
+        private var sentDocumentCount = 0
 
         init {
             server.createContext("/ipp/print") { exchange ->
@@ -324,6 +350,7 @@ class IppPrintClientTest {
                 val input = IppInputStream(exchange.requestBody)
                 val packet = input.readPacket()
                 if (packet.operation.code == Operation.sendDocument.code) {
+                    sentDocumentCount += 1
                     sentDocuments += SentDocument(
                         documentFormat = packet.getString(Tag.operationAttributes, Types.documentFormat) ?: "",
                         lastDocument = packet.getValue(Tag.operationAttributes, Types.lastDocument) == true,
@@ -338,6 +365,10 @@ class IppPrintClientTest {
                     createJobColorMode = packet.getValue(Tag.jobAttributes, Types.printColorMode)
                 }
                 val response = when (packet.operation.code) {
+                    Operation.sendDocument.code ->
+                        IppPacket.Builder(
+                            if (sendDocumentFailureAt == sentDocumentCount) SEND_DOCUMENT_FAILURE else SUCCESS,
+                        ).build()
                     Operation.getPrinterAttributes.code ->
                         IppPacket.Builder(SUCCESS).putPrinterAttributes(
                             Types.documentFormatSupported.of(formats),
@@ -393,5 +424,6 @@ class IppPrintClientTest {
     private companion object {
         const val JOB_ID = 42
         const val SUCCESS = 0x0000 // IPP successful-ok (RFC 8011 §13)
+        const val SEND_DOCUMENT_FAILURE = 0x0400 // IPP client-error-bad-request
     }
 }

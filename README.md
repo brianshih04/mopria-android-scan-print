@@ -2,7 +2,7 @@
 
 Kotlin／Jetpack Compose Android App，透過 eSCL（AirScan）掃描文件，並透過 Android Print Framework 列印手機檔案或掃描結果。專案目前版本為 `0.1.0`，`minSdk 28`、`targetSdk 36`。
 
-> 目前狀態（2026-08-02）：Mock 模式、eSCL pull-scan client、Flatbed／ADF 多頁工作流、PDF／JPEG 文件庫、Android 系統列印入口及 10 種語言 UI 均已完成並通過建置／測試驗證。真實掃描器與印表機的跨品牌驗收仍待實體硬體。
+> 目前狀態（2026-08-07）：Mock 模式、eSCL pull-scan client、Flatbed／ADF 多頁工作流、PDF／JPEG 文件庫、Android 系統列印入口、Direct IPP（PDF／JPEG／PNG／PWG-Raster／PCLm）及 10 種語言 UI 均已完成建置／測試驗證。真實掃描器與印表機的跨品牌驗收仍待實體硬體。
 
 ## Android／Mopria 技術邊界
 
@@ -14,7 +14,7 @@ Android 沒有一個同時提供 Mopria 掃描與列印的公開「Mopria API」
 | 列印 | Android `PrintManager` + `PrintDocumentAdapter` | 文件選擇、內容轉換、預覽入口與工作狀態 |
 | 印表機連線 | Android Default Print Service／Mopria Print Service | 印表機探索、IPP/IPPS、紙張、色彩、雙面與 spool |
 
-因此，eSCL／AirScan 是掃描協定；列印方面，Real 模式可在設定切換「系統列印（Mopria，預設）」與「直接 IPP」——前者走 Android Print Framework，後者透過 `IppPrintClient` 探索 `_ipp/_ipps` 並送件（找不到時 fallback 系統列印）。直接 IPP 尚未以實體印表機驗證（見「下一階段」）。
+因此，eSCL／AirScan 是掃描協定；列印方面，Real 模式可在設定切換「系統列印（Mopria，預設）」與「直接 IPP」——前者走 Android Print Framework，後者透過 `IppPrintClient` 探索 `_ipp/_ipps` 並送件；不支援 PDF 的印表機會依 capability 轉成 PWG-Raster 或 PCLm。Direct IPP 找不到印表機時會顯示明確錯誤，不會默默改走系統列印。直接 IPP 尚未以實體印表機驗證（見「下一階段」）。
 
 ## 已完成的使用者功能
 
@@ -103,6 +103,7 @@ MopriaAndroidScanPrint/
 ├─ dev_plan.md                          開發範圍、里程碑與驗收計畫
 ├─ CHANGELOG.md                         版本變更與驗證紀錄
 ├─ HANDOFF.md                           第三方接手、建置與風險說明
+├─ DIRECT_IPP_FOLLOWUPS.md              Direct IPP review、待辦與驗收條件
 ├─ README.md                            專案總覽、架構與開發方式
 └─ userguide.md                         使用者操作指南
 ```
@@ -160,7 +161,7 @@ MopriaAndroidScanPrint/
 
 ## 開發環境與建置
 
-需要 JDK 17+、Android SDK 36 及可用的 Android SDK license。Android Studio 建議用於 Compose Preview、Logcat、Profiler 與 Emulator，但命令列即可建置。
+需要 Android Studio bundled JDK 25.0.2（或相容 JDK 25）、Android SDK 37 及可用的 Android SDK license。Android Studio 建議用於 Compose Preview、Logcat、Profiler 與 Emulator，但命令列即可建置。
 
 ```powershell
 # 於專案根目錄執行（以下為 Windows PowerShell；macOS／Linux 改用 ./gradlew）
@@ -188,19 +189,19 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 
 ## 最新驗證紀錄
 
-2026-08-05 的建置／品質驗證：
+2026-08-07 的建置／品質驗證：
 
 - 工具鏈：AGP 9.3.1、Gradle 9.5.0、JDK 25 daemon、`compileSdk 37`。
 - Release 啟用 R8 minify + resource shrinking；release APK 由 ~42 MB 縮至 ~2.2 MB。
 - Android lint：0 errors，0 warnings（Kotlin compiler warnings 亦清零）。
-- Unit tests：34 passed。
+- Unit tests：57 passed。
 - `:app:assembleDebug`／`:app:assembleRelease`：passed。
 - GitHub Actions CI：push／PR 自動跑 test + lint + assemble，Linux + JDK 25 環境綠燈。
 - 測試 APK 改由 [GitHub Release v0.1.0](https://github.com/brianshih04/mopria-android-scan-print/releases/tag/v0.1.0) 發布，不再進 repo。
 
 2026-08-02 的最終本機驗證：
 
-- Unit tests：34 passed，0 failed。
+- Unit tests：34 passed，0 failed（2026-08-02 的舊版 baseline）。
 - Android lint：0 errors，34 warnings（dependency update、Kotlin annotation／extension 與 pluralization 建議；無 blocker）。
 - `:app:assembleDebug`：passed。
 - `:app:assembleRelease`：passed；release APK 已簽署並通過 `apksigner verify`。
@@ -223,7 +224,7 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 4. 加入工作持久化、程序死亡恢復、暫存檔保留期限與大型文件 soak test。
 5. target SDK 37 時依 Android 官方 local-network permission／picker 模型遷移；target 36 目前不應提前宣告 `ACCESS_LOCAL_NETWORK`。參考：[Local network permission](https://developer.android.com/privacy-and-security/local-network-permission)。
 
-詳細規劃、使用方式與接手資訊：[`dev_plan.md`](dev_plan.md)、[`userguide.md`](userguide.md)、[`CHANGELOG.md`](CHANGELOG.md)、[`HANDOFF.md`](HANDOFF.md)。
+詳細規劃、使用方式與接手資訊：[`dev_plan.md`](dev_plan.md)、[`userguide.md`](userguide.md)、[`CHANGELOG.md`](CHANGELOG.md)、[`HANDOFF.md`](HANDOFF.md)、[`DIRECT_IPP_FOLLOWUPS.md`](DIRECT_IPP_FOLLOWUPS.md)。
 
 ## 產品與開源參考
 

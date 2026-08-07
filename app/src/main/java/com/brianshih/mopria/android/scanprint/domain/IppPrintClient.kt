@@ -68,17 +68,18 @@ object IppDocumentFormat {
     const val JPEG = "image/jpeg"
     const val PNG = "image/png"
     const val PWG_RASTER = "image/pwg-raster"
+    const val PCLM = "application/PCLm"
     const val URF = "image/urf"
     const val OCTET_STREAM = "application/octet-stream"
 
     /**
      * Formats this app can currently render and submit, in preference order.
      *
-     * `RealIntegrationProvider.renderPrintDocument` produces each: PDF via Android `PdfDocument` (single
-     * multi-page file), JPEG/PNG via per-page bitmap compress. Keep this list in sync with the renderer —
+     * `RealIntegrationProvider.renderPrintDocument` produces each: PDF via Android `PdfDocument`,
+     * JPEG/PNG via per-page bitmap compress, and PWG-Raster/PCLm via `IppRasterizer`. Keep this list in sync with the renderer —
      * a format here without a matching renderer would send mislabeled bytes. See DIRECT_IPP_FOLLOWUPS.md.
      */
-    val producible: List<String> = listOf(PDF, JPEG, PNG)
+    val producible: List<String> = listOf(PDF, PWG_RASTER, PCLM, JPEG, PNG)
 
     /**
      * Pick the first format in [preferred] that the printer advertises as [supported] (case-insensitive),
@@ -119,6 +120,26 @@ class IppPrintClient(
     fun documentFormatsSupported(attributes: IppPacket): List<String> =
         attributes.getStrings(Tag.printerAttributes, Types.documentFormatSupported)
 
+    /** Read `print-color-mode-supported` (PWG), e.g. color / monochrome / bi-level. */
+    fun printColorModesSupported(attributes: IppPacket): List<String> =
+        attributes.getStrings(Tag.printerAttributes, Types.printColorModeSupported)
+
+    /** Read `printer-resolution-supported` and prefer 300 DPI when advertised. */
+    fun preferredResolution(attributes: IppPacket): Int {
+        val resolutions = runCatching {
+            attributes.getValues(Tag.printerAttributes, Types.printerResolutionSupported)
+        }.getOrDefault(emptyList())
+        return resolutions.firstOrNull { it.x == 300 }?.x
+            ?: resolutions.firstOrNull()?.x
+            ?: 300
+    }
+
+    /** Read `pclm-strip-height-preferred`, falling back to the PCLm default. */
+    fun pclmStripHeightPreferred(attributes: IppPacket): Int =
+        runCatching { attributes.getValue(Tag.printerAttributes, Types.pclmStripHeightPreferred) }
+            .getOrNull()
+            ?: 16
+
     /**
      * Parse the printable-option capabilities (copies, media, sides, color, quality, orientation) from a
      * Get-Printer-Attributes response. Missing attributes yield empty lists / copies fixed at 1, so the
@@ -153,7 +174,8 @@ class IppPrintClient(
      * [RenderedPrintDocument.format]; only the final Send-Document carries `last-document=true`, so a
      * multi-page image job (one file per page) finalizes correctly while a single-file PDF job submits
      * in one step. Create-Job or any Send-Document failure throws so a caller can stop early; a
-     * separate Cancel-Job ([cancelJob]) is the caller's responsibility on partial failure.
+     * a partial transfer is followed by a best-effort Cancel-Job so a printer does not retain an
+     * unfinished job when a later page or transport request fails.
      *
      * Two-step Create-Job + Send-Document (rather than Print-Job) is preferred per the PWG IPP guide
      * because the job-id is assigned *before* the document transfers, so Cancel-Job can stop a large
@@ -178,20 +200,25 @@ class IppPrintClient(
             ?: throw PrintError.CreateJobFailed(createResponse.status.code)
 
         var lastResponse: IppPacket? = null
-        document.files.forEachIndexed { index, file ->
-            val isLast = index == document.files.lastIndex
-            val sendRequest = IppPacket.sendDocument(uri, jobId)
-                .putOperationAttributes(
-                    Types.requestingUserName.of(userAgent),
-                    Types.documentFormat.of(document.format),
-                    Types.lastDocument.of(isLast),
-                )
-                .build()
-            val response = file.inputStream().use { stream ->
-                transport.send(uri, sendRequest, stream, file.length())
+        try {
+            document.files.forEachIndexed { index, file ->
+                val isLast = index == document.files.lastIndex
+                val sendRequest = IppPacket.sendDocument(uri, jobId)
+                    .putOperationAttributes(
+                        Types.requestingUserName.of(userAgent),
+                        Types.documentFormat.of(document.format),
+                        Types.lastDocument.of(isLast),
+                    )
+                    .build()
+                val response = file.inputStream().use { stream ->
+                    transport.send(uri, sendRequest, stream, file.length())
+                }
+                if (!isSuccessful(response)) throw PrintError.SendDocumentFailed(response.status.code)
+                lastResponse = response
             }
-            if (!isSuccessful(response)) throw PrintError.SendDocumentFailed(response.status.code)
-            lastResponse = response
+        } catch (error: Throwable) {
+            runCatching { cancelJob(uri, jobId) }
+            throw error
         }
         return IppJobSubmission(jobId, requireNotNull(lastResponse))
     }
