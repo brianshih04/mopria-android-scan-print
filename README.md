@@ -1,8 +1,8 @@
 # Mopria Android Scan & Print
 
-Kotlin／Jetpack Compose Android App，透過 eSCL（AirScan）掃描文件，並透過 Android Print Framework 列印手機檔案或掃描結果。專案目前版本為 `0.1.0`，`minSdk 28`、`targetSdk 36`。
+Kotlin／Jetpack Compose Android App，透過 eSCL（AirScan）掃描文件，並可透過 Android Print Framework 或實驗性的 Direct IPP 列印手機檔案與掃描結果。專案目前版本為 `0.1.0`，`minSdk 28`、`targetSdk 36`。
 
-> 目前狀態（2026-08-07）：Mock 模式、eSCL pull-scan client、Flatbed／ADF 多頁工作流、PDF／JPEG 文件庫、Android 系統列印入口、Direct IPP（PDF／JPEG／PNG／PWG-Raster／PCLm）及 10 種語言 UI 均已完成建置／測試驗證。真實掃描器與印表機的跨品牌驗收仍待實體硬體。
+> 目前狀態（2026-08-08）：Mock 模式、eSCL pull-scan client、Flatbed／ADF 多頁工作流、PDF／JPEG 文件庫、Android 系統列印入口、Direct IPP（PDF／JPEG／PNG／PWG-Raster／PCLm）及 10 種語言 UI 均已完成建置／自動測試驗證。Direct IPP 已合併到 `main`，但仍是 opt-in 實驗功能；真實掃描器與印表機的跨品牌驗收尚待實體硬體。
 
 ## Android／Mopria 技術邊界
 
@@ -11,8 +11,8 @@ Android 沒有一個同時提供 Mopria 掃描與列印的公開「Mopria API」
 | 功能 | 實作方式 | App 負責範圍 |
 |---|---|---|
 | 掃描 | eSCL pull scan + Android `NsdManager` | DNS-SD 探索、capability 協商、工作生命週期、頁面下載與文件輸出 |
-| 列印 | Android `PrintManager` + `PrintDocumentAdapter` | 文件選擇、內容轉換、預覽入口與工作狀態 |
-| 印表機連線 | Android Default Print Service／Mopria Print Service | 印表機探索、IPP/IPPS、紙張、色彩、雙面與 spool |
+| 系統列印（預設） | Android `PrintManager` + `PrintDocumentAdapter` | 文件選擇、內容轉換、預覽入口與工作狀態；Print Service 負責探索、IPP/IPPS、紙張、色彩、雙面與 spool |
+| Direct IPP（opt-in） | `IppDiscovery` + `IppPrintClient` + `IppTransport` | 探索 `_ipp/_ipps`、capability 協商、格式轉換、送件、job polling 與錯誤清理 |
 
 因此，eSCL／AirScan 是掃描協定；列印方面，Real 模式可在設定切換「系統列印（Mopria，預設）」與「直接 IPP」——前者走 Android Print Framework，後者透過 `IppPrintClient` 探索 `_ipp/_ipps` 並送件；不支援 PDF 的印表機會依 capability 轉成 PWG-Raster 或 PCLm。JPEG／PNG 多頁工作會遵守 `multiple-document-jobs-supported`，不支援多文件工作的印表機改為逐頁建立單文件 job。Direct IPP 找不到印表機時會顯示明確錯誤，不會默默改走系統列印。直接 IPP 尚未以實體印表機驗證（見「下一階段」）。
 
@@ -129,9 +129,11 @@ MopriaAndroidScanPrint/
 | `EsclDiscovery.kt` | 透過 Android `NsdManager` 探索 `_uscan._tcp`／`_uscans._tcp`、解析 TXT 與驗證 resource root。 |
 | `EsclProtocol.kt` | namespace-aware XML capability/status parser、設定協商、ScanJob request 與 URL policy。 |
 | `EsclHttpClient.kt` | bounded HTTP、TLS、redirect、Retry-After、重試與串流下載。 |
-| `RealIntegrationProvider.kt` | 真實設備 discovery、eSCL scan job lifecycle、JPEG／PDF payload 下載。 |
+| `RealIntegrationProvider.kt` | 真實設備 discovery、eSCL scan job lifecycle、JPEG／PDF payload 下載及 Direct IPP 列印協調。 |
 | `MockIntegrationProvider.kt` | 不連接硬體的 deterministic scanner／printer fixture。 |
 | `ScanDocumentOrganizer.kt` | Flatbed 逐頁合併與 ADF 多頁合併／拆分規則。 |
+| `IppDiscovery.kt`、`IppPrintClient.kt`、`IppTransport.kt` | Direct IPP／IPPS 探索、capability、job lifecycle 與 bounded fixed-length HTTP 傳輸。 |
+| `IppRasterizer.kt`、`PrintRenderSizing.kt`、`SampledBitmapDecoder.kt` | PDF／圖片轉 PWG-Raster／PCLm，以及最高 300 dpi 的受控 render 尺寸。 |
 
 ### UI 與輸出層
 
@@ -143,7 +145,7 @@ MopriaAndroidScanPrint/
 | `HomeScreen.kt` | 首頁掃描、列印、裝置與最近工作卡片。 |
 | `ScanScreen.kt` | Flatbed／ADF、dpi、色彩、ADF 頁數上限與 PDF 合併設定。 |
 | `DocumentsScreen.kt` | 文件縮圖／預覽，以及列印、分享、PDF、JPEG 操作。 |
-| `PrintScreen.kt` | 手機文件列印入口與已掃描文件入口。 |
+| `PrintScreen.kt`、`PrintOptionsSheet.kt` | 手機文件列印入口、系統／Direct IPP 路徑及 capability-constrained 列印選項。 |
 | `SupportScreens.kt` | 工作紀錄與設定頁面。 |
 | `DocumentPageBitmapLoader.kt`、`DocumentPreviewLoader.kt`、`BitmapLoader.kt` | JPEG／PNG／PDF 頁面載入、縮圖與預覽。 |
 | `ScanExportService.kt` | PDF／JPEG 寫入 Download 資料夾及分享 URI。 |
@@ -189,7 +191,7 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 
 ## 最新驗證紀錄
 
-2026-08-07 的建置／品質驗證：
+2026-08-08 的建置／品質驗證：
 
 - 工具鏈：AGP 9.3.1、Gradle 9.5.0、JDK 25 daemon、`compileSdk 37`。
 - Release 啟用 R8 minify + resource shrinking；release APK 由 ~42 MB 縮至 ~2.2 MB。
@@ -197,7 +199,7 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 - Unit tests：62 passed。
 - `:app:assembleDebug`／`:app:assembleRelease`：passed。
 - API 36 emulator instrumentation：5 passed，包含 app launch、列印方式 persistence、PDF→PWG/PCLm 與 bounded image decode。
-- GitHub Actions CI：push／PR 自動跑 test + lint + assemble，Linux + JDK 25 環境綠燈。
+- GitHub Actions CI：PR #5 與合併後 `main` push 均通過 test + lint + assemble（Linux + JDK 25）。
 - 測試 APK 改由 [GitHub Release v0.1.0](https://github.com/brianshih04/mopria-android-scan-print/releases/tag/v0.1.0) 發布，不再進 repo。
 
 2026-08-02 的最終本機驗證：
@@ -220,8 +222,8 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 ## 下一階段
 
 1. 以至少兩個品牌的 eSCL MFP 驗證 `_uscan`／`_uscans`、自訂 `rs`、Flatbed、ADF、PDF／JPEG 與斷線清理。
-2. 以至少兩個品牌的 Mopria 印表機驗證 Android Print Service 的成功、取消、離線、紙張、色彩與雙面。
-3. 將真實 capability 反映為動態 UI 選項，加入手動 IP／URL 與認證流程。
+2. 以至少兩個品牌的 Mopria 印表機分別驗證 Android Print Service 與 Direct IPP；涵蓋 IPP/IPPS、PDF／JPEG／PNG／PWG-Raster／PCLm、job lifecycle、憑證、紙張、色彩、雙面、成功、取消與離線。
+3. 將真實 scanner capability 反映為動態掃描 UI 選項，加入手動 IP／URL 與認證流程。
 4. 加入工作持久化、程序死亡恢復、暫存檔保留期限與大型文件 soak test。
 5. target SDK 37 時依 Android 官方 local-network permission／picker 模型遷移；target 36 目前不應提前宣告 `ACCESS_LOCAL_NETWORK`。參考：[Local network permission](https://developer.android.com/privacy-and-security/local-network-permission)。
 

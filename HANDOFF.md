@@ -1,6 +1,6 @@
 # Development Handoff
 
-更新日期：2026-08-07
+更新日期：2026-08-08
 
 Repository：`brianshih04/mopria-android-scan-print`
 
@@ -8,9 +8,9 @@ Repository：`brianshih04/mopria-android-scan-print`
 
 ## 1. 接手摘要
 
-目前版本已完成可執行的 Android Compose App、Mock／Real 模式、eSCL v2.97 pull-scan client、Flatbed／ADF 多頁文件工作流、PDF／JPEG 文件庫、Android Print Framework 列印入口，以及 10 種語言與系統語系 fallback。
+目前版本已完成可執行的 Android Compose App、Mock／Real 模式、eSCL v2.97 pull-scan client、Flatbed／ADF 多頁文件工作流、PDF／JPEG 文件庫、Android Print Framework 預設列印入口、opt-in Direct IPP，以及 10 種語言與系統語系 fallback。
 
-自動測試與 API 36 emulator 已通過（62 JVM unit tests、5 個 instrumentation tests）；唯一重要的產品級缺口是尚未連接真實 eSCL scanner 與 Mopria printer 做跨品牌驗收。請勿把 Mock／fixture 結果描述成 Mopria Certified 或廠牌相容證據。
+自動測試與 API 36 emulator 已通過（62 JVM unit tests、5 個 instrumentation tests）。主要產品級缺口是尚未連接真實 eSCL scanner 與 Mopria printer 做跨品牌驗收，以及 Direct IPP 高 DPI 多頁 PWG-Raster／PCLm 仍需改善 streaming／完成 OOM soak；文件與工作也尚未支援 process-death 恢復。請勿把 Mock／fixture 結果描述成 Mopria Certified 或廠牌相容證據。
 
 ## 2. 快速啟動
 
@@ -38,9 +38,12 @@ adb shell am start -n com.brianshih.mopria.android.scanprint/.MainActivity
 | `domain/EsclDiscovery.kt` | TXT metadata、resource root 驗證、安全服務優先 |
 | `domain/EsclProtocol.kt` | XML parse、capability negotiation、ScanSettings、Job URL policy |
 | `domain/EsclHttpClient.kt` | HTTP status、Retry-After、redirect、TLS、bounded streaming |
-| `domain/RealIntegrationProvider.kt` | Android NSD、eSCL job lifecycle、JPEG／PDF 文件映射 |
+| `domain/RealIntegrationProvider.kt` | Android NSD、eSCL job lifecycle、JPEG／PDF 文件映射與 Direct IPP 列印協調 |
 | `domain/MockIntegrationProvider.kt` | 不依賴硬體的 deterministic scan／print fixture |
 | `domain/ScanDocumentOrganizer.kt` | Flatbed append 與 ADF split 純邏輯 |
+| `domain/IppDiscovery.kt` | `_ipp/_ipps` NSD 探索、URI 與 secure candidate 選擇 |
+| `domain/IppPrintClient.kt`、`IppTransport.kt` | Direct IPP capability、job lifecycle、fixed-length 傳輸與 cancel cleanup |
+| `domain/IppRasterizer.kt`、`PrintRenderSizing.kt` | PWG-Raster／PCLm 產生與 bounded render 尺寸；多頁高 DPI streaming 仍待改善 |
 | `ui/MopriaViewModel.kt` | discovery／scan／export／print 協調及 Flatbed session state |
 | `ui/LanguageManager.kt` | 系統語系偵測、手動覆寫、中文 script／region 判斷與 English fallback |
 | `ui/ScanScreen.kt` | ADF max pages、Flatbed／ADF PDF 合併設定及下一頁 dialog |
@@ -92,7 +95,7 @@ Flatbed multi-page 是多個獨立 eSCL Platen job 的 App-level session，不�
 | `:app:assembleDebug` | passed；APK 位於 `app/build/outputs/apk/debug/app-debug.apk` |
 | `:app:assembleRelease` | passed；R8 minify 開啟，release APK ~2.2 MB（unsigned，產品簽章另以 `apksigner` 套用） |
 | `:app:connectedDebugAndroidTest` | API 36 emulator：5 passed，0 failed |
-| GitHub Actions CI | push／PR 自動跑 `testDebugUnitTest` + `lintDebug` + `assembleDebug`，Linux + JDK 25 環境綠燈 |
+| GitHub Actions CI | PR #5 與合併後 `main` push 均通過 `testDebugUnitTest` + `lintDebug` + `assembleDebug`（Linux + JDK 25） |
 | `LanguageManagerTest` | 覆蓋 10 種可選語系、未知 tag、繁／簡中文 script 與 region 判斷 |
 | `git diff --check` | passed |
 | `DIRECT_IPP_FOLLOWUPS.md` | Direct IPP review findings、接手順序與驗收條件 |
@@ -117,6 +120,7 @@ Lint warnings 已清零（原為依賴版本／extension／pluralization 建議�
 - 沒有手動 IP／URL fallback、duplex scan、編輯、OCR 或 searchable PDF。
 - 文件輸出使用 Android `PdfDocument` 重繪頁面，不保留原始 PDF 的文字／向量語意。
 - 50 頁是 App 安全上限；大型高 dpi 掃描仍需實機 soak 與儲存空間檢查。
+- Direct IPP 的 `IppRasterizer` 仍可能同時保留多個高 DPI page bitmap；在完成逐頁／swath streaming 與 soak 前，不應宣稱大型多頁工作已具產品級穩定性。
 
 ## 8. Android 平台注意事項
 
@@ -132,6 +136,6 @@ Lint warnings 已清零（原為依賴版本／extension／pluralization 建議�
 3. 驗證 Flatbed JPEG、ADF PDF、`SelectSinglePage` true／false、取消與 503。
 4. 將真實 capability 注入 ViewModel，讓 UI 動態限制來源／解析度／色彩。
 5. 設計持久化 job/document model 與 raw scan retention，再處理 background／process death。
-6. 接第二品牌與 Android Print Service 實體印表機，完成硬體 matrix 後才準備 Beta 宣稱。
+6. 以至少兩個印表機品牌同時驗證 Android Print Service 與 Direct IPP（IPP/IPPS、格式、capability、job lifecycle、TLS 與高 DPI 多頁 soak），完成硬體 matrix 後才準備 Beta 宣稱。
 
 詳細產品範圍見 [`README.md`](README.md)，里程碑見 [`dev_plan.md`](dev_plan.md)，本輪變更見 [`CHANGELOG.md`](CHANGELOG.md)。

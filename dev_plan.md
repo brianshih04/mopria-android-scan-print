@@ -1,10 +1,10 @@
 # Development Plan
 
-更新日期：2026-08-07
+更新日期：2026-08-08
 
 ## 1. 產品目標
 
-建立跨品牌 Android 掃描與列印 App：掃描由 App 直接實作 eSCL pull scan，列印交給 Android Print Framework。文件預設保留在本機，使用者可預覽、輸出、分享或列印掃描結果。
+建立跨品牌 Android 掃描與列印 App：掃描由 App 直接實作 eSCL pull scan；列印預設交給 Android Print Framework，並提供 opt-in 的 Direct IPP 路徑。文件預設保留在本機，使用者可預覽、輸出、分享或列印掃描結果。
 
 核心原則：
 
@@ -66,7 +66,9 @@
 - 從手機資料夾選擇 PDF／JPEG／PNG。
 - 從文件庫列印掃描文件。
 - `SystemPrintAdapter`／`UriPrintAdapter` 遵守 Android page range 與 media size。
-- Android Print Service 負責印表機探索、IPP/IPPS 與列印設定。
+- 系統列印為預設路徑，由 Android Print Service 負責印表機探索、IPP/IPPS 與 spooler 設定。
+- Direct IPP 已整合到 `main`，可在 Real 模式 opt-in；支援 `_ipp/_ipps` 探索、PDF／JPEG／PNG／PWG-Raster／PCLm、capability-constrained options、job polling、timeout cancel、fixed-length HTTP、bounded 300 dpi source rendering 與 single-document printer batching。
+- Direct IPP 找不到印表機時會顯示本地化錯誤，不會默默 fallback 到系統列印；尚未以實體印表機驗證。
 
 ## 4. 目前不在完成宣稱內
 
@@ -75,7 +77,7 @@
 - 使用者認證、PIN、OAuth、client certificate UI。
 - 手動 IP／URL、QR／NFC 加入設備。
 - 工作持久化、程序死亡恢復、前景服務、背景續傳。
-- 自行實作直接 IPP／IPPS（已接線：`IppDiscovery` + `RealIntegrationProvider` + ViewModel + 列印方式切換、PDF／JPEG／PNG／PWG-Raster／PCLm、解析度／色彩協商、bounded 300 dpi source rendering、multi-document job capability、job polling、fixed-length HTTP 與 capability 列印選項；仍待實體設備驗證）。
+- Direct IPP 的產品級實機相容性宣稱；程式與自動測試已接線，但 IPP／IPPS 憑證、各格式接受度、job lifecycle 與高 DPI 多頁記憶體仍待實體／soak 驗證。
 - Mopria Certified 或任何廠商品牌相容性宣稱。
 
 ## 5. 里程碑
@@ -87,6 +89,7 @@
 | M2 eSCL v2.97 pull-scan client | 程式與 fixture 完成 | 62 unit tests、lint、build；尚缺實機 |
 | M3 Flatbed／ADF 多頁 PDF | Mock／UI 完成 | Flatbed 2 頁、ADF 6 頁 emulator smoke |
 | M3.1 多國語言 | 完成 | 10 種 resource locale、系統偵測、English fallback、手動選擇與 JVM tests |
+| M3.2 Direct IPP | 程式與自動測試完成 | opt-in 路徑、格式／capability／job lifecycle；尚缺跨品牌實機與高 DPI soak |
 | M4 實體跨品牌驗收 | 待辦 | 至少兩個 scanner 品牌與兩個 printer 品牌 |
 | M5 文件編輯／持久工作 | 待辦 | 裁切、旋轉、排序、背景恢復、大型文件 |
 | M6 Beta 品質 | 待辦 | TalkBack、平板、效能、隱私、Play 測試 |
@@ -106,12 +109,14 @@
 
 ### Printer matrix
 
-至少兩個品牌，使用 Android Default Print Service 或 Mopria Print Service：
+至少兩個品牌，同時測試 Android Default Print Service／Mopria Print Service 與 App 的 Direct IPP：
 
 - 手機 PDF、JPEG、PNG 與掃描 multi-page PDF。
 - 份數、紙張、方向、彩色／灰階、雙面、頁面範圍。
 - 成功、取消、離線、缺紙與服務未啟用。
 - 從 DocumentsUI 返回 App，以及 Print Spooler 返回 App。
+- Direct IPP `_ipp/_ipps` discovery、TLS／hostname 驗證、PDF／JPEG／PNG／PWG-Raster／PCLm、`multiple-document-jobs-supported`、capability options、job polling 與 timeout cleanup。
+- 高 DPI 多頁 PWG-Raster／PCLm soak，記錄峰值記憶體並確認不發生 OOM。
 
 實體驗收完成前，README／Play Store 不使用「已相容 Canon／Brother／Fujifilm」或「Mopria Certified」字樣。
 

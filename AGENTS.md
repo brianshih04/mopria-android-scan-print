@@ -20,7 +20,7 @@ git diff --check
 ## 架構事實（檔名看不出來的）
 
 - 單一 `app` module；package root `com.brianshih.mopria.android.scanprint`。沒有 Hilt／Room／WorkManager／多 module，也不要無目的地搬移。
-- **掃描與列印是兩條不同路徑**：掃描由 App 自建 eSCL v2.97 client 實作；列印在 `main` 交給 Android `PrintManager`／`PrintDocumentAdapter`（不自行發 IPP），在 `feat/direct-ipp*` 另有 opt-in 的 direct IPP client（`IppPrintClient`／`IppTransport`／`IppDiscovery`）。
+- **掃描與列印是兩組不同協定路徑**：掃描由 App 自建 eSCL v2.97 client 實作；`main` 的列印預設交給 Android `PrintManager`／`PrintDocumentAdapter`，也包含 opt-in 的 Direct IPP client（`IppPrintClient`／`IppTransport`／`IppDiscovery`）。
 - Mock／Real 透過 `domain/IntegrationProviders.kt` 的三個介面切換；domain model 與 UI 在兩種模式下共用。改協定行為時兩個 provider 都要顧。
 - App state 在 `MopriaViewModel` + `StateFlow` + SharedPreferences（名稱 `mopria_settings`）；文件與工作主要存在記憶體，process death 不可恢復。
 - eSCL 規格 PDF 是受限制的本機研究來源，**嚴禁複製進 repository／issue／CI artifact**；只能連結 [Mopria eSCL Specification](https://mopria.org/mopria-escl-specification)。
@@ -40,17 +40,17 @@ git diff --check
 - 中文 script／region 判斷邏輯在 `ui/LanguageManager.kt`；locale 套用在 `MainActivity.attachBaseContext`。
 - 錯誤訊息也要本地化；provider 應回可本地化的 error type 或 resource id，不要回硬編碼顯示文字。
 
-## Branch 差異（最容易誤判的事）
+## `main` 現況（最容易誤判的事）
 
-- `DIRECT_IPP_FOLLOWUPS.md` 描述的是目前 Direct IPP 整合與 `feat/direct-ipp-fixes` 的剩餘風險；合併到 `main` 後仍應保留「未實機驗證就不宣稱」的限制。
-- `main` 的整合基礎已包含 Direct IPP、PWG-Raster 與 PCLm；此 branch 主要補 reliability hardening、capability options、localization、tests 與 handoff 文件。
+- PR #5 已把 `feat/direct-ipp-fixes` 合併到 `main`；目前 `main` 已包含 Direct IPP、PWG-Raster、PCLm、reliability hardening、capability options、localization 與 tests。舊 feature branch 只供歷史追溯，不是實作差異來源。
+- `DIRECT_IPP_FOLLOWUPS.md` 描述目前 Direct IPP 的已完成項目與剩餘實機／記憶體風險；仍須保留「未實機驗證就不宣稱」的限制。
 - 改動前先確認你在哪條 branch，並以 `app/build.gradle.kts` 為準，不要相信文件裡的 SDK 數字。
 
 ## 平台／環境 gotchas
 
 - `local.properties`（Android SDK 路徑）被 gitignore；新機器需自行建立，或由 Android Studio 產生。
 - JDK／SDK：目前使用 JDK 25（見 `gradle/gradle-daemon-jvm.properties`）與 compileSdk 37；CI 對應 Android 37.0 platform 與 build-tools 37.0.0。以 `app/build.gradle.kts` 與 `.github/workflows/ci.yml` 為準。
-- `release/avi-print-scan.apk` 用**本機 debug keystore 簽署**，僅供 emulator／開發測試；正式發布前必須換產品簽章。
+- 測試 APK 不在 repository；GitHub Release `v0.1.0` 的 `avi-print-scan.apk` 使用**本機 debug keystore 簽署**，僅供 emulator／開發測試，正式發布前必須換產品簽章。
 - `targetSdk 36` 的 local network 存取仍由 `INTERNET` 涵蓋；**不要提前加入 `ACCESS_LOCAL_NETWORK`**，那是 target SDK 37+ 的遷移項目。
 - `app/build/` 是 gitignored 的建置產物；`.workflow/` 是過往 review／compliance 的歷史紀錄，不是活躍設定。
 - `network_security_config.xml` 刻意允許 cleartext，因為 `_uscan` 常以本地 HTTP 運作；不要為了「安全」拔掉而破壞 real-mode 探索。

@@ -1,8 +1,8 @@
 # Changelog
 
-本專案依 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 的概念記錄重要變更；目前尚未建立 release tag。
+本專案依 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 的概念記錄重要變更；GitHub Release `v0.1.0` 已建立，目前合併後續變更記錄在 Unreleased。
 
-## [Unreleased] - 2026-08-07
+## [Unreleased] - 2026-08-08
 
 ### Added
 
@@ -18,7 +18,8 @@
 - 新增文件 merge／split 純邏輯與測試。
 - 新增 `.workflow/escl-v2.97-compliance` 合規計畫、狀態與最終報告。
 - 新增 `HANDOFF.md`，記錄第三方接手所需架構、驗證與剩餘風險。
-- 新增 GitHub 可下載的 `release/avi-print-scan.apk` 及 7 張 API 36 emulator 主畫面 JPEG。
+- 新增 7 張 API 36 emulator 主畫面 JPEG。
+- 新增 GitHub Release `v0.1.0` 的 `avi-print-scan.apk` 測試資產；APK 不存放在 repository。
 - 新增 10 種語言資源：English、日本語、한국어、Español、Português、Deutsch、Français、Русский、繁體中文、简体中文。
 - 新增依 Android 系統語系自動選擇、未支援語系 fallback English，以及設定頁手動語言覆寫。
 - 新增 `LanguageManager` 語系判斷單元測試。
@@ -47,6 +48,7 @@
 - 恢復 Direct IPP 所需的 `androidTest` dependencies，並加入列印方式 persistence、MainActivity smoke 與 rasterizer smoke coverage。
 - Direct IPP 圖片列印改以紙張 point size 與協商 DPI 計算像素預算，來源 bitmap 最高 300 dpi，避免先降為約 72 dpi 後再放大列印。
 - JPEG／PNG 多頁列印會解析 `multiple-document-jobs-supported`；不支援多文件 job 時，改為逐頁建立單文件 job。
+- PR #5 已將 Direct IPP reliability fixes 與文件同步合併到 `main`。
 
 ### Removed
 
@@ -78,8 +80,8 @@
 - 62 unit tests passed，0 failed。
 - Android lint：0 errors，0 warnings。
 - Debug APK build passed。
-- Release APK build passed；目前建置輸出為 unsigned APK，產品簽章需另行套用。
-- GitHub Actions CI 通過（`testDebugUnitTest` + `lintDebug` + `assembleDebug`，Linux + JDK 25）。
+- Release APK build passed；本機 Gradle release 輸出為 unsigned，GitHub Release `v0.1.0` 的測試 APK 另以本機 debug keystore 簽署，產品發布仍需正式簽章。
+- GitHub Actions CI 通過；PR #5 與 merge commit `b00fa09` 的 `main` push 均完成 `testDebugUnitTest` + `lintDebug` + `assembleDebug`（Linux + JDK 25）。
 - API 36 emulator 通過 ADF 6 頁合併 PDF、Flatbed 2 頁逐頁合併、文件預覽／匯出、DocumentsUI 返回與列印頁返回流程。
 - API 36 emulator 語系 smoke 通過：系統 English、設定頁 10 語言清單、Japanese 與簡體中文手動切換。
 - API 36 emulator instrumentation tests：5 passed，0 failed。

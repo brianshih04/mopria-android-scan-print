@@ -2,17 +2,17 @@
 
 ## 文件目的
 
-本文件供接手開發者處理 Direct IPP 的 code review findings。此次整合已將最新 `main` 的 PWG-Raster／PCLm 功能帶入 `feat/direct-ipp-fixes`，並保留格式 payload 一致、job polling、fixed-length streaming、OOM sampling、錯誤本地化、no-printer error 與 instrumentation tests；Direct IPP 仍應維持 experimental opt-in，直到實體設備驗證完成。
+本文件供接手開發者追蹤 Direct IPP 已完成的 code review fixes 與剩餘風險。PR #5 已將 Direct IPP、PWG-Raster／PCLm、格式 payload 一致性、job polling、fixed-length streaming、OOM sampling、錯誤本地化、no-printer error 與 instrumentation tests 合併到 `main`；Direct IPP 仍應維持 experimental opt-in，直到實體設備與高 DPI 多頁 soak 驗證完成。
 
 ## 審查基準
 
-- Reviewed branch：[`feat/direct-ipp-fixes`](https://github.com/brianshih04/mopria-android-scan-print/tree/feat/direct-ipp-fixes)
-- Integration base：`origin/main` / `2b4bb05`
-- Fixes base：`d299bf3`
-- 變更內容：Direct IPP base、PWG-Raster／PCLm、capability options 與 review fixes
+- Current branch：[`main`](https://github.com/brianshih04/mopria-android-scan-print/tree/main)
+- Merged PR：[#5](https://github.com/brianshih04/mopria-android-scan-print/pull/5)
+- Merge commit：`b00fa09`
+- 變更內容：Direct IPP base、PWG-Raster／PCLm、capability options、reliability 與 review fixes
 - Android Studio bundled JDK：25.0.2
 - 已驗證：unit tests 62/62、lint、debug/release assemble、5 個 emulator instrumentation tests 均成功
-- 尚未完成：實體 IPP/IPPS 印表機跨品牌驗證
+- 尚未完成：實體 IPP/IPPS 印表機跨品牌驗證，以及高 DPI 多頁 PWG-Raster／PCLm streaming／OOM soak
 
 ## 目前接手重點
 
@@ -29,15 +29,15 @@
 - [ ] 實體設備驗證 IPP、IPPS、PWG-Raster、PCLm、job lifecycle 與憑證行為。
 - [ ] 進一步改善 `IppRasterizer` 多頁高 DPI 的 bitmap streaming，避免同時保留所有頁面。
 
-## P1：合併或擴大測試前必須處理
+## P1：實機 rollout 或擴大測試前必須處理
 
 ### 1. 修正 document-format 與實際 bytes 不一致
 
 相關檔案：
 
-- [`IppPrintClient.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppPrintClient.kt)
-- [`RealIntegrationProvider.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/RealIntegrationProvider.kt)
-- [`IppPrintClientTest.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/test/java/com/brianshih/mopria/android/scanprint/domain/IppPrintClientTest.kt)
+- [`IppPrintClient.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppPrintClient.kt)
+- [`RealIntegrationProvider.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/RealIntegrationProvider.kt)
+- [`IppPrintClientTest.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/src/test/java/com/brianshih/mopria/android/scanprint/domain/IppPrintClientTest.kt)
 
 目前已完成格式與 payload 對齊：`IppDocumentFormat.producible` 依偏好順序提供 PDF、PWG-Raster、PCLm、JPEG、PNG；`RealIntegrationProvider` 會分別產生對應 bytes。JPEG／PNG 多頁在 `multiple-document-jobs-supported=true` 時以多個 `Send-Document` 組成同一 job，否則逐頁建立單文件 job。PWG-Raster／PCLm 由 `jipp-pdl` 從中介 PDF rasterize。
 
@@ -47,9 +47,9 @@
 
 相關檔案：
 
-- [`IppPrintClient.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppPrintClient.kt)
-- [`RealIntegrationProvider.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/RealIntegrationProvider.kt)
-- [`MopriaViewModel.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/ui/MopriaViewModel.kt)
+- [`IppPrintClient.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppPrintClient.kt)
+- [`RealIntegrationProvider.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/RealIntegrationProvider.kt)
+- [`MopriaViewModel.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/src/main/java/com/brianshih/mopria/android/scanprint/ui/MopriaViewModel.kt)
 
 已完成 `awaitJobCompletion(uri, jobId)`：Pending／Held／Processing／Stopped 會 polling，Completed 才成功，Canceled／Aborted 會轉成 domain error，timeout 會在 `NonCancellable` 中 best-effort Cancel-Job；中途頁面傳輸失敗也會清理已建立的 job。相關狀態、timeout 與 HTTP／IPP error tests 已通過。
 
@@ -57,8 +57,8 @@
 
 相關檔案：
 
-- [`app/build.gradle.kts`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/build.gradle.kts)
-- [`ci.yml`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/.github/workflows/ci.yml)
+- [`app/build.gradle.kts`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/build.gradle.kts)
+- [`ci.yml`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/.github/workflows/ci.yml)
 
 此問題已修正。project 使用 `compileSdk 37`，CI 會明確安裝 Android 37.0 platform 與對應 build tools：
 
@@ -69,16 +69,18 @@ platforms;android-37.0 build-tools;37.0.0
 驗收方式是在乾淨 runner 或只安裝文件指定 SDK 的環境執行：
 
 ```powershell
-.\gradlew.bat :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --no-daemon
+.\gradlew.bat :app:testDebugUnitTest --max-workers=1 --no-daemon
+.\gradlew.bat :app:lintDebug :app:assembleDebug --max-workers=1 --no-daemon
+git diff --check
 ```
 
 ### 4. 完成 IPPS 實體設備驗證，但不要使用 trust-all
 
 相關檔案：
 
-- [`IppDiscovery.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppDiscovery.kt)
-- [`IppTransport.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppTransport.kt)
-- [`RealIntegrationProvider.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih04/mopria/android/scanprint/domain/RealIntegrationProvider.kt)
+- [`IppDiscovery.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppDiscovery.kt)
+- [`IppTransport.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppTransport.kt)
+- [`RealIntegrationProvider.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/RealIntegrationProvider.kt)
 
 目前 `_ipps._tcp` discovery 會優先於 `_ipp._tcp`，並使用 Android system trust store。實體印表機常見 self-signed certificate、hostname 與 resolved IP 不一致，可能造成 TLS 或 hostname verification 失敗。
 
@@ -107,7 +109,7 @@ platforms;android-37.0 build-tools;37.0.0
 
 ### 8. 驗證 HTTP streaming interoperability
 
-[`IppTransport.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/feat/direct-ipp-fixes/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppTransport.kt) 已改用已知長度的 fixed-length HTTP body，不再使用 chunked streaming；JVM test server 已驗證 `Content-Length`。仍需在至少兩個品牌實體印表機確認 Create-Job／Send-Document 的 interoperability。
+[`IppTransport.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppTransport.kt) 已改用已知長度的 fixed-length HTTP body，不再使用 chunked streaming；JVM test server 已驗證 `Content-Length`。仍需在至少兩個品牌實體印表機確認 Create-Job／Send-Document 的 interoperability。
 
 ### 9. 補 capability-driven print options
 
@@ -119,7 +121,7 @@ capability-driven print options 已完成：從 `Get-Printer-Attributes` 解析 
 
 ## 文件與 release 同步
 
-以下內容需在實作完成後一起更新：
+以下內容已在 PR #5 合併時同步；後續功能或驗證變更仍需一起維護：
 
 - README、HANDOFF、CHANGELOG 的測試數量：目前實際為 62 JVM unit tests，另有 5 個 emulator instrumentation tests。
 - README 的環境需求：JDK 25 daemon、compileSdk 37、Android SDK 版本要一致。

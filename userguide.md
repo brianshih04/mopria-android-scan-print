@@ -22,14 +22,14 @@ Android 若阻擋非 Play 商店安裝，請先在系統設定允許目前使用
 首頁提供四個主要入口：
 
 - 掃描文件：開啟掃描設定與掃描工作。
-- 列印：從手機檔案選擇 PDF／JPEG／PNG，交給 Android 系統列印。
+- 列印：從手機檔案選擇 PDF／JPEG／PNG，依設定使用 Android 系統列印或 Direct IPP。
 - 文件：查看已完成的掃描結果。
 - 紀錄：查看掃描、列印與匯出的工作狀態。
 
 右上角設定可切換：
 
 - 測試模式：使用內建 Mock scanner／printer，不需要硬體或網路，適合先熟悉流程。
-- 實體裝置：透過 DNS-SD 探索同一網路中的 eSCL／AirScan scanner；列印仍由 Android Print Framework 與已安裝的 Print Service 處理。
+- 實體裝置：透過 DNS-SD 探索同一網路中的 eSCL／AirScan scanner；列印預設使用 Android Print Framework，也可在設定中 opt-in Direct IPP。
 
 第一次使用建議先留在「測試模式」驗證 UI 與文件流程，再切換「實體裝置」。
 
@@ -73,7 +73,7 @@ Android 若阻擋非 Play 商店安裝，請先在系統設定允許目前使用
 每份文件可進行：
 
 - 點選頁面縮圖：查看大圖預覽。
-- `列印`：送往 Android 系統列印預覽。
+- `列印`：依目前設定送往 Android 系統列印預覽或 Direct IPP 列印流程。
 - `分享`：開啟 Android Sharesheet，交給其他 App。
 - `PDF`：輸出或重新保存為 PDF。
 - `JPEG`：將文件頁面輸出為 JPEG 檔案。
@@ -88,10 +88,14 @@ Android 9 會在需要寫入公開 Download 資料夾時要求儲存權限。
 
 ## 5. 從手機檔案列印
 
-1. 在首頁點選「列印」。
-2. 在 Android DocumentsUI 選擇一個或多個 PDF／JPEG／PNG。
-3. 確認選取後，App 會交給 Android Print Framework。
-4. 在系統列印預覽中選擇可用的 printer／Mopria Print Service，設定紙張、色彩、雙面等選項後送出。
+1. 切換到「實體裝置」後，到「設定」選擇列印方式；建議先保留預設的「系統列印」，Direct IPP 是尚待跨品牌實機驗證的 opt-in 功能。
+2. 在首頁點選「列印」。
+3. 在 Android DocumentsUI 選擇一個或多個 PDF／JPEG／PNG。
+4. 確認選取後，App 會依列印方式繼續：
+   - `系統列印`：開啟 Android Print Framework 預覽，由 Default Print Service／Mopria Print Service 探索印表機並提供紙張、色彩、雙面等選項。
+   - `直接 IPP`：App 探索同一網路的 `_ipp._tcp`／`_ipps._tcp` 印表機，讀取 capability，顯示可用的份數、紙張、方向、色彩、雙面與品質選項，再直接送出工作。
+
+Direct IPP 可送出 PDF、JPEG、PNG，並可依印表機 capability 轉為 PWG-Raster 或 PCLm。若印表機不支援多文件 job，圖片多頁會改成逐頁建立單文件 job。找不到 Direct IPP 印表機時會顯示錯誤，不會自動切回系統列印。
 
 按 Android 返回鍵可從檔案選擇器回到 App；取消選檔也會回到 App 的列印流程。
 
@@ -106,7 +110,7 @@ Android 9 會在需要寫入公開 Download 資料夾時要求儲存權限。
 
 回到首頁點選裝置卡片即可觸發 discovery。找到設備後，進入掃描頁並依設備 capability 使用 Flatbed 或 ADF。不同品牌對解析度、色彩、PDF 及 ADF 的支援可能不同，App 會依實際 capability 選擇有效設定。
 
-本專案目前只實作 eSCL 掃描 client；列印不直接實作 IPP，而是使用 Android Print Framework／系統的 Mopria Print Service。因此，實體印表機是否出現取決於 Android 裝置上已啟用的 Print Service。
+實體列印有兩條路徑：系統列印是否看得到印表機，取決於 Android 裝置上已啟用的 Default Print Service／Mopria Print Service；Direct IPP 則由 App 探索 `_ipp._tcp`／`_ipps._tcp`。使用 Direct IPP 時，手機與印表機必須在允許 mDNS／DNS-SD 與 IPP 流量的同一區域網路；IPPS 憑證必須通過 Android 系統 trust store 與 hostname 驗證。
 
 ## 7. 常見問題
 
@@ -120,7 +124,7 @@ Android 9 會在需要寫入公開 Download 資料夾時要求儲存權限。
 
 ### 列印沒有出現印表機
 
-確認 Android 設定中的 Print Service 已啟用，並檢查 Mopria Print Service 或廠商 Print Service 是否能看到同一網路中的印表機。
+若使用系統列印，確認 Android 設定中的 Print Service 已啟用，並檢查 Mopria Print Service 或廠商 Print Service 是否能看到同一網路中的印表機。若使用 Direct IPP，確認手機與印表機位於同一區域網路、設備有宣告 `_ipp._tcp` 或 `_ipps._tcp`，且網路未阻擋 mDNS／DNS-SD；Direct IPP 失敗時不會自動改走系統列印，可到設定手動切回。
 
 ### 文件沒有出現在 App
 
@@ -128,4 +132,4 @@ Android 9 會在需要寫入公開 Download 資料夾時要求儲存權限。
 
 ## 8. 功能邊界
 
-目前版本不宣稱支援 Push Scan、OCR／可搜尋 PDF、ADF duplex UI、使用者認證輸入、手動 IP／URL、直接 IPP 列印或 Mopria 認證。真實設備仍需要 Canon、Brother、Fujifilm 或其他品牌的實機驗收。
+目前版本不宣稱支援 Push Scan、OCR／可搜尋 PDF、ADF duplex UI、使用者認證輸入、手動 IP／URL 或 Mopria 認證。Direct IPP 已提供 opt-in 實作，但尚未完成跨品牌實機驗證；高 DPI 多頁 PWG-Raster／PCLm 也仍需記憶體 soak，因此不應視為 Mopria Certified 或特定廠牌相容證據。真實設備仍需要 Canon、Brother、Fujifilm 或其他品牌的實機驗收。
