@@ -43,13 +43,13 @@ class EsclHttpClient(
 ) {
     fun fetchCapabilities(baseUrl: String): String {
         val response = request("GET", "$baseUrl/ScannerCapabilities")
-        requireSuccessful(response, "取得 ScannerCapabilities", setOf(HttpURLConnection.HTTP_OK))
+        requireSuccessful(response, "GET ScannerCapabilities", setOf(HttpURLConnection.HTTP_OK))
         return response.body.toString(Charsets.UTF_8)
     }
 
     fun fetchScannerStatus(baseUrl: String): EsclScannerStatus {
         val response = request("GET", "$baseUrl/ScannerStatus")
-        requireSuccessful(response, "取得 ScannerStatus", setOf(HttpURLConnection.HTTP_OK))
+        requireSuccessful(response, "GET ScannerStatus", setOf(HttpURLConnection.HTTP_OK))
         return EsclProtocol.parseScannerStatus(response.body.toString(Charsets.UTF_8))
     }
 
@@ -60,15 +60,15 @@ class EsclHttpClient(
             body = settingsXml.toByteArray(Charsets.UTF_8),
             contentType = "text/xml; charset=utf-8",
         )
-        requireSuccessful(response, "建立 eSCL ScanJob", setOf(HttpURLConnection.HTTP_CREATED))
-        return response.header("Location") ?: error("eSCL ScanJobs 201 回應缺少 Location header")
+        requireSuccessful(response, "POST ScanJobs", setOf(HttpURLConnection.HTTP_CREATED))
+        return response.header("Location") ?: error("eSCL ScanJobs 201 response missing Location header")
     }
 
     fun cancelScanJob(baseUrl: String, location: String) {
         val jobUrl = EsclProtocol.scanJobUrl(baseUrl, location)
         val response = request("DELETE", jobUrl)
         if (response.code !in setOf(HttpURLConnection.HTTP_OK, HttpURLConnection.HTTP_NOT_FOUND, HttpURLConnection.HTTP_GONE)) {
-            throw httpError(response, "取消 eSCL ScanJob")
+            throw httpError(response, "DELETE ScanJob")
         }
     }
 
@@ -85,7 +85,7 @@ class EsclHttpClient(
             try {
                 val code = connection.responseCode
                 if (code == HttpURLConnection.HTTP_MOVED_PERM || code == HTTP_UPGRADE_REQUIRED) {
-                    require(redirects < MAX_REDIRECTS) { "eSCL secure redirect 次數過多" }
+                    require(redirects < MAX_REDIRECTS) { "eSCL secure redirect limit exceeded" }
                     currentUrl = secureRedirect(
                         currentUrl,
                         connection.getHeaderField("Location"),
@@ -106,7 +106,7 @@ class EsclHttpClient(
                     val challenge = connection.getHeaderField("WWW-Authenticate")?.take(160)
                     throw EsclHttpException(
                         code,
-                        "取得 eSCL NextDocument 失敗：HTTP $code${challenge?.let { " · authentication required: $it" }.orEmpty()}${detail.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()}",
+                        "GET eSCL NextDocument failed: HTTP $code${challenge?.let { " · authentication required: $it" }.orEmpty()}${detail.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()}",
                     )
                 } else {
                     val contentLength = connection.contentLengthLong
@@ -119,7 +119,7 @@ class EsclHttpClient(
                     }
                     if (destination.length() == 0L) {
                         destination.delete()
-                        error("eSCL NextDocument 回傳空白 payload")
+                        error("eSCL NextDocument returned empty payload")
                     }
                     val contentType = normalizedContentType(connection.getHeaderField("Content-Type"), destination)
                     return EsclDocumentPayload(destination, contentType)
@@ -129,10 +129,10 @@ class EsclHttpClient(
                 throw error
             } catch (error: SocketTimeoutException) {
                 destination.delete()
-                throw EsclNextDocumentTimeoutException("eSCL NextDocument 等待逾時", error)
+                throw EsclNextDocumentTimeoutException("eSCL NextDocument timed out", error)
             } catch (error: IOException) {
                 destination.delete()
-                throw IOException("eSCL HTTP GET $currentUrl 失敗：${error.message}", error)
+                throw IOException("eSCL HTTP GET $currentUrl failed: ${error.message}", error)
             } catch (error: Exception) {
                 destination.delete()
                 throw error
@@ -169,7 +169,7 @@ class EsclHttpClient(
                 val bytes = stream?.use { it.readLimited(MAX_CONTROL_RESPONSE_BYTES) } ?: ByteArray(0)
                 val response = HttpResponse(code, connection.headerFields, bytes)
                 if (code == HttpURLConnection.HTTP_MOVED_PERM || code == HTTP_UPGRADE_REQUIRED) {
-                    require(redirects < MAX_REDIRECTS) { "eSCL secure redirect 次數過多" }
+                    require(redirects < MAX_REDIRECTS) { "eSCL secure redirect limit exceeded" }
                     currentUrl = secureRedirect(currentUrl, response.header("Location"), response.header("Upgrade"), code)
                     redirects += 1
                     continue
@@ -181,7 +181,7 @@ class EsclHttpClient(
                 }
                 return response
             } catch (error: IOException) {
-                throw IOException("eSCL HTTP $method $currentUrl 失敗：${error.message}", error)
+                throw IOException("eSCL HTTP $method $currentUrl failed: ${error.message}", error)
             } finally {
                 connection.disconnect()
             }
@@ -204,16 +204,16 @@ class EsclHttpClient(
             source.toURI().resolve(URI(location.trim()))
         } else {
             require(statusCode == HTTP_UPGRADE_REQUIRED && upgrade.orEmpty().contains("TLS", true)) {
-                "eSCL HTTP $statusCode 要求安全連線，但未提供有效的 Location 或 TLS Upgrade"
+                "eSCL HTTP $statusCode requires secure connection but no valid Location or TLS Upgrade provided"
             }
             URI("https", null, source.host, 443, source.path, source.query, null)
         }
-        require(source.host.equals(target.host, true)) { "拒絕跨主機 eSCL redirect" }
-        require(source.path == target.path && source.query == target.query) { "eSCL redirect 必須保留 relative URL" }
+        require(source.host.equals(target.host, true)) { "Cross-host eSCL redirect rejected" }
+        require(source.path == target.path && source.query == target.query) { "eSCL redirect must preserve relative URL" }
         require(source.protocol.equals("http", true) && target.scheme.equals("https", true)) {
-            "eSCL redirect 只能從 HTTP 升級到 HTTPS"
+            "eSCL redirect may only upgrade from HTTP to HTTPS"
         }
-        require(target.userInfo == null && target.fragment == null) { "eSCL redirect URL 格式不安全" }
+        require(target.userInfo == null && target.fragment == null) { "eSCL redirect URL format is unsafe" }
         return target.toURL()
     }
 
@@ -245,8 +245,8 @@ class EsclHttpClient(
         }
         val supported = setOf("image/jpeg", "application/pdf", "image/png")
         val result = detected ?: declared.takeIf { it in supported }
-        requireNotNull(result) { "eSCL NextDocument 回傳不支援的 Content-Type：${declared.ifBlank { "missing" }}" }
-        if (declared in supported) require(declared == result) { "eSCL Content-Type 與 payload signature 不一致" }
+        requireNotNull(result) { "eSCL NextDocument returned unsupported Content-Type: ${declared.ifBlank { "missing" }}" }
+        if (declared in supported) require(declared == result) { "eSCL Content-Type does not match payload signature" }
         return result
     }
 
@@ -263,7 +263,7 @@ class EsclHttpClient(
             val read = read(buffer)
             if (read < 0) break
             total += read
-            require(total <= maxBytes) { "eSCL 回應超過 ${maxBytes / 1_048_576} MB 上限" }
+            require(total <= maxBytes) { "eSCL response exceeded ${maxBytes / 1_048_576} MB cap" }
             output.write(buffer, 0, read)
         }
     }
@@ -281,7 +281,7 @@ class EsclHttpClient(
         val challenge = response.header("WWW-Authenticate")?.take(160)
         return EsclHttpException(
             response.code,
-            "$operation 失敗：HTTP ${response.code}${challenge?.let { " · authentication required: $it" }.orEmpty()}${detail.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()}",
+            "$operation failed: HTTP ${response.code}${challenge?.let { " · authentication required: $it" }.orEmpty()}${detail.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()}",
         )
     }
 
@@ -328,7 +328,7 @@ private class Tls13CapableSocketFactory(
         val ssl = socket as? SSLSocket ?: return socket
         if ("TLSv1.3" !in ssl.supportedProtocols) {
             ssl.close()
-            throw SSLHandshakeException("此 Android TLS provider 不支援 eSCL v2.97 要求的 TLS 1.3")
+            throw SSLHandshakeException("Android TLS provider does not support TLS 1.3 required by eSCL v2.97")
         }
         ssl.enabledProtocols = (ssl.enabledProtocols + "TLSv1.3").distinct().toTypedArray()
         return ssl

@@ -177,7 +177,7 @@ class EsclProtocolTest {
             </scan:ScannerCapabilities>
             """.trimIndent(),
         )
-        assertThrows(IllegalStateException::class.java) {
+        assertThrows(ScanError.CapabilityNotSupported::class.java) {
             EsclProtocol.negotiate(capabilities, ScanSettings())
         }
     }

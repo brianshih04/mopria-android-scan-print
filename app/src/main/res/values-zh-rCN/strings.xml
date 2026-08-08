@@ -195,4 +195,15 @@
     <string name="print_options_media">纸张</string>
     <string name="print_options_orientation">方向</string>
     <string name="print_options_cancel">取消</string>
+
+    <string name="scan_error_scanner_not_ready">扫描仪尚未就绪，请检查设备后再试一次。</string>
+    <string name="scan_error_adf_not_ready">进纸器中没有文件或尚未就绪，请放入文件后再试。</string>
+    <string name="scan_error_http">无法与扫描仪通讯，请再试一次。</string>
+    <string name="scan_error_timeout">扫描超时，请再试一次。</string>
+    <string name="scan_error_job_stopped">扫描作业已停止或取消。</string>
+    <string name="scan_error_capability">扫描仪不支持当前的设置，请尝试其他选项。</string>
+    <string name="scan_error_no_images">扫描完成但未取得任何影像。</string>
+    <string name="scan_searching_devices">正在搜索设备</string>
+    <string name="documents_delete">删除</string>
+    <string name="event_document_deleted">文档已删除</string>
 </resources>

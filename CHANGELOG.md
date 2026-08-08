@@ -4,6 +4,53 @@
 
 ## [Unreleased] - 2026-08-08
 
+### Added — Architecture & Quality Refactor
+
+- 新增 `ScanError` 結構化掃描錯誤（mirrors `PrintError` pattern）：8 種子類型，ViewModel 映射至 string resources，取代直接顯示 raw exception message。
+- 新增 7 條掃描錯誤字串 × 10 種語言（英/日/韓/西/葡/德/法/俄/繁中/簡中），共 70 條新翻譯。
+- 新增 `PdfPageRenderer`（domain 層）：共用 PDF 頁面建立迴圈、bitmap 載入與 aspect-ratio fit-to-page，`ScanExportService` 和 `RealIntegrationProvider` 統一使用。
+- 新增 `DocumentStore`：以 `org.json` 將文件列表與 Flatbed session 持久化至內部儲存，App 被系統殺掉後可恢復；啟動時自動過濾磁碟上已不存在的過期檔案引用。
+- 新增 `SettingsStore`：從 ViewModel 提取所有 SharedPreferences 讀寫邏輯。
+- 新增 `TempFileCleanup`：三層暫存檔清理機制（啟動時 orphan scan sweep + stale cache sweep、使用者刪除文件時、掃描失敗時）。
+- 新增 `ScannerCapabilities`：Real 模式探索後取得 eSCL capability 並映射為 UI 選項集；ScanScreen 依據 caps 動態過濾解析度、掃描來源、色彩模式。
+- 新增 `ScanAcquisitionProvider.scannerCapabilities()` 介面方法與 `RealIntegrationProvider` 實作。
+- 新增 `MopriaUiState.scannerCapabilities` 欄位與 ViewModel 探索時自動取得。
+- 新增文件刪除功能：DocumentsScreen 紅色刪除按鈕，刪除時同時清除原始掃描檔案。
+- 新增 `scan_searching_devices` 字串 × 10 種語言。
+- 新增 `documents_delete` 與 `event_document_deleted` 字串 × 10 種語言。
+- Theme 加入 `surfaceContainerLow/Container/High/Highest` 與 `onError`，Dark Mode 配色完整定義。
+- ScanScreen 解析度、來源、色彩選項改為 capability-driven（Real 模式只顯示掃描器支援的選項）。
+- PageThumbnail 加入 `contentDescription` 與 `Role.Button` 語義，改善 TalkBack 無障礙支援。
+
+### Changed — IppRasterizer Streaming & Bug Fixes
+
+- `IppRasterizer` 改為逐頁串流：`StreamingPdfPageIterator` 每次只保留一頁 bitmap，峰值記憶體從 N 頁降至 1 頁。
+- `RenderableDocument.iterator()` 每次呼叫建立新迭代器，修正 PclmWriter 內部多次遍歷（`handleSides` → `count()` → `mapPages()`）導致 PCLm 輸出空白的嚴重 bug。
+- PDF 頁面渲染改用 `RENDER_MODE_FOR_PRINT`（原 `RENDER_MODE_FOR_DISPLAY`），確保列印色彩正確。
+- 灰階轉換改用 `roundToInt()`（原 `toInt()` 截斷），避免系統性偏暗。
+- `IppRasterizer.render()` 新增 RGBA ColorSpace 分支（4 bytes/pixel 含 alpha）。
+- `IppRasterizer.rasterize()` 失敗時刪除 partial output 檔案。
+- Domain 層所有硬編碼中文/英文混合錯誤訊息改為英文開發者訊息；使用者面向的錯誤改拋 `ScanError`。
+- `RealIntegrationProvider.validateScannerReady()` 改拋 `ScanError.ScannerNotReady` / `ScanError.AdfNotReady`。
+- `DocumentsScreen` 按鈕文字從硬編碼 "PDF"/"JPEG" 改用 string resources。
+
+### Changed — i18n Cleanup
+
+- 清除所有 `.kt` 原始碼中的硬編碼中文字串（EsclHttpClient、EsclProtocol、RealIntegrationProvider、IppPrintClient、ScanExportService、SystemPrintAdapter、UriPrintAdapter、ScanScreen、DocumentPageBitmapLoader）。
+- ViewModel `scan()` 新增 `ScanError` catch block 與 `messageStringRes()` 映射。
+- ViewModel `scan()` generic exception 不再將 raw `error.message` 顯示給使用者。
+
+### Testing
+
+- JVM unit tests 由 62 增至 99（+37）。
+- 新增 `ScannerCapabilitiesTest`（8 tests）：`fromEscl()` capability 映射、解析度交集、來源/色彩 fallback。
+- 新增 `PrintCapabilitiesTest`（7 tests）：`hasAnyOption()`、`coerceTo()` 支援值保留/不支援值丟棄/邊界值。
+- 新增 `IppDocumentFormatTest`（7 tests）：格式偏好順序、case-insensitive match、octet-stream 不視為通用匹配。
+- 重寫 `IppRasterizerTest`（3→13 tests）：新增 multi-pass iterator 驗證（PCLm 多頁、奇數頁）、RGB/RGBA/Grayscale 像素轉換正確性、`renderSize` 計算。
+- 擴充 `EsclProtocolTest`（+7 tests）：URL 安全（query/fragment/userInfo 拒絕）、`ScanError.CapabilityNotSupported` 路徑、nearest resolution tie-breaking。
+- 擴充 `ScanDocumentOrganizerTest`（+5 tests）：空文件例外、existing id 保留、多頁順序。
+
+
 ### Added
 
 - 新增 eSCL DNS-SD TXT parser，支援 `rs`、`uuid`、`vers`、`ty`、`pdl` 與 `_uscans` 優先去重。

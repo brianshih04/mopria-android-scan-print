@@ -184,4 +184,15 @@
     <string name="print_options_media">Бумага</string>
     <string name="print_options_orientation">Ориентация</string>
     <string name="print_options_cancel">Отмена</string>
+
+    <string name="scan_error_scanner_not_ready">Сканер не готов. Проверьте устройство и попробуйте снова.</string>
+    <string name="scan_error_adf_not_ready">Устройство автоматической подачи пусто или не готово. Загрузите документы и попробуйте снова.</string>
+    <string name="scan_error_http">Не удалось связаться со сканером. Попробуйте снова.</string>
+    <string name="scan_error_timeout">Время сканирования истекло. Попробуйте снова.</string>
+    <string name="scan_error_job_stopped">Задание сканирования было остановлено или отменено.</string>
+    <string name="scan_error_capability">Сканер не поддерживает выбранные настройки. Попробуйте другие параметры.</string>
+    <string name="scan_error_no_images">Сканирование завершено, но изображения не получены.</string>
+    <string name="scan_searching_devices">Поиск устройств</string>
+    <string name="documents_delete">Удалить</string>
+    <string name="event_document_deleted">Документ удалён</string>
 </resources>

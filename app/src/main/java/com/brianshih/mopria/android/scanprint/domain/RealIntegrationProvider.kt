@@ -8,8 +8,6 @@ import android.os.Looper
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.RectF
-import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.core.graphics.createBitmap
@@ -251,7 +249,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
             }
             jobFinished = true
 
-            require(payloads.isNotEmpty()) { "eSCL ScanJob 沒有回傳影像" }
+            if (payloads.isEmpty()) throw ScanError.NoImages
             val pages = payloads.flatMapIndexed { payloadIndex, payload ->
                 if (payload.contentType == "application/pdf") {
                     val count = pdfPageCount(payload.file)
@@ -285,6 +283,18 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                 pages = pages,
                 createdAt = scanId,
             )
+        } catch (error: EsclHttpException) {
+            if (!jobFinished && location != null) {
+                withContext(NonCancellable + Dispatchers.IO) { runCatching { httpClient.cancelScanJob(baseUrl, location) } }
+            }
+            payloads.map(EsclDocumentPayload::file).forEach(File::delete)
+            throw ScanError.HttpError(error.statusCode)
+        } catch (error: EsclNextDocumentTimeoutException) {
+            if (!jobFinished && location != null) {
+                withContext(NonCancellable + Dispatchers.IO) { runCatching { httpClient.cancelScanJob(baseUrl, location) } }
+            }
+            payloads.map(EsclDocumentPayload::file).forEach(File::delete)
+            throw ScanError.DocumentTimeout
         } catch (error: Exception) {
             if (!jobFinished && location != null) {
                 withContext(NonCancellable + Dispatchers.IO) { runCatching { httpClient.cancelScanJob(baseUrl, location) } }
@@ -292,6 +302,16 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
             payloads.map(EsclDocumentPayload::file).forEach(File::delete)
             throw error
         }
+    }
+
+    
+    override suspend fun scannerCapabilities(scanner: IntegrationDevice): ScannerCapabilities? = withContext(Dispatchers.IO) {
+        runCatching {
+            val baseUrl = scanner.eSclBaseUrl()
+            val capabilitiesXml = httpClient.fetchCapabilities(baseUrl)
+            val capabilities = EsclProtocol.parseCapabilities(capabilitiesXml)
+            ScannerCapabilities.fromEscl(capabilities)
+        }.getOrNull()
     }
 
     override suspend fun print(printer: IntegrationDevice, document: MopriaDocument, options: PrintOptions?) = withContext(Dispatchers.IO) {
@@ -410,7 +430,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         try {
             val canvas = Canvas(output)
             canvas.drawColor(Color.WHITE)
-            drawFittedBitmap(canvas, source, renderSize.marginPixels.toFloat())
+            PdfPageRenderer.drawFitted(canvas, source, renderSize.marginPixels.toFloat(), MAX_BITMAP_SCALE)
             val compressFormat = if (format == IppDocumentFormat.JPEG) Bitmap.CompressFormat.JPEG else Bitmap.CompressFormat.PNG
             val file = File(appContext.cacheDir, "ipp-print-$documentId-page-${index + 1}.$extension")
             try {
@@ -432,25 +452,20 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
 
     /**
      * Renders a [MopriaDocument] to a single multi-page PDF in the cache dir for IPP submission.
-     * TODO: consolidate with `ScanExportService.drawPage`/`writePdf` into a shared renderer.
+     * Uses the shared [PdfPageRenderer] for PDF creation and bitmap fitting.
      */
     private fun renderDocumentPdf(document: MopriaDocument, dpi: Int): File {
         val output = File(appContext.cacheDir, "ipp-print-${document.id}.pdf")
-        val pdf = PdfDocument()
         val renderSize = PrintRenderSizing.page(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT, PDF_MARGIN, dpi)
         try {
-            document.pages.forEachIndexed { index, page ->
-                val info = PdfDocument.PageInfo.Builder(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT, index + 1).create()
-                val pdfPage = pdf.startPage(info)
-                drawPrintPage(pdfPage.canvas, page, index + 1, renderSize)
-                pdf.finishPage(pdfPage)
+            FileOutputStream(output).use { out ->
+                PdfPageRenderer.writePdf(document, out) { canvas, _, page, pageNumber ->
+                    drawPrintPage(canvas, page, pageNumber, renderSize)
+                }
             }
-            FileOutputStream(output).use { pdf.writeTo(it) }
         } catch (error: Throwable) {
             output.delete()
             throw error
-        } finally {
-            pdf.close()
         }
         return output
     }
@@ -460,22 +475,10 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         val bitmap = decodePageBitmap(page, renderSize.contentWidthPixels, renderSize.contentHeightPixels)
             ?: throw PrintError.PageRenderFailed(pageNumber, IppDocumentFormat.PDF)
         try {
-            drawFittedBitmap(canvas, bitmap, PDF_MARGIN.toFloat())
+            PdfPageRenderer.drawFitted(canvas, bitmap, PDF_MARGIN.toFloat(), MAX_BITMAP_SCALE)
         } finally {
             bitmap.recycle()
         }
-    }
-
-    /** Draws [bitmap] fitted within [margin] on [canvas], preserving aspect ratio. */
-    private fun drawFittedBitmap(canvas: Canvas, bitmap: Bitmap, margin: Float) {
-        val scale = minOf(
-            (canvas.width - margin * 2) / bitmap.width.toFloat(),
-            (canvas.height - margin * 2) / bitmap.height.toFloat(),
-        ).coerceAtMost(MAX_BITMAP_SCALE)
-        val width = bitmap.width * scale
-        val height = bitmap.height * scale
-        val left = (canvas.width - width) / 2f
-        canvas.drawBitmap(bitmap, null, RectF(left, margin, left + width, margin + height), null)
     }
 
     private fun decodePageBitmap(page: DocumentPage, requestedWidth: Int, requestedHeight: Int): Bitmap? {
@@ -515,7 +518,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
     }
 
     private fun IntegrationDevice.eSclBaseUrl(): String {
-        val resolvedHost = requireNotNull(host) { "掃描器缺少 resolved host" }
+        val resolvedHost = requireNotNull(host) { "Scanner missing resolved host" }
             .let { value ->
                 val encoded = value.replace("%", "%25")
                 if (encoded.contains(":") && !encoded.startsWith("[") && !encoded.endsWith("]")) "[$encoded]" else encoded
@@ -526,20 +529,11 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
     }
 
     private fun validateScannerReady(status: EsclScannerStatus, source: ScanInputSource) {
-        require(status.state.equals("Idle", true)) {
-            val description = when {
-                status.state.equals("Processing", true) -> "掃描器忙碌中"
-                status.state.equals("Testing", true) -> "掃描器正在校正"
-                status.state.equals("Stopped", true) -> "掃描器已停止，請檢查設備"
-                status.state.equals("Down", true) -> "掃描器目前無法使用"
-                else -> "掃描器目前狀態為 ${status.state}"
-            }
-            description
-        }
+        if (!status.state.equals("Idle", true)) throw ScanError.ScannerNotReady(status.state)
         if (source == ScanInputSource.Adf) {
             val adfState = status.adfState ?: return
-            require(adfState.equals("ScannerAdfLoaded", true) || adfState.equals("ScannerAdfProcessing", true)) {
-                if (adfState.equals("ScannerAdfEmpty", true)) "ADF 尚未放入文件" else "ADF 狀態異常：$adfState"
+            if (!adfState.equals("ScannerAdfLoaded", true) && !adfState.equals("ScannerAdfProcessing", true)) {
+                throw ScanError.AdfNotReady(adfState)
             }
         }
     }
@@ -551,12 +545,12 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                 job == null -> return
                 job.state.equals("Completed", true) -> return
                 job.state.equals("Canceled", true) || job.state.equals("Aborted", true) -> {
-                    error("eSCL ScanJob ${job.state}：${job.stateReasons.joinToString().ifBlank { "unknown reason" }}")
+                    throw ScanError.JobAborted(job.state)
                 }
             }
             delay(JOB_STATUS_POLL_MS)
         }
-        error("等待 eSCL ScanJob 完成逾時")
+        throw ScanError.JobTimeout
     }
 
     private suspend fun awaitJobReady(baseUrl: String, jobUrl: String) {
@@ -566,12 +560,12 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                 job == null -> Unit
                 job.state.equals("Pending", true) || job.state.equals("Processing", true) || job.state.equals("Completed", true) -> return
                 job.state.equals("Canceled", true) || job.state.equals("Aborted", true) -> {
-                    error("eSCL ScanJob ${job.state}：${job.stateReasons.joinToString().ifBlank { "unknown reason" }}")
+                    throw ScanError.JobAborted(job.state)
                 }
             }
             delay(JOB_STATUS_POLL_MS)
         }
-        error("等待 eSCL ScanJob 可傳輸逾時")
+        throw ScanError.JobTimeout
     }
 
     private fun jobTransferState(baseUrl: String, jobUrl: String): JobTransferState {
@@ -580,7 +574,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
             job.state.equals("Pending", true) || job.state.equals("Processing", true) -> JobTransferState.Active
             job.state.equals("Completed", true) -> JobTransferState.Completed
             job.state.equals("Canceled", true) || job.state.equals("Aborted", true) -> {
-                error("eSCL ScanJob ${job.state}：${job.stateReasons.joinToString().ifBlank { "unknown reason" }}")
+                throw ScanError.JobAborted(job.state)
             }
             else -> JobTransferState.Missing
         }
@@ -589,7 +583,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
     private fun pdfPageCount(file: File): Int {
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
             PdfRenderer(descriptor).use { renderer -> renderer.pageCount }
-        }.also { require(it > 0) { "掃描器回傳的 PDF 沒有頁面" } }
+        }.also { require(it > 0) { "Scanner-returned PDF has no pages" } }
     }
 
     private data class ServiceType(

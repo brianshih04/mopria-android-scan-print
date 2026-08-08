@@ -184,4 +184,15 @@
     <string name="print_options_media">用紙</string>
     <string name="print_options_orientation">方向</string>
     <string name="print_options_cancel">キャンセル</string>
+
+    <string name="scan_error_scanner_not_ready">スキャナーの準備ができていません。デバイスを確認して再試行してください。</string>
+    <string name="scan_error_adf_not_ready">原稿フィーダーが空か準備未完了です。原稿をセットして再試行してください。</string>
+    <string name="scan_error_http">スキャナーと通信できません。再試行してください。</string>
+    <string name="scan_error_timeout">スキャンがタイムアウトしました。再試行してください。</string>
+    <string name="scan_error_job_stopped">スキャンジョブが停止またはキャンセルされました。</string>
+    <string name="scan_error_capability">スキャナーが選択した設定をサポートしていません。別のオプションをお試しください。</string>
+    <string name="scan_error_no_images">スキャンは完了しましたが、画像が取得されませんでした。</string>
+    <string name="scan_searching_devices">デバイスを検索中</string>
+    <string name="documents_delete">削除</string>
+    <string name="event_document_deleted">ドキュメントを削除しました</string>
 </resources>

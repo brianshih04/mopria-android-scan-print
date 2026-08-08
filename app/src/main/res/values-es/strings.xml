@@ -184,4 +184,15 @@
     <string name="print_options_media">Papel</string>
     <string name="print_options_orientation">Orientación</string>
     <string name="print_options_cancel">Cancelar</string>
+
+    <string name="scan_error_scanner_not_ready">El escáner no está listo. Compruebe el dispositivo e inténtelo de nuevo.</string>
+    <string name="scan_error_adf_not_ready">El alimentador de documentos está vacío o no está listo. Cargue documentos e inténtelo de nuevo.</string>
+    <string name="scan_error_http">No se pudo comunicar con el escáner. Inténtelo de nuevo.</string>
+    <string name="scan_error_timeout">El escaneo ha superado el tiempo de espera. Inténtelo de nuevo.</string>
+    <string name="scan_error_job_stopped">El trabajo de escaneo se detuvo o canceló.</string>
+    <string name="scan_error_capability">El escáner no admite la configuración seleccionada. Pruebe otras opciones.</string>
+    <string name="scan_error_no_images">El escaneo se completó pero no se devolvieron imágenes.</string>
+    <string name="scan_searching_devices">Buscando dispositivos</string>
+    <string name="documents_delete">Eliminar</string>
+    <string name="event_document_deleted">Documento eliminado</string>
 </resources>

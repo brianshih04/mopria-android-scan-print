@@ -45,6 +45,7 @@ import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
 import com.brianshih.mopria.android.scanprint.domain.ScanColorMode
 import com.brianshih.mopria.android.scanprint.domain.ScanInputSource
 import com.brianshih.mopria.android.scanprint.domain.ScanSettings
+import com.brianshih.mopria.android.scanprint.domain.ScannerCapabilities
 import kotlin.math.roundToInt
 
 @Composable
@@ -79,6 +80,7 @@ internal fun ScanScreen(
         item {
             ScanComposerCard(
                 settings = uiState.scanSettings,
+                caps = uiState.scannerCapabilities,
                 enabled = !uiState.isBusy,
                 onChanged = onScanSettingsChanged,
                 onScan = onScan,
@@ -92,6 +94,7 @@ internal fun ScanScreen(
 @Composable
 private fun ScanComposerCard(
     settings: ScanSettings,
+    caps: ScannerCapabilities,
     enabled: Boolean,
     onChanged: (ScanSettings) -> Unit,
     onScan: () -> Unit,
@@ -141,7 +144,7 @@ private fun ScanComposerCard(
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.scan_source), style = MaterialTheme.typography.labelLarge)
-                ScanInputSource.entries.forEach { source ->
+                ScanInputSource.entries.filter { it in caps.supportedSources }.forEach { source ->
                     SourceOption(
                         source = source,
                         selected = source == settings.inputSource,
@@ -189,7 +192,7 @@ private fun ScanComposerCard(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.scan_resolution), style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(150, 300, 600).forEach { dpi ->
+                    caps.supportedResolutions.sorted().forEach { dpi ->
                         FilterChip(
                             selected = settings.resolutionDpi == dpi,
                             onClick = { onChanged(settings.copy(resolutionDpi = dpi)) },
@@ -203,7 +206,7 @@ private fun ScanComposerCard(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.scan_color), style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ScanColorMode.entries.forEach { colorMode ->
+                    ScanColorMode.entries.filter { it in caps.supportedColorModes }.forEach { colorMode ->
                         FilterChip(
                             selected = settings.colorMode == colorMode,
                             onClick = { onChanged(settings.copy(colorMode = colorMode)) },
@@ -281,9 +284,9 @@ private fun OperationProgressCard(uiState: MopriaUiState) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            Text(activeJob?.title ?: "正在搜尋裝置", style = MaterialTheme.typography.titleMedium)
+            Text(activeJob?.title ?: stringResource(R.string.scan_searching_devices), style = MaterialTheme.typography.titleMedium)
             Text(
-                activeJob?.detail ?: "搜尋中",
+                activeJob?.detail ?: stringResource(R.string.settings_searching),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
             )

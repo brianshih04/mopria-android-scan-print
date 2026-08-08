@@ -31,7 +31,7 @@ internal object DocumentPageBitmapLoader {
         return runCatching {
             openDescriptor(context, path)?.use { descriptor ->
                 PdfRenderer(descriptor).use { renderer ->
-                    require(pageIndex in 0 until renderer.pageCount) { "PDF page index 超出範圍" }
+                    require(pageIndex in 0 until renderer.pageCount) { "PDF page index out of range" }
                     renderer.openPage(pageIndex).use { pdfPage ->
                         val scale = minOf(
                             requestedWidth.toFloat() / pdfPage.width,

@@ -257,6 +257,7 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                         selectedDestinationName = AppDestination.Home.name
                         openPrint(document.name, SystemPrintAdapter(document, context))
                     },
+                    onDeleteDocument = viewModel::deleteDocument,
                 )
 
                 AppDestination.History -> HistoryScreen(uiState)

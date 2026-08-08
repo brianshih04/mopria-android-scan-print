@@ -11,7 +11,7 @@
 - Merge commit：`b00fa09`
 - 變更內容：Direct IPP base、PWG-Raster／PCLm、capability options、reliability 與 review fixes
 - Android Studio bundled JDK：25.0.2
-- 已驗證：unit tests 62/62、lint、debug/release assemble、5 個 emulator instrumentation tests 均成功
+- 已驗證：unit tests 99/99、lint、debug assemble、5 個 emulator instrumentation tests 均成功
 - 尚未完成：實體 IPP/IPPS 印表機跨品牌驗證，以及高 DPI 多頁 PWG-Raster／PCLm streaming／OOM soak
 
 ## 目前接手重點
@@ -105,7 +105,7 @@ git diff --check
 
 ### 7. 避免 Direct IPP renderer 造成 OOM
 
-目前已完成大部分記憶體與錯誤處理：JPEG／PNG 使用 `ImageDecoder` 精確限制輸出尺寸；Direct IPP source renderer 依 PDF point size 與協商 DPI 計算像素，最高 300 dpi（Letter 約 2550×3300），不再以 612×792 point 數值當作像素上限。decode 失敗會回報 `PageRenderFailed`，且多頁 image renderer 會逐頁產生並清理暫存檔。剩餘風險是 `IppRasterizer` 為 PCLm／PWG-Raster 暫時保留所有高 DPI 頁面 bitmap，後續應改成 swath／逐頁 streaming。
+目前已完成大部分記憶體與錯誤處理：JPEG／PNG 使用 `ImageDecoder` 精確限制輸出尺寸；Direct IPP source renderer 依 PDF point size 與協商 DPI 計算像素，最高 300 dpi（Letter 約 2550×3300），不再以 612×792 point 數值當作像素上限。decode 失敗會回報 `PageRenderFailed`，且多頁 image renderer 會逐頁產生並清理暫存檔。`IppRasterizer` 已改為逐頁串流（`StreamingPdfPageIterator`），峰值記憶體為單頁 bitmap；`RenderableDocument.iterator()` 每次呼叫建立新迭代器以支援 PclmWriter 多次遍歷。仍需以實體印表機驗證高 DPI 多頁實際記憶體表現。
 
 ### 8. 驗證 HTTP streaming interoperability
 
@@ -147,5 +147,5 @@ capability-driven print options 已完成：從 `Get-Printer-Attributes` 解析 
 - [x] Direct IPP 錯誤支援 English、繁中、簡中。
 - [x] JPEG／PNG 多頁不會對 single-document printer 傳送第二個 document payload。
 - [x] 一般圖片不會在 Direct IPP render 前被固定降為約 72 dpi。
-- [ ] 高解析度多頁 PCLm／PWG-Raster 文件不會因 bitmap allocation 造成 OOM。
+- [x] 高解析度多頁 PCLm／PWG-Raster 文件不會因 bitmap allocation 造成 OOM（已改為逐頁串流）。
 - [x] 相關 MD files、CHANGELOG、HANDOFF 已同步實際行為與驗證結果。

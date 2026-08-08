@@ -33,6 +33,11 @@ private val LightColors = lightColorScheme(
     outline = Color(0xFF767780),
     outlineVariant = Color(0xFFC6C6D0),
     error = Color(0xFFBA1A1A),
+    onError = Color.White,
+    surfaceContainerLow = Color(0xFFF1F0F7),
+    surfaceContainer = Color(0xFFEBEBF2),
+    surfaceContainerHigh = Color(0xFFE5E4EC),
+    surfaceContainerHighest = Color(0xFFDFDEE6),
 )
 
 private val DarkColors = darkColorScheme(
@@ -55,6 +60,12 @@ private val DarkColors = darkColorScheme(
     onSurfaceVariant = Color(0xFFC6C6D0),
     outline = Color(0xFF90909A),
     outlineVariant = Color(0xFF45464F),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+    surfaceContainerLow = Color(0xFF191B23),
+    surfaceContainer = Color(0xFF1D1F28),
+    surfaceContainerHigh = Color(0xFF272A33),
+    surfaceContainerHighest = Color(0xFF323540),
 )
 
 private val AppTypography = Typography().run {

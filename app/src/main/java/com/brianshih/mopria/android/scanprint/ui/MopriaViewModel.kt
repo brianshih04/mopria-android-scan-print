@@ -5,7 +5,6 @@ import android.content.Context
 import android.print.PrintJob
 import android.print.PrintJobInfo
 import androidx.annotation.StringRes
-import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.brianshih.mopria.android.scanprint.R
@@ -13,6 +12,7 @@ import com.brianshih.mopria.android.scanprint.domain.DeviceDiscovery
 import com.brianshih.mopria.android.scanprint.domain.DirectIppPrintPrompt
 import com.brianshih.mopria.android.scanprint.domain.DeviceKind
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
+import com.brianshih.mopria.android.scanprint.domain.DocumentStore
 import com.brianshih.mopria.android.scanprint.domain.IntegrationDevice
 import com.brianshih.mopria.android.scanprint.domain.IntegrationMode
 import com.brianshih.mopria.android.scanprint.domain.JobKind
@@ -23,6 +23,7 @@ import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
 import com.brianshih.mopria.android.scanprint.domain.PrintMethod
 import com.brianshih.mopria.android.scanprint.domain.PrintError
+import com.brianshih.mopria.android.scanprint.domain.ScanError
 import com.brianshih.mopria.android.scanprint.domain.PrintOptions
 import com.brianshih.mopria.android.scanprint.domain.PrintProvider
 import com.brianshih.mopria.android.scanprint.domain.RealIntegrationProvider
@@ -32,6 +33,9 @@ import com.brianshih.mopria.android.scanprint.domain.ScanDocumentOrganizer
 import com.brianshih.mopria.android.scanprint.domain.ScanInputSource
 import com.brianshih.mopria.android.scanprint.domain.ScanOutputFormat
 import com.brianshih.mopria.android.scanprint.domain.ScanSettings
+import com.brianshih.mopria.android.scanprint.domain.ScannerCapabilities
+import com.brianshih.mopria.android.scanprint.domain.TempFileCleanup
+import com.brianshih.mopria.android.scanprint.domain.SettingsStore
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -44,20 +48,21 @@ import kotlinx.coroutines.launch
 internal data class ShareRequest(val uri: String, val title: String)
 
 class MopriaViewModel(application: Application) : AndroidViewModel(application) {
-    private val preferences = application.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+    private val settingsStore = SettingsStore(application)
     private val mockProvider = MockIntegrationProvider()
     private val realProvider = RealIntegrationProvider(application)
     private val _uiState = MutableStateFlow(
         MopriaUiState(
-            integrationMode = loadIntegrationMode(),
-            printMethod = loadPrintMethod(),
-            scanSettings = loadScanSettings(),
+            integrationMode = settingsStore.loadIntegrationMode(),
+            printMethod = settingsStore.loadPrintMethod(),
+            scanSettings = settingsStore.loadScanSettings(),
         ),
     )
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
     private val _printRequests = MutableSharedFlow<MopriaDocument>(extraBufferCapacity = 4)
     private val _shareRequests = MutableSharedFlow<ShareRequest>(extraBufferCapacity = 4)
     private val scanExportService = ScanExportService(application)
+    private val documentStore = DocumentStore(application)
 
     val uiState = _uiState.asStateFlow()
     val events = _events.asSharedFlow()
@@ -71,11 +76,36 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         localizedContext.getString(resourceId, *arguments)
 
     init {
+        // Restore in-memory documents and Flatbed session from internal storage first (survives process death).
+        val persisted = documentStore.load()
+        if (persisted != null) {
+            _uiState.update {
+                it.copy(
+                    documents = persisted.documents,
+                    pendingFlatbedDocumentId = persisted.pendingFlatbedDocumentId,
+                    awaitingNextFlatbedPage = persisted.pendingFlatbedDocumentId != null,
+                )
+            }
+        }
+        // Reclaim storage: delete orphaned scan files and stale cache temp files from previous sessions.
+        val referencedPaths = _uiState.value.documents
+            .flatMap { it.pages }
+            .flatMap { listOfNotNull(it.imagePath, it.pdfPath) }
+            .map { it.removePrefix("file://") }
+            .toSet()
+        TempFileCleanup.deleteOrphanedScans(application, referencedPaths)
+        TempFileCleanup.sweepStaleCache(application)
+
+        // Then load any additional documents saved to the public Downloads folder via MediaStore.
         viewModelScope.launch {
             try {
                 val savedDocuments = scanExportService.loadSavedDocuments()
                 if (savedDocuments.isNotEmpty()) {
-                    _uiState.update { it.copy(documents = savedDocuments + it.documents) }
+                    val existingIds = _uiState.value.documents.mapTo(mutableSetOf()) { it.id }
+                    val newDocs = savedDocuments.filter { it.id !in existingIds }
+                    if (newDocs.isNotEmpty()) {
+                        _uiState.update { it.copy(documents = it.documents + newDocs) }
+                    }
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -88,7 +118,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
     fun setIntegrationMode(mode: IntegrationMode) {
         if (_uiState.value.isBusy || _uiState.value.integrationMode == mode) return
 
-        preferences.edit { putString(KEY_INTEGRATION_MODE, mode.name) }
+        settingsStore.saveIntegrationMode(mode)
         _uiState.update {
             it.copy(
                 integrationMode = mode,
@@ -101,7 +131,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setPrintMethod(method: PrintMethod) {
         if (_uiState.value.printMethod == method) return
-        preferences.edit { putString(KEY_PRINT_METHOD, method.name) }
+        settingsStore.savePrintMethod(method)
         _uiState.update { it.copy(printMethod = method) }
     }
 
@@ -127,13 +157,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateScanSettings(settings: ScanSettings) {
         if (_uiState.value.isBusy) return
-        preferences.edit {
-            putString(KEY_SCAN_INPUT_SOURCE, settings.inputSource.name)
-            putInt(KEY_SCAN_RESOLUTION, settings.resolutionDpi)
-            putString(KEY_SCAN_COLOR_MODE, settings.colorMode.name)
-            putInt(KEY_SCAN_MAX_PAGES, settings.maxPages.coerceIn(MIN_SCAN_PAGES, MAX_SCAN_PAGES))
-            putBoolean(KEY_SCAN_COMBINE_PDF, settings.combineAsPdf)
-        }
+        settingsStore.saveScanSettings(settings)
         _uiState.update { it.copy(scanSettings = settings) }
     }
 
@@ -207,6 +231,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                             )
                         }
                         updateJob(currentJobId, JobStatus.Completed, 100, text(R.string.common_pages, merged.pages.size))
+                        persistDocuments()
                         if (reachedLimit) {
                             _events.tryEmit(text(R.string.event_scan_limit, MAX_SCAN_PAGES))
                             saveScan(merged.id, ScanOutputFormat.Pdf)
@@ -224,6 +249,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                             )
                         }
                         updateJob(currentJobId, JobStatus.Completed, 100, text(R.string.common_pages, document.pages.size))
+                        persistDocuments()
                         _events.tryEmit(text(R.string.event_scan_separate_done, text(mode.labelRes), document.pages.size))
                     }
                     else -> {
@@ -235,6 +261,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                             )
                         }
                         updateJob(currentJobId, JobStatus.Completed, 100, text(R.string.common_pages, document.pages.size))
+                        persistDocuments()
                         _events.tryEmit(text(R.string.event_scan_done, text(mode.labelRes), document.pages.size))
                         if (settings.inputSource == ScanInputSource.Adf && settings.combineAsPdf) {
                             saveScan(document.id, ScanOutputFormat.Pdf)
@@ -251,8 +278,9 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 }
                 throw error
-            } catch (error: Exception) {
-                jobId?.let { updateJob(it, JobStatus.Failed, 0, error.message ?: text(R.string.event_scan_failed, text(mode.labelRes), text(R.string.common_retry))) }
+            } catch (error: ScanError) {
+                val message = text(error.messageStringRes())
+                jobId?.let { updateJob(it, JobStatus.Failed, 0, message) }
                 _uiState.update {
                     it.copy(
                         isDiscovering = false,
@@ -260,7 +288,18 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                         awaitingNextFlatbedPage = it.pendingFlatbedDocumentId != null,
                     )
                 }
-                _events.tryEmit(text(R.string.event_scan_failed, text(mode.labelRes), error.message ?: text(R.string.common_retry)))
+                _events.tryEmit(message)
+            } catch (error: Exception) {
+                val message = text(R.string.event_scan_failed, text(mode.labelRes), text(R.string.common_retry))
+                jobId?.let { updateJob(it, JobStatus.Failed, 0, message) }
+                _uiState.update {
+                    it.copy(
+                        isDiscovering = false,
+                        activeJobId = null,
+                        awaitingNextFlatbedPage = it.pendingFlatbedDocumentId != null,
+                    )
+                }
+                _events.tryEmit(message)
             }
         }
     }
@@ -284,6 +323,20 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             )
         }
         saveScan(documentId, ScanOutputFormat.Pdf)
+        persistDocuments()
+    }
+
+    fun deleteDocument(documentId: String) {
+        val document = _uiState.value.documents.firstOrNull { it.id == documentId } ?: return
+        TempFileCleanup.deleteDocumentFiles(getApplication(), document)
+        _uiState.update { state ->
+            state.copy(
+                documents = state.documents.filterNot { it.id == documentId },
+                selectedDocumentId = if (state.selectedDocumentId == documentId) null else state.selectedDocumentId,
+            )
+        }
+        persistDocuments()
+        _events.tryEmit(text(R.string.event_document_deleted))
     }
 
     fun createDemoDocument() {
@@ -435,6 +488,18 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         is PrintError.PageRenderFailed -> R.string.print_error_render_failed
     }
 
+    /** Maps a localizable [ScanError] to the string resource that describes it for the user. */
+    private fun ScanError.messageStringRes(): Int = when (this) {
+        is ScanError.ScannerNotReady -> R.string.scan_error_scanner_not_ready
+        is ScanError.AdfNotReady -> R.string.scan_error_adf_not_ready
+        is ScanError.HttpError -> R.string.scan_error_http
+        is ScanError.DocumentTimeout -> R.string.scan_error_timeout
+        is ScanError.JobAborted -> R.string.scan_error_job_stopped
+        is ScanError.JobTimeout -> R.string.scan_error_timeout
+        is ScanError.CapabilityNotSupported -> R.string.scan_error_capability
+        is ScanError.NoImages -> R.string.scan_error_no_images
+    }
+
     fun export(documentId: String? = null) {
         saveScan(documentId, ScanOutputFormat.Pdf)
     }
@@ -500,6 +565,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 }
                 updateJob(jobId, JobStatus.Completed, 100, text(R.string.event_export_done, file.size, text(format.labelRes)))
+                persistDocuments()
                 _events.tryEmit(text(R.string.event_export_location, text(format.labelRes)))
             } catch (error: CancellationException) {
                 updateJob(jobId, JobStatus.Cancelled, 0, text(R.string.event_export_cancelled, text(format.labelRes)))
@@ -554,6 +620,12 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+
+    private fun persistDocuments() {
+        val state = _uiState.value
+        runCatching { documentStore.save(state.documents, state.pendingFlatbedDocumentId) }
+    }
+
     fun reportMessage(message: String) {
         _events.tryEmit(message)
     }
@@ -575,31 +647,6 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         IntegrationMode.Mock -> ProviderSet(mockProvider, mockProvider, mockProvider)
         IntegrationMode.Real -> ProviderSet(realProvider, realProvider, realProvider)
     }
-
-    private fun loadIntegrationMode(): IntegrationMode = preferences
-        .getString(KEY_INTEGRATION_MODE, IntegrationMode.Mock.name)
-        ?.let { value -> runCatching { IntegrationMode.valueOf(value) }.getOrDefault(IntegrationMode.Mock) }
-        ?: IntegrationMode.Mock
-
-    private fun loadPrintMethod(): PrintMethod = preferences
-        .getString(KEY_PRINT_METHOD, PrintMethod.System.name)
-        ?.let { value -> runCatching { PrintMethod.valueOf(value) }.getOrDefault(PrintMethod.System) }
-        ?: PrintMethod.System
-
-    private fun loadScanSettings(): ScanSettings = ScanSettings(
-        inputSource = preferences.getString(KEY_SCAN_INPUT_SOURCE, ScanInputSource.Flatbed.name)
-            ?.let { value -> runCatching { ScanInputSource.valueOf(value) }.getOrDefault(ScanInputSource.Flatbed) }
-            ?: ScanInputSource.Flatbed,
-        resolutionDpi = preferences.getInt(KEY_SCAN_RESOLUTION, 300)
-            .takeIf { it in SUPPORTED_RESOLUTIONS }
-            ?: 300,
-        colorMode = preferences.getString(KEY_SCAN_COLOR_MODE, ScanColorMode.Color.name)
-            ?.let { value -> runCatching { ScanColorMode.valueOf(value) }.getOrDefault(ScanColorMode.Color) }
-            ?: ScanColorMode.Color,
-        maxPages = preferences.getInt(KEY_SCAN_MAX_PAGES, DEFAULT_SCAN_MAX_PAGES)
-            .coerceIn(MIN_SCAN_PAGES, MAX_SCAN_PAGES),
-        combineAsPdf = preferences.getBoolean(KEY_SCAN_COMBINE_PDF, false),
-    )
 
     private fun discoveryMessage(mode: IntegrationMode, devices: List<IntegrationDevice>): String = when {
         mode == IntegrationMode.Mock -> text(R.string.event_discovery_mock, devices.size)
@@ -628,17 +675,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
     )
 
     private companion object {
-        const val PREFERENCES_NAME = "mopria_settings"
-        const val KEY_INTEGRATION_MODE = "integration_mode"
-        const val KEY_PRINT_METHOD = "print_method"
-        const val KEY_SCAN_INPUT_SOURCE = "scan_input_source"
-        const val KEY_SCAN_RESOLUTION = "scan_resolution"
-        const val KEY_SCAN_COLOR_MODE = "scan_color_mode"
-        const val KEY_SCAN_MAX_PAGES = "scan_max_pages"
-        const val KEY_SCAN_COMBINE_PDF = "scan_combine_pdf"
-        const val MIN_SCAN_PAGES = 1
         const val MAX_SCAN_PAGES = 50
-        const val DEFAULT_SCAN_MAX_PAGES = 20
-        val SUPPORTED_RESOLUTIONS = setOf(150, 300, 600)
+        const val MIN_SCAN_PAGES = 1
     }
 }

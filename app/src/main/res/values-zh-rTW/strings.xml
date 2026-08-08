@@ -195,4 +195,15 @@
     <string name="print_options_media">紙張</string>
     <string name="print_options_orientation">方向</string>
     <string name="print_options_cancel">取消</string>
+
+    <string name="scan_error_scanner_not_ready">掃描器尚未就緒，請檢查設備後再試一次。</string>
+    <string name="scan_error_adf_not_ready">進紙器中沒有文件或尚未就緒，請放入文件後再試。</string>
+    <string name="scan_error_http">無法與掃描器通訊，請再試一次。</string>
+    <string name="scan_error_timeout">掃描逾時，請再試一次。</string>
+    <string name="scan_error_job_stopped">掃描工作已停止或取消。</string>
+    <string name="scan_error_capability">掃描器不支援目前的設定，請嘗試其他選項。</string>
+    <string name="scan_error_no_images">掃描完成但未取得任何影像。</string>
+    <string name="scan_searching_devices">正在搜尋裝置</string>
+    <string name="documents_delete">刪除</string>
+    <string name="event_document_deleted">文件已刪除</string>
 </resources>

@@ -10,7 +10,7 @@ Repository：`brianshih04/mopria-android-scan-print`
 
 目前版本已完成可執行的 Android Compose App、Mock／Real 模式、eSCL v2.97 pull-scan client、Flatbed／ADF 多頁文件工作流、PDF／JPEG 文件庫、Android Print Framework 預設列印入口、opt-in Direct IPP，以及 10 種語言與系統語系 fallback。
 
-自動測試與 API 36 emulator 已通過（62 JVM unit tests、5 個 instrumentation tests）。主要產品級缺口是尚未連接真實 eSCL scanner 與 Mopria printer 做跨品牌驗收，以及 Direct IPP 高 DPI 多頁 PWG-Raster／PCLm 仍需改善 streaming／完成 OOM soak；文件與工作也尚未支援 process-death 恢復。請勿把 Mock／fixture 結果描述成 Mopria Certified 或廠牌相容證據。
+自動測試與 API 36 emulator 已通過（99 JVM unit tests、5 個 instrumentation tests）。主要產品級缺口是尚未連接真實 eSCL scanner 與 Mopria printer 做跨品牌驗收，以及 Direct IPP 高 DPI 多頁 PWG-Raster／PCLm 仍需改善 streaming／完成 OOM soak；文件與工作也尚未支援 process-death 恢復。請勿把 Mock／fixture 結果描述成 Mopria Certified 或廠牌相容證據。
 
 ## 2. 快速啟動
 
@@ -51,6 +51,13 @@ adb shell am start -n com.brianshih.mopria.android.scanprint/.MainActivity
 | `ui/DocumentPageBitmapLoader.kt` | JPEG／PNG／PDF-backed 頁面取樣／render |
 | `ui/ScanExportService.kt` | MediaStore PDF／JPEG 與分享 PDF |
 | `ui/SystemPrintAdapter.kt` | 掃描文件交給 Android Print Framework |
+
+| `domain/ScanError.kt` | 結構化掃描錯誤（8 子類型），ViewModel 映射至 string resources |
+| `domain/PdfPageRenderer.kt` | 共用 PDF 頁面渲染（writePdf + drawFitted） |
+| `domain/DocumentStore.kt` | JSON 持久化文件列表與 Flatbed session |
+| `domain/SettingsStore.kt` | SharedPreferences 讀寫，從 ViewModel 提取 |
+| `domain/TempFileCleanup.kt` | 暫存檔三層清理（orphan scan + stale cache + delete） |
+| `domain/ScannerCapabilities.kt` | eSCL → UI 選項映射（解析度/來源/色彩） |
 | `ui/UriPrintAdapter.kt` | 手機 PDF／JPEG／PNG 交給 Android Print Framework |
 
 Package root：`app/src/main/java/com/brianshih/mopria/android/scanprint/`。

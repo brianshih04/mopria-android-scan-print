@@ -23,11 +23,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -59,6 +61,9 @@ import com.brianshih.mopria.android.scanprint.domain.IntegrationMode
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
 import com.brianshih.mopria.android.scanprint.R
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 @Composable
 internal fun DocumentsScreen(
@@ -68,6 +73,7 @@ internal fun DocumentsScreen(
     onPrint: (String) -> Unit,
     onShare: (String) -> Unit,
     onSystemPreview: (MopriaDocument) -> Unit,
+    onDeleteDocument: (String) -> Unit,
 ) {
     var previewPage by remember { mutableStateOf<DocumentPage?>(null) }
 
@@ -100,6 +106,7 @@ internal fun DocumentsScreen(
                     onShare = onShare,
                     onSystemPreview = onSystemPreview,
                     onPreviewPage = { previewPage = it },
+                    onDeleteDocument = onDeleteDocument,
                 )
             }
         }
@@ -122,6 +129,7 @@ private fun DocumentCard(
     onShare: (String) -> Unit,
     onSystemPreview: (MopriaDocument) -> Unit,
     onPreviewPage: (DocumentPage) -> Unit,
+    onDeleteDocument: (String) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -211,7 +219,7 @@ private fun DocumentCard(
                 ) {
                     Icon(Icons.Outlined.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("PDF")
+                    Text(stringResource(R.string.format_pdf))
                 }
                 OutlinedButton(
                     onClick = { onSaveJpegs(document.id) },
@@ -220,7 +228,7 @@ private fun DocumentCard(
                 ) {
                     Icon(Icons.Outlined.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("JPEG")
+                    Text(stringResource(R.string.format_jpeg))
                 }
             }
             if (integrationMode == IntegrationMode.Mock) {
@@ -232,6 +240,18 @@ private fun DocumentCard(
                     Text(stringResource(R.string.documents_system_preview))
                 }
             }
+            TextButton(
+                onClick = { onDeleteDocument(document.id) },
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+            ) {
+                Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.documents_delete))
+            }
         }
     }
 }
@@ -242,7 +262,7 @@ private fun PageThumbnail(page: DocumentPage, onClick: () -> Unit) {
         modifier = Modifier
             .width(126.dp)
             .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Surface(

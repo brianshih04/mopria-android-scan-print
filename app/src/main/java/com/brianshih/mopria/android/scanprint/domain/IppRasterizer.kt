@@ -24,8 +24,14 @@ import kotlin.math.roundToInt
  * Note: the on-device raster path can only be fully validated against a real printer. The PwgWriter
  * integration itself is covered by [IppRasterizerTest] using a synthetic page (no Android needed).
  *
- * Memory: each page is rendered to a full ARGB bitmap at (pageInches × [dpi]), so very large or very
- * high-dpi multi-page jobs may be heavy on low-RAM devices; streaming swaths is a future refinement.
+ * Memory: pages are streamed one at a time — each page's bitmap is allocated, rendered, consumed by
+ * the writer, and recycled before the next page begins. Peak memory is one page's ARGB bitmap
+ * (e.g. ~32 MB for US Letter @ 300 dpi), not N pages simultaneously.
+ *
+ * Multi-pass: PclmWriter internally calls [RenderableDocument.handleSides] which may iterate the
+ * document more than once (count pages, add blank page for duplex). To support this, each call to
+ * the document's [RenderableDocument.iterator] creates a fresh [StreamingPdfPageIterator] that
+ * re-renders from page 0 — the [PdfRenderer] stays open during the entire rasterization.
  */
 object IppRasterizer {
 
@@ -41,38 +47,77 @@ object IppRasterizer {
             PclmWriter(out, PclmSettings(output = OutputSettings(colorSpace = colorSpace), stripHeight = stripHeight)).use { it.write(document) }
         }
 
-    /** Open [pdf], render each page to a [RenderablePage] at [dpi], and let [write] emit it to [out]. */
+    /**
+     * Open [pdf], render each page to a [RenderablePage] at [dpi], and let [write] emit it to [out].
+     *
+     * The document's [iterator][RenderableDocument.iterator] creates a new [StreamingPdfPageIterator]
+     * on each call, so writers that iterate multiple times (e.g. PclmWriter for page counting) work
+     * correctly. Each iterator renders one page at a time and recycles its bitmap before opening the
+     * next, bounding peak memory to a single page.
+     */
     private inline fun rasterize(pdf: File, ext: String, dpi: Int, write: (RenderableDocument, OutputStream) -> Unit): File {
         val output = File(pdf.parentFile, "${pdf.nameWithoutExtension}.$ext")
         ParcelFileDescriptor.open(pdf, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
             PdfRenderer(descriptor).use { renderer ->
-                val pages = (0 until renderer.pageCount).map { index ->
-                    renderer.openPage(index).use { page ->
-                        PdfRenderablePage(
-                            page,
-                            widthPixels = (page.width / POINTS_PER_INCH * dpi).roundToInt().coerceAtLeast(1),
-                            heightPixels = (page.height / POINTS_PER_INCH * dpi).roundToInt().coerceAtLeast(1),
-                        )
-                    }
+                val document = object : RenderableDocument() {
+                    override val dpi = dpi
+                    override fun iterator(): Iterator<RenderablePage> = StreamingPdfPageIterator(renderer, dpi)
                 }
                 try {
-                    val document = object : RenderableDocument() {
-                        override val dpi = dpi
-                        override fun iterator() = pages.iterator()
-                    }
                     FileOutputStream(output).use { out -> write(document, out) }
-                } finally {
-                    pages.forEach { it.release() }
+                } catch (error: Throwable) {
+                    output.delete()
+                    throw error
                 }
             }
         }
         return output
     }
 
-    private const val POINTS_PER_INCH = 72.0
+    internal const val POINTS_PER_INCH = 72.0
 }
 
-/** A [RenderablePage] backed by a pre-rendered ARGB bitmap of one PDF page. */
+/**
+ * Iterator that streams [PdfRenderablePage] instances one at a time from a [PdfRenderer].
+ *
+ * When [next] is called, the previous page (if any) is released — its bitmap is recycled and its
+ * [PdfRenderer.Page] is closed — before the next page is opened and rendered. This bounds peak
+ * memory to a single page's bitmap regardless of document length.
+ *
+ * Each instance is single-pass. Callers that need to iterate multiple times (e.g. PclmWriter's
+ * internal page counting) should create a new instance via the [RenderableDocument.iterator] override.
+ */
+private class StreamingPdfPageIterator(
+    private val renderer: PdfRenderer,
+    private val dpi: Int,
+) : Iterator<RenderablePage> {
+    private var index = 0
+    private var currentPage: PdfRenderablePage? = null
+
+    override fun hasNext(): Boolean = index < renderer.pageCount
+
+    override fun next(): RenderablePage {
+        if (!hasNext()) throw NoSuchElementException("No more PDF pages")
+        // Release the previous page before opening the next.
+        currentPage?.release()
+        renderer.openPage(index).use { page ->
+            val widthPixels = (page.width / IppRasterizer.POINTS_PER_INCH * dpi).roundToInt().coerceAtLeast(1)
+            val heightPixels = (page.height / IppRasterizer.POINTS_PER_INCH * dpi).roundToInt().coerceAtLeast(1)
+            val renderable = PdfRenderablePage(page, widthPixels, heightPixels)
+            currentPage = renderable
+            index++
+            return renderable
+        }
+    }
+}
+
+/**
+ * A [RenderablePage] backed by a pre-rendered ARGB bitmap of one PDF page.
+ *
+ * The bitmap is created eagerly in the constructor (the [page] is rendered immediately and then
+ * closed by the caller), so the page content is available for all subsequent [render] swath calls.
+ * Call [release] to recycle the bitmap when the writer moves to the next page.
+ */
 private class PdfRenderablePage(
     page: PdfRenderer.Page,
     widthPixels: Int,
@@ -81,7 +126,7 @@ private class PdfRenderablePage(
 
     private val bitmap = createBitmap(widthPixels, heightPixels).also { bitmap ->
         bitmap.eraseColor(Color.WHITE)
-        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
     }
 
     override fun render(yOffset: Int, swathHeight: Int, colorSpace: ColorSpace, byteArray: ByteArray) {
@@ -89,17 +134,33 @@ private class PdfRenderablePage(
         bitmap.getPixels(pixels, 0, widthPixels, 0, yOffset, widthPixels, swathHeight)
         var src = 0
         var dst = 0
-        while (src < pixels.size) {
-            val red = (pixels[src] shr 16) and 0xFF
-            val green = (pixels[src] shr 8) and 0xFF
-            val blue = pixels[src] and 0xFF
-            src++
-            if (colorSpace == ColorSpace.Grayscale) {
-                byteArray[dst++] = (RED_LUMA * red + GREEN_LUMA * green + BLUE_LUMA * blue).toInt().toByte()
-            } else {
-                byteArray[dst++] = red.toByte()
-                byteArray[dst++] = green.toByte()
-                byteArray[dst++] = blue.toByte()
+        when (colorSpace) {
+            ColorSpace.Grayscale -> {
+                while (src < pixels.size) {
+                    val red = (pixels[src] shr 16) and 0xFF
+                    val green = (pixels[src] shr 8) and 0xFF
+                    val blue = pixels[src] and 0xFF
+                    src++
+                    byteArray[dst++] = (RED_LUMA * red + GREEN_LUMA * green + BLUE_LUMA * blue)
+                        .roundToInt().coerceIn(0, 255).toByte()
+                }
+            }
+            ColorSpace.Rgb -> {
+                while (src < pixels.size) {
+                    byteArray[dst++] = ((pixels[src] shr 16) and 0xFF).toByte()
+                    byteArray[dst++] = ((pixels[src] shr 8) and 0xFF).toByte()
+                    byteArray[dst++] = (pixels[src] and 0xFF).toByte()
+                    src++
+                }
+            }
+            ColorSpace.Rgba -> {
+                while (src < pixels.size) {
+                    byteArray[dst++] = ((pixels[src] shr 16) and 0xFF).toByte()
+                    byteArray[dst++] = ((pixels[src] shr 8) and 0xFF).toByte()
+                    byteArray[dst++] = (pixels[src] and 0xFF).toByte()
+                    byteArray[dst++] = ((pixels[src] shr 24) and 0xFF).toByte()
+                    src++
+                }
             }
         }
     }

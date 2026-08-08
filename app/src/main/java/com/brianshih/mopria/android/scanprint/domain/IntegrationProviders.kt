@@ -6,6 +6,12 @@ interface DeviceDiscovery {
 
 interface ScanAcquisitionProvider {
     suspend fun scan(scanner: IntegrationDevice, settings: ScanSettings = ScanSettings()): MopriaDocument
+
+    /**
+     * Fetch and summarize scanner capabilities for UI option filtering, or null if the scanner
+     * is unreachable or capabilities cannot be parsed. Mock returns the default full set.
+     */
+    suspend fun scannerCapabilities(scanner: IntegrationDevice): ScannerCapabilities? = ScannerCapabilities.DEFAULT
 }
 
 interface PrintProvider {

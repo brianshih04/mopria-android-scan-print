@@ -184,4 +184,15 @@
     <string name="print_options_media">Papier</string>
     <string name="print_options_orientation">Ausrichtung</string>
     <string name="print_options_cancel">Abbrechen</string>
+
+    <string name="scan_error_scanner_not_ready">Der Scanner ist nicht bereit. Überprüfen Sie das Gerät und versuchen Sie es erneut.</string>
+    <string name="scan_error_adf_not_ready">Der Dokumenteneinzug ist leer oder nicht bereit. Legen Sie Dokumente ein und versuchen Sie es erneut.</string>
+    <string name="scan_error_http">Die Kommunikation mit dem Scanner ist fehlgeschlagen. Bitte erneut versuchen.</string>
+    <string name="scan_error_timeout">Der Scan-Vorgang hat ein Zeitlimit überschritten. Bitte erneut versuchen.</string>
+    <string name="scan_error_job_stopped">Der Scan-Auftrag wurde gestoppt oder abgebrochen.</string>
+    <string name="scan_error_capability">Der Scanner unterstützt die gewählten Einstellungen nicht. Versuchen Sie andere Optionen.</string>
+    <string name="scan_error_no_images">Der Scan wurde abgeschlossen, aber es wurden keine Bilder zurückgegeben.</string>
+    <string name="scan_searching_devices">Geräte werden gesucht</string>
+    <string name="documents_delete">Löschen</string>
+    <string name="event_document_deleted">Dokument gelöscht</string>
 </resources>

@@ -184,4 +184,15 @@
     <string name="print_options_media">용지</string>
     <string name="print_options_orientation">방향</string>
     <string name="print_options_cancel">취소</string>
+
+    <string name="scan_error_scanner_not_ready">스캐너가 준비되지 않았습니다. 장치를 확인하고 다시 시도해 주세요.</string>
+    <string name="scan_error_adf_not_ready">급지 장치가 비어 있거나 준비되지 않았습니다. 용지를 넣고 다시 시도해 주세요.</string>
+    <string name="scan_error_http">스캐너와 통신할 수 없습니다. 다시 시도해 주세요.</string>
+    <string name="scan_error_timeout">스캔 시간이 초과되었습니다. 다시 시도해 주세요.</string>
+    <string name="scan_error_job_stopped">스캔 작업이 중지되거나 취소되었습니다.</string>
+    <string name="scan_error_capability">스캐너가 선택한 설정을 지원하지 않습니다. 다른 옵션을 시도해 보세요.</string>
+    <string name="scan_error_no_images">스캔이 완료되었지만 이미지가 반환되지 않았습니다.</string>
+    <string name="scan_searching_devices">장치 검색 중</string>
+    <string name="documents_delete">삭제</string>
+    <string name="event_document_deleted">문서가 삭제되었습니다</string>
 </resources>

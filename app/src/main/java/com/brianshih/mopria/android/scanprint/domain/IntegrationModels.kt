@@ -134,6 +134,7 @@ data class MopriaUiState(
     val pendingFlatbedDocumentId: String? = null,
     val awaitingNextFlatbedPage: Boolean = false,
     val directIppPrintPrompt: DirectIppPrintPrompt? = null,
+    val scannerCapabilities: ScannerCapabilities = ScannerCapabilities.DEFAULT,
 ) {
     val mockMode: Boolean
         get() = integrationMode == IntegrationMode.Mock

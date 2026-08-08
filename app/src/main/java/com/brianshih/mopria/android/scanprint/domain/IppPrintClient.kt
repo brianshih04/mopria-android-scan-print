@@ -33,7 +33,7 @@ data class RenderedPrintDocument(
     val files: List<File>,
 ) {
     init {
-        require(files.isNotEmpty()) { "RenderedPrintDocument 必須包含至少一個檔案" }
+        require(files.isNotEmpty()) { "RenderedPrintDocument must contain at least one file" }
     }
 
     /** Best-effort delete of all temp files; safe to call from a `finally` block. */

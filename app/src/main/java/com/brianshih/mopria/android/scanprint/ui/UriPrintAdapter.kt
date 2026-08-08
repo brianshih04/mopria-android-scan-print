@@ -68,7 +68,7 @@ class UriPrintAdapter(
             try {
                 updatePageSize(newAttributes)
                 val inspectedItems = uris.map { uri ->
-                    if (cancellationSignal.isCanceled) throw CancellationException("列印版面配置已取消")
+                    if (cancellationSignal.isCanceled) throw CancellationException("Print layout cancelled")
                     inspect(uri)
                 }
                 printItems = inspectedItems
@@ -82,7 +82,7 @@ class UriPrintAdapter(
             } catch (_: CancellationException) {
                 callback.onLayoutCancelled()
             } catch (error: Exception) {
-                callback.onLayoutFailed(error.message ?: "無法讀取選取的文件")
+                callback.onLayoutFailed(error.message ?: "Could not read selected document")
             }
         }
     }
@@ -107,7 +107,7 @@ class UriPrintAdapter(
                 printItems.forEach { item ->
                     if (item.isPdf) {
                         val descriptor = context.contentResolver.openFileDescriptor(item.uri, "r")
-                            ?: throw FileNotFoundException("無法開啟 ${item.displayName}")
+                            ?: throw FileNotFoundException("Could not open ${item.displayName}")
                         descriptor.use { fileDescriptor ->
                             PdfRenderer(fileDescriptor).use { renderer ->
                                 repeat(renderer.pageCount) { pageIndex ->
@@ -139,7 +139,7 @@ class UriPrintAdapter(
                                 item.uri,
                                 requestedWidth = MAX_BITMAP_EDGE,
                                 requestedHeight = MAX_BITMAP_EDGE,
-                            ) ?: throw FileNotFoundException("無法讀取 ${item.displayName}")
+                            ) ?: throw FileNotFoundException("Could not read ${item.displayName}")
                             try {
                                 drawBitmapPage(pdf, bitmap, outputPageNumber)
                             } finally {
@@ -158,7 +158,7 @@ class UriPrintAdapter(
                 callback.onWriteCancelled()
             } catch (error: Exception) {
                 runCatching { destination.close() }
-                callback.onWriteFailed(error.message ?: "無法建立列印文件")
+                callback.onWriteFailed(error.message ?: "Could not create print document")
             } finally {
                 pdf.close()
             }
@@ -177,7 +177,7 @@ class UriPrintAdapter(
         if (!isPdf) return PrintItem(uri, displayName, isPdf = false, pageCount = 1)
 
         val descriptor = context.contentResolver.openFileDescriptor(uri, "r")
-            ?: throw FileNotFoundException("無法開啟 $displayName")
+            ?: throw FileNotFoundException("Could not open $displayName")
         descriptor.use { fileDescriptor ->
             PdfRenderer(fileDescriptor).use { renderer ->
                 return PrintItem(uri, displayName, isPdf = true, pageCount = renderer.pageCount)
@@ -233,11 +233,11 @@ class UriPrintAdapter(
         context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) return cursor.getString(0)
         }
-        return uri.lastPathSegment ?: "選取文件"
+        return uri.lastPathSegment ?: "Selected document"
     }
 
     private fun ensureNotCancelled(signal: CancellationSignal) {
-        if (signal.isCanceled) throw CancellationException("列印已取消")
+        if (signal.isCanceled) throw CancellationException("Print cancelled")
     }
 
     private fun isPageRequested(pageIndex: Int, ranges: Array<out PageRange>): Boolean =

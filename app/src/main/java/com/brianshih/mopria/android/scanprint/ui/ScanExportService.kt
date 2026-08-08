@@ -7,8 +7,6 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.RectF
-import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Build
@@ -22,13 +20,13 @@ import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
 import com.brianshih.mopria.android.scanprint.domain.SavedScanFile
+import com.brianshih.mopria.android.scanprint.domain.PdfPageRenderer
 import com.brianshih.mopria.android.scanprint.domain.ScanOutputFormat
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Locale
-import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -181,17 +179,8 @@ class ScanExportService(private val context: Context) {
     }
 
     private fun writePdf(document: MopriaDocument, output: OutputStream) {
-        val pdf = PdfDocument()
-        try {
-            document.pages.forEachIndexed { index, page ->
-                val pageInfo = PdfDocument.PageInfo.Builder(612, 792, index + 1).create()
-                val pdfPage = pdf.startPage(pageInfo)
-                drawPage(pdfPage.canvas, document, page)
-                pdf.finishPage(pdfPage)
-            }
-            pdf.writeTo(output)
-        } finally {
-            pdf.close()
+        PdfPageRenderer.writePdf(document, output) { canvas, doc, page, _ ->
+            drawPage(canvas, doc, page)
         }
     }
 
@@ -202,12 +191,12 @@ class ScanExportService(private val context: Context) {
             val bitmap = loadPageBitmap(page)
             try {
                 if (bitmap != null) {
-                    check(bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "JPEG 壓縮失敗" }
+                    check(bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "JPEG compression failed" }
                 } else {
                     val fixture = createBitmap(612, 792)
                     try {
                         drawPage(Canvas(fixture), document, page)
-                        check(fixture.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "JPEG 壓縮失敗" }
+                        check(fixture.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "JPEG compression failed" }
                     } finally {
                         fixture.recycle()
                     }
@@ -232,11 +221,11 @@ class ScanExportService(private val context: Context) {
             }
             val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
             val uri = requireNotNull(context.contentResolver.insert(collection, values)) {
-                "無法建立 $displayName"
+                "Could not create $displayName"
             }
             try {
                 context.contentResolver.openOutputStream(uri).use { output ->
-                    requireNotNull(output) { "無法寫入 $displayName" }
+                    requireNotNull(output) { "Could not write $displayName" }
                     write(output)
                 }
                 context.contentResolver.update(uri, ContentValues().apply {
@@ -289,14 +278,7 @@ class ScanExportService(private val context: Context) {
             val margin = 54f
             val top = 158f
             val bottom = 640f
-            val scale = min(
-                (canvas.width - margin * 2) / bitmap.width.toFloat(),
-                (bottom - top) / bitmap.height.toFloat(),
-            )
-            val width = bitmap.width * scale
-            val height = bitmap.height * scale
-            val left = (canvas.width - width) / 2f
-            canvas.drawBitmap(bitmap, null, RectF(left, top, left + width, top + height), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+            PdfPageRenderer.drawFittedInArea(canvas, bitmap, margin, top, bottom)
             canvas.drawText("${page.pageNumber}. ${page.title}", margin, 684f, titlePaint)
             bitmap.recycle()
         } else {

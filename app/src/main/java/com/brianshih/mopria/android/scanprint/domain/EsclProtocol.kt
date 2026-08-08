@@ -190,7 +190,7 @@ object EsclProtocol {
             version = requiredVersion(root),
             state = root.firstDescendant(PWG_NAMESPACE, "State")?.textValue()
                 ?.takeIf(String::isNotBlank)
-                ?: error("eSCL ScannerStatus 缺少必要的 pwg:State"),
+                ?: error("eSCL ScannerStatus missing required pwg:State"),
             adfState = root.firstDescendant(XML_NAMESPACE, "AdfState")?.textValue(),
             jobs = jobs,
         )
@@ -204,7 +204,7 @@ object EsclProtocol {
         }
         val source = settings.inputSource.eSclValue
         val input = capabilities.inputs.entries.firstOrNull { it.key.equals(source, true) }?.value
-            ?: error("掃描器未提供 $source 的 eSCL capabilities")
+            ?: throw ScanError.CapabilityNotSupported
         val formatPreference = if (settings.colorMode == ScanColorMode.BlackAndWhite) {
             listOf("application/pdf")
         } else {
@@ -216,7 +216,7 @@ object EsclProtocol {
                     ?.nearestResolution(settings.colorMode.eSclValue, settings.resolutionDpi)
                     ?.let { Triple(profile, format, it) }
             }
-        } ?: error("Scanner does not support ${settings.inputSource.eSclValue}/${settings.colorMode.eSclValue} JPEG or PDF combination")
+        } ?: throw ScanError.CapabilityNotSupported
         val resolution = selection.third
         return EsclNegotiatedSettings(
             version = compatibleVersion(capabilities.version),
@@ -271,19 +271,19 @@ object EsclProtocol {
         val base = URI(baseUrl.trimEnd('/') + "/")
         val rawJob = base.resolve(URI(location.trim()))
         val job = rawJob.normalize()
-        require(rawJob == job) { "eSCL ScanJob Location 不得包含相對路徑跳脫" }
+        require(rawJob == job) { "eSCL ScanJob Location must not contain path traversal" }
         val sameHost = job.host.equals(base.host, ignoreCase = true)
         val sameTransport = job.scheme.equals(base.scheme, true) && effectivePort(job) == effectivePort(base)
         val secureUpgrade = base.scheme.equals("http", true) && job.scheme.equals("https", true)
         require(sameHost && (sameTransport || secureUpgrade)) {
-            "eSCL ScanJob Location 必須與掃描器同源，且只能升級到 HTTPS"
+            "eSCL ScanJob Location must be same-origin, HTTPS upgrade only"
         }
         require(job.userInfo == null && job.query == null && job.fragment == null) {
-            "eSCL ScanJob Location 格式不安全"
+            "eSCL ScanJob Location format is unsafe"
         }
         val jobPrefix = "${base.path.trimEnd('/')}/ScanJobs/"
         require(job.path.startsWith(jobPrefix) && job.path.removePrefix(jobPrefix).isNotBlank()) {
-            "eSCL ScanJob Location 必須位於 {root}/ScanJobs/{job-id}"
+            "eSCL ScanJob Location must be under {root}/ScanJobs/{job-id}"
         }
         return job.toString().trimEnd('/')
     }
@@ -381,17 +381,17 @@ object EsclProtocol {
             runCatching { setAttribute("http://javax.xml.XMLConstants/property/accessExternalSchema", "") }
         }
         val root = runCatching { factory.newDocumentBuilder().parse(InputSource(StringReader(xml))).documentElement }
-            .getOrElse { error -> throw IllegalArgumentException("無法解析 eSCL $expectedRoot XML", error) }
-        require(root.localTag().equals(expectedRoot, true)) { "eSCL XML root 必須是 $expectedRoot" }
-        require(root.namespaceURI == XML_NAMESPACE) { "eSCL $expectedRoot root namespace 不正確" }
+            .getOrElse { error -> throw IllegalArgumentException("Failed to parse eSCL $expectedRoot XML", error) }
+        require(root.localTag().equals(expectedRoot, true)) { "eSCL XML root must be $expectedRoot" }
+        require(root.namespaceURI == XML_NAMESPACE) { "eSCL $expectedRoot root namespace is incorrect" }
         return root
     }
 
     private fun requiredVersion(root: Element): String = root.directChild(PWG_NAMESPACE, "Version")
         ?.textValue()
         ?.takeIf(String::isNotBlank)
-        ?.also { require(VERSION_PATTERN.matches(it)) { "eSCL ${root.localTag()} 的 pwg:Version 格式無效：$it" } }
-        ?: error("eSCL ${root.localTag()} 缺少必要的 pwg:Version")
+        ?.also { require(VERSION_PATTERN.matches(it)) { "eSCL ${root.localTag()} pwg:Version format is invalid: $it" } }
+        ?: error("eSCL ${root.localTag()} missing required pwg:Version")
 
     private fun Element.localTag(): String = localName ?: tagName.substringAfter(':')
     private fun Element.textValue(): String = textContent.orEmpty().trim()
@@ -410,7 +410,7 @@ object EsclProtocol {
     }
 
     private fun compatibleVersion(providerVersion: String): String {
-        require(versionAtLeast(providerVersion, 2, 0)) { "掃描器 eSCL 版本無效或低於 2.0：$providerVersion" }
+        require(versionAtLeast(providerVersion, 2, 0)) { "Invalid eSCL version or below 2.0: $providerVersion" }
         return if (compareVersions(providerVersion, CLIENT_VERSION) <= 0) providerVersion else CLIENT_VERSION
     }
 

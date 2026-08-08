@@ -77,7 +77,7 @@ class SystemPrintAdapter(
             try {
                 var outputPage = 1
                 document.pages.forEachIndexed { index, pageData ->
-                    if (cancellationSignal.isCanceled) throw CancellationException("列印已取消")
+                    if (cancellationSignal.isCanceled) throw CancellationException("Print cancelled")
                     if (!isPageRequested(index, pages)) return@forEachIndexed
                     val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, outputPage).create()
                     val page = pdf.startPage(pageInfo)
@@ -93,7 +93,7 @@ class SystemPrintAdapter(
                 callback.onWriteCancelled()
             } catch (error: Exception) {
                 runCatching { destination.close() }
-                callback.onWriteFailed(error.message ?: "無法建立列印文件")
+                callback.onWriteFailed(error.message ?: "Could not create print document")
             } finally {
                 pdf.close()
             }
