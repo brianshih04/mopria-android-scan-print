@@ -315,7 +315,7 @@ private fun PagePreview(
         initialValue = null,
         key1 = page.id,
         key2 = requestedWidth,
-        key3 = requestedHeight,
+        key3 = "$requestedHeight-${page.rotationDegrees}-${page.cropRect}",
     ) {
         value = runCatching {
             DocumentPreviewLoader.load(context, page, requestedWidth, requestedHeight)

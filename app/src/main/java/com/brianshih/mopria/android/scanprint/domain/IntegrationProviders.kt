@@ -5,7 +5,11 @@ interface DeviceDiscovery {
 }
 
 interface ScanAcquisitionProvider {
-    suspend fun scan(scanner: IntegrationDevice, settings: ScanSettings = ScanSettings()): MopriaDocument
+    suspend fun scan(
+        scanner: IntegrationDevice,
+        settings: ScanSettings = ScanSettings(),
+        onProgress: (ScanProgress) -> Unit = {},
+    ): MopriaDocument
 
     /**
      * Fetch and summarize scanner capabilities for UI option filtering, or null if the scanner

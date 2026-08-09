@@ -24,8 +24,12 @@ import java.io.File
 import kotlin.coroutines.resume
 
 /** Real network discovery plus the eSCL scan workflow. */
-class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisitionProvider, PrintProvider {
+class RealIntegrationProvider(
+    context: Context,
+    ocrEngine: OcrEngine? = null,
+) : DeviceDiscovery, ScanAcquisitionProvider, PrintProvider {
     private val appContext = context.applicationContext
+    private val activeOcrEngine = ocrEngine ?: MlKitOcrEngine.production(appContext)
     private val nsdManager = checkNotNull(appContext.getSystemService(NsdManager::class.java))
     private val mainHandler = Handler(Looper.getMainLooper())
     private val httpClient = EsclHttpClient()
@@ -171,7 +175,12 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
         }
     }
 
-    override suspend fun scan(scanner: IntegrationDevice, settings: ScanSettings): MopriaDocument = withContext(Dispatchers.IO) {
+    override suspend fun scan(
+        scanner: IntegrationDevice,
+        settings: ScanSettings,
+        onProgress: (ScanProgress) -> Unit,
+    ): MopriaDocument = withContext(Dispatchers.IO) {
+        onProgress(ScanProgress(ScanProgressStage.Preparing))
         val baseUrl = scanner.eSclBaseUrl()
         validateScannerReady(httpClient.fetchScannerStatus(baseUrl), settings.inputSource)
         val capabilitiesXml = httpClient.fetchCapabilities(baseUrl)
@@ -190,6 +199,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
             awaitJobReady(baseUrl, jobUrl)
             var reachedEnd = false
             val pageLimit = if (settings.inputSource == ScanInputSource.Flatbed) 1 else settings.maxPages.coerceIn(1, MAX_SCAN_PAGES)
+            onProgress(ScanProgress(ScanProgressStage.Downloading, 0, pageLimit))
             pageLoop@
             for (index in 0 until pageLimit) {
                 currentCoroutineContext().ensureActive()
@@ -240,6 +250,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                     error("Could not save scanned page ${index + 1}")
                 }
                 payloads += payload.copy(file = finalFile)
+                onProgress(ScanProgress(ScanProgressStage.Downloading, index + 1, pageLimit))
             }
 
             if (reachedEnd || settings.inputSource == ScanInputSource.Flatbed || negotiated.numberOfPages != null) {
@@ -251,16 +262,67 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
 
             if (payloads.isEmpty()) throw ScanError.NoImages
 
-            // Apply background enhancement if requested (JPEG/PNG only; PDF skipped).
-            settings.enhanceBackground?.let { strength ->
-                payloads.forEach { payload ->
-                    if (payload.contentType != "application/pdf") {
-                        runCatching { BackgroundEnhancer.enhanceImageFile(payload.file, strength) }
+            val ocrProcessingSettings = settings.copy(
+                deskew = settings.deskew || settings.ocrMode != OcrMode.Disabled,
+                autoCrop = settings.autoCrop || settings.ocrMode != OcrMode.Disabled,
+            )
+            val imageProcessingResults = if (
+                ocrProcessingSettings.deskew ||
+                ocrProcessingSettings.autoCrop ||
+                ocrProcessingSettings.dropBlankPages
+            ) {
+                onProgress(ScanProgress(ScanProgressStage.Processing, 0, payloads.size))
+                val downloaded = payloads.toList()
+                val results = mutableListOf<ScanImageResult>()
+                val retained = mutableListOf<EsclDocumentPayload>()
+                downloaded.forEachIndexed { index, payload ->
+                    val result = ScanImagePipeline.process(payload.file, ocrProcessingSettings)
+                    results += result
+                    if (result != ScanImageResult.DroppedBlankPage) {
+                        retained += payload
+                    } else {
+                        payload.file.delete()
+                    }
+                    onProgress(ScanProgress(ScanProgressStage.Processing, index + 1, downloaded.size))
+                }
+                payloads.clear()
+                payloads += retained
+                results
+            } else {
+                emptyList()
+            }
+
+            if (payloads.isEmpty()) throw ScanError.NoImages
+
+            // Apply background enhancement after download. The result is carried with the
+            // document so the ViewModel can report Skipped/Failed without losing the source.
+            val enhancementResults = settings.enhanceBackground?.let { strength ->
+                onProgress(ScanProgress(ScanProgressStage.Enhancing, 0, payloads.size))
+                payloads.mapIndexed { index, payload ->
+                    BackgroundEnhancer.enhanceImageFile(payload.file, strength).also {
+                        onProgress(ScanProgress(ScanProgressStage.Enhancing, index + 1, payloads.size))
                     }
                 }
+            }.orEmpty()
+
+            val ocrResults = if (settings.ocrMode != OcrMode.Disabled) {
+                onProgress(ScanProgress(ScanProgressStage.Ocr, 0, payloads.size))
+                payloads.mapIndexed { index, payload ->
+                    val result = if (activeOcrEngine is LanguageAwareOcrEngine) {
+                        activeOcrEngine.recognize(payload.file, settings.ocrLanguage)
+                    } else {
+                        activeOcrEngine.recognize(payload.file)
+                    }
+                    result.also {
+                        onProgress(ScanProgress(ScanProgressStage.Ocr, index + 1, payloads.size))
+                    }
+                }
+            } else {
+                emptyList()
             }
 
             val pages = payloads.flatMapIndexed { payloadIndex, payload ->
+                val ocrResult = ocrResults.getOrNull(payloadIndex)
                 if (payload.contentType == "application/pdf") {
                     val count = pdfPageCount(payload.file)
                     (0 until count).map { pdfPageIndex ->
@@ -270,6 +332,9 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                             title = "",
                             pdfPath = payload.file.absolutePath,
                             pdfPageIndex = pdfPageIndex,
+                            // The current OCR engine accepts image files only. Keep PDF-backed
+                            // pages image-only until they are rasterized for page-scoped OCR.
+                            ocrResult = null,
                         )
                     }
                 } else {
@@ -279,6 +344,7 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                             pageNumber = 0,
                             title = "",
                             imagePath = payload.file.absolutePath,
+                            ocrResult = ocrResult,
                         ),
                     )
                 }
@@ -292,6 +358,11 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
                 sourceLabel = "${scanner.name} · eSCL · ${settings.inputSource.eSclValue} · ${resolutionLabel(negotiated)} · ${colorModeLabel(negotiated.colorMode)}",
                 pages = pages,
                 createdAt = scanId,
+                enhancementResults = enhancementResults,
+                imageProcessingResults = imageProcessingResults,
+                ocrResults = ocrResults,
+                searchablePdf = settings.searchablePdf && settings.ocrMode != OcrMode.Disabled &&
+                    pages.any { it.ocrResult.hasPositionedText() },
             )
         } catch (error: EsclHttpException) {
             if (!jobFinished && location != null) {

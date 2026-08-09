@@ -33,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -169,7 +168,7 @@ private fun EditablePageCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Thumbnail with rotation
-            val bitmap = remember(page.id, page.rotationDegrees) {
+            val bitmap = remember(page.id, page.rotationDegrees, page.cropRect) {
                 DocumentPageBitmapLoader.load(context, page, 200, 280)
             }
             Surface(
@@ -181,7 +180,7 @@ private fun EditablePageCard(
                     Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = null,
-                        modifier = Modifier.fillMaxSize().rotate(page.rotationDegrees.toFloat()),
+                        modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Fit,
                     )
                 }
@@ -234,8 +233,9 @@ private fun CropDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val bitmap = remember(page.id) {
-        DocumentPageBitmapLoader.load(context, page, 600, 800)
+    val bitmap = remember(page.id, page.rotationDegrees) {
+        // Show the uncropped source while the sliders define the crop fractions.
+        DocumentPageBitmapLoader.load(context, page.copy(cropRect = null), 600, 800)
     }
     var left by remember { mutableFloatStateOf(page.cropRect?.left ?: 0.05f) }
     var top by remember { mutableFloatStateOf(page.cropRect?.top ?: 0.05f) }
@@ -256,7 +256,7 @@ private fun CropDialog(
                         Image(
                             bitmap = bmpImage,
                             contentDescription = null,
-                            modifier = Modifier.fillMaxSize().rotate(page.rotationDegrees.toFloat()),
+                            modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Fit,
                         )
                         Canvas(modifier = Modifier.fillMaxSize()) {

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -40,6 +41,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +64,11 @@ import com.brianshih.mopria.android.scanprint.domain.JobKind
 import com.brianshih.mopria.android.scanprint.domain.JobRecord
 import com.brianshih.mopria.android.scanprint.domain.JobStatus
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
+import com.brianshih.mopria.android.scanprint.domain.OcrLanguagePack
+import com.brianshih.mopria.android.scanprint.domain.OcrLanguageModel
+import com.brianshih.mopria.android.scanprint.domain.OcrLanguagePackState
+import com.brianshih.mopria.android.scanprint.domain.OcrLanguagePackStatus
+import com.brianshih.mopria.android.scanprint.domain.OcrLanguageRegion
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -177,6 +184,10 @@ internal fun SettingsScreen(
     onFindDevices: () -> Unit,
     selectedLanguage: AppLanguage,
     onLanguageChanged: (AppLanguage) -> Unit,
+    onOcrLanguagePackSelected: (OcrLanguagePack, Boolean) -> Unit,
+    onActiveOcrLanguageChanged: (OcrLanguagePack) -> Unit,
+    onDownloadOcrLanguagePack: (OcrLanguagePack) -> Unit,
+    onDownloadSelectedOcrLanguagePacks: () -> Unit,
 ) {
     val isTablet = isTabletLayout()
     LazyColumn(
@@ -312,6 +323,130 @@ internal fun SettingsScreen(
         }
         item {
             LanguageSelector(selectedLanguage, onLanguageChanged)
+        }
+        item {
+            OcrLanguagePacksSection(
+                packs = uiState.ocrLanguagePacks,
+                enabled = !uiState.isBusy,
+                onSelected = onOcrLanguagePackSelected,
+                onActiveChanged = onActiveOcrLanguageChanged,
+                onDownload = onDownloadOcrLanguagePack,
+                onDownloadSelected = onDownloadSelectedOcrLanguagePacks,
+            )
+        }
+    }
+}
+
+@Composable
+private fun OcrLanguagePacksSection(
+    packs: List<OcrLanguagePackState>,
+    enabled: Boolean,
+    onSelected: (OcrLanguagePack, Boolean) -> Unit,
+    onActiveChanged: (OcrLanguagePack) -> Unit,
+    onDownload: (OcrLanguagePack) -> Unit,
+    onDownloadSelected: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.ocr_language_packs_title), style = MaterialTheme.typography.titleMedium)
+        Text(
+            stringResource(R.string.ocr_language_packs_detail),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Button(
+            onClick = onDownloadSelected,
+            enabled = enabled && packs.any {
+                it.selected &&
+                    it.language.model != OcrLanguageModel.Unsupported &&
+                    it.status != OcrLanguagePackStatus.Downloading
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.ocr_language_packs_download_selected))
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        ) {
+            Column {
+                OcrLanguageRegion.entries.forEach { region ->
+                    val regionPacks = packs.filter { it.language.region == region }
+                    if (regionPacks.isNotEmpty()) {
+                        Text(
+                            stringResource(region.labelRes),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        regionPacks.forEachIndexed { index, pack ->
+                            if (index > 0) HorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                            OcrLanguagePackRow(
+                                pack = pack,
+                                enabled = enabled && pack.language.model != OcrLanguageModel.Unsupported,
+                                onSelected = onSelected,
+                                onActiveChanged = onActiveChanged,
+                                onDownload = onDownload,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OcrLanguagePackRow(
+    pack: OcrLanguagePackState,
+    enabled: Boolean,
+    onSelected: (OcrLanguagePack, Boolean) -> Unit,
+    onActiveChanged: (OcrLanguagePack) -> Unit,
+    onDownload: (OcrLanguagePack) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = pack.selected,
+                onCheckedChange = { checked -> onSelected(pack.language, checked) },
+                enabled = enabled,
+            )
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(pack.language.labelRes), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    stringResource(pack.status.labelRes),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (
+                        pack.status == OcrLanguagePackStatus.Failed ||
+                        pack.status == OcrLanguagePackStatus.Unsupported
+                    ) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            RadioButton(
+                selected = pack.active,
+                onClick = { onActiveChanged(pack.language) },
+                enabled = enabled && pack.selected,
+            )
+        }
+        if (pack.status == OcrLanguagePackStatus.Downloading) {
+            LinearProgressIndicator(
+                progress = { pack.progress.coerceIn(0, 100) / 100f },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            )
+        } else if (
+            pack.status != OcrLanguagePackStatus.Downloading &&
+            pack.language.model != OcrLanguageModel.Unsupported
+        ) {
+            TextButton(
+                onClick = { onDownload(pack.language) },
+                enabled = enabled,
+                modifier = Modifier.align(Alignment.End),
+            ) {
+                Text(stringResource(R.string.ocr_language_pack_download))
+            }
         }
     }
 }

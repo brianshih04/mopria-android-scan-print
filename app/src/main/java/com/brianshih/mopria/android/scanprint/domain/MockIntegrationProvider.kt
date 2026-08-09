@@ -28,10 +28,16 @@ class MockIntegrationProvider : DeviceDiscovery, ScanAcquisitionProvider, PrintP
         return devices
     }
 
-    override suspend fun scan(scanner: IntegrationDevice, settings: ScanSettings): MopriaDocument {
+    override suspend fun scan(
+        scanner: IntegrationDevice,
+        settings: ScanSettings,
+        onProgress: (ScanProgress) -> Unit,
+    ): MopriaDocument {
+        onProgress(ScanProgress(ScanProgressStage.Preparing))
         delay(850)
         val timestamp = System.currentTimeMillis()
         val pageCount = if (settings.inputSource == ScanInputSource.Flatbed) 1 else settings.maxPages.coerceIn(1, 50)
+        onProgress(ScanProgress(ScanProgressStage.Downloading, pageCount, pageCount))
         return MopriaDocument(
             id = "scan-$timestamp",
             name = "Mock scan document ${timestamp.toString().takeLast(4)}",

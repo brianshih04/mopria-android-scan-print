@@ -14,7 +14,9 @@ import com.brianshih.mopria.android.scanprint.domain.DeviceKind
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
 import com.brianshih.mopria.android.scanprint.domain.CropRect
 import com.brianshih.mopria.android.scanprint.domain.DocumentEditor
-import com.brianshih.mopria.android.scanprint.domain.EnhancementStrength
+import com.brianshih.mopria.android.scanprint.domain.EnhancementError
+import com.brianshih.mopria.android.scanprint.domain.EnhancementResult
+import com.brianshih.mopria.android.scanprint.domain.EnhancementSkipReason
 import com.brianshih.mopria.android.scanprint.domain.DocumentStore
 import com.brianshih.mopria.android.scanprint.domain.IntegrationDevice
 import com.brianshih.mopria.android.scanprint.domain.IntegrationMode
@@ -24,6 +26,16 @@ import com.brianshih.mopria.android.scanprint.domain.JobStatus
 import com.brianshih.mopria.android.scanprint.domain.MockIntegrationProvider
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
+import com.brianshih.mopria.android.scanprint.domain.OcrError
+import com.brianshih.mopria.android.scanprint.domain.OcrLanguagePack
+import com.brianshih.mopria.android.scanprint.domain.OcrLanguagePackManager
+import com.brianshih.mopria.android.scanprint.domain.OcrLanguagePackState
+import com.brianshih.mopria.android.scanprint.domain.OcrLanguagePackStatus
+import com.brianshih.mopria.android.scanprint.domain.OcrLanguageModel
+import com.brianshih.mopria.android.scanprint.domain.OcrMode
+import com.brianshih.mopria.android.scanprint.domain.OcrPackDownloadResult
+import com.brianshih.mopria.android.scanprint.domain.OcrResult
+import com.brianshih.mopria.android.scanprint.domain.OcrSkipReason
 import com.brianshih.mopria.android.scanprint.domain.PrintMethod
 import com.brianshih.mopria.android.scanprint.domain.PrintError
 import com.brianshih.mopria.android.scanprint.domain.ScanError
@@ -34,8 +46,13 @@ import com.brianshih.mopria.android.scanprint.domain.ScanAcquisitionProvider
 import com.brianshih.mopria.android.scanprint.domain.ScanColorMode
 import com.brianshih.mopria.android.scanprint.domain.ScanDocumentOrganizer
 import com.brianshih.mopria.android.scanprint.domain.ScanInputSource
+import com.brianshih.mopria.android.scanprint.domain.ScanImageError
+import com.brianshih.mopria.android.scanprint.domain.ScanImageResult
+import com.brianshih.mopria.android.scanprint.domain.ScanImageSkipReason
 import com.brianshih.mopria.android.scanprint.domain.ScanOutputFormat
 import com.brianshih.mopria.android.scanprint.domain.ScanPreset
+import com.brianshih.mopria.android.scanprint.domain.ScanProgress
+import com.brianshih.mopria.android.scanprint.domain.ScanProgressStage
 import com.brianshih.mopria.android.scanprint.domain.ScanSettings
 import com.brianshih.mopria.android.scanprint.domain.ScannerCapabilities
 import com.brianshih.mopria.android.scanprint.domain.TempFileCleanup
@@ -53,14 +70,21 @@ internal data class ShareRequest(val uri: String, val title: String)
 
 class MopriaViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsStore = SettingsStore(application)
+    private val ocrLanguagePackManager = OcrLanguagePackManager(application)
     private val mockProvider = MockIntegrationProvider()
     private val realProvider = RealIntegrationProvider(application)
+    private val initialOcrLanguagePacks = settingsStore.loadOcrLanguagePacks()
+    private val initialScanSettings = settingsStore.loadScanSettings()
     private val _uiState = MutableStateFlow(
         MopriaUiState(
             integrationMode = settingsStore.loadIntegrationMode(),
             printMethod = settingsStore.loadPrintMethod(),
-            scanSettings = settingsStore.loadScanSettings(),
+            scanSettings = initialScanSettings,
             scanPreset = settingsStore.loadScanPreset(),
+            ocrLanguagePacks = ocrLanguagePackManager.states(
+                selected = initialOcrLanguagePacks,
+                active = initialScanSettings.ocrLanguage,
+            ),
         ),
     )
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
@@ -140,6 +164,103 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update { it.copy(printMethod = method) }
     }
 
+    fun setOcrLanguagePackSelected(language: OcrLanguagePack, selected: Boolean) {
+        if (_uiState.value.isBusy || language.model == OcrLanguageModel.Unsupported) return
+        val current = _uiState.value.ocrLanguagePacks
+            .filter { it.selected && it.language.model != OcrLanguageModel.Unsupported }
+            .mapTo(linkedSetOf()) { it.language }
+        val next = current.toMutableSet().apply {
+            if (selected) add(language) else remove(language)
+        }
+        if (next.isEmpty()) return
+        val active = _uiState.value.scanSettings.ocrLanguage
+            .takeIf { it in next }
+            ?: next.first()
+        settingsStore.saveOcrLanguagePacks(next)
+        val updatedSettings = _uiState.value.scanSettings.copy(ocrLanguage = active)
+        settingsStore.saveScanSettings(updatedSettings)
+        _uiState.update {
+            it.copy(
+                scanSettings = updatedSettings,
+                ocrLanguagePacks = ocrLanguagePackManager.states(next, active),
+            )
+        }
+    }
+
+    fun setActiveOcrLanguage(language: OcrLanguagePack) {
+        if (_uiState.value.isBusy || _uiState.value.ocrLanguagePacks.none {
+                it.language == language && it.selected
+            }
+        ) return
+        updateScanSettings(_uiState.value.scanSettings.copy(ocrLanguage = language))
+    }
+
+    fun downloadOcrLanguagePack(language: OcrLanguagePack) {
+        if (_uiState.value.isBusy) return
+        viewModelScope.launch { downloadOcrLanguagePackInternal(language) }
+    }
+
+    fun downloadSelectedOcrLanguagePacks() {
+        if (_uiState.value.isBusy) return
+        viewModelScope.launch { downloadSelectedOcrLanguagePacksInternal() }
+    }
+
+    private suspend fun downloadSelectedOcrLanguagePacksInternal() {
+        val selected = _uiState.value.ocrLanguagePacks
+            .filter { it.selected && it.language.model != OcrLanguageModel.Unsupported }
+            .map { it.language }
+            .distinctBy { it.model }
+        selected.forEach { language -> downloadOcrLanguagePackInternal(language) }
+        refreshOcrLanguagePackStates()
+    }
+
+    private suspend fun downloadOcrLanguagePackInternal(language: OcrLanguagePack) {
+        val current = _uiState.value.ocrLanguagePacks.firstOrNull { it.language == language }
+        if (current?.status == OcrLanguagePackStatus.Downloading) return
+        updateOcrLanguagePackState(language) { it.copy(status = OcrLanguagePackStatus.Downloading, progress = 0) }
+        when (val result = ocrLanguagePackManager.download(language) { progress ->
+            updateOcrLanguagePackState(language) { it.copy(progress = progress) }
+        }) {
+            is OcrPackDownloadResult.Ready -> {
+                refreshOcrLanguagePackStates()
+                _events.tryEmit(text(R.string.event_ocr_language_pack_downloaded, text(language.labelRes)))
+            }
+            is OcrPackDownloadResult.Requested -> {
+                refreshOcrLanguagePackStates()
+                _events.tryEmit(text(R.string.event_ocr_language_pack_unavailable, text(language.labelRes)))
+            }
+            is OcrPackDownloadResult.Failed -> {
+                updateOcrLanguagePackState(language) {
+                    it.copy(status = OcrLanguagePackStatus.Failed, progress = 0)
+                }
+                _events.tryEmit(text(R.string.event_ocr_language_pack_failed, text(language.labelRes)))
+            }
+        }
+    }
+
+    private fun updateOcrLanguagePackState(
+        language: OcrLanguagePack,
+        transform: (OcrLanguagePackState) -> OcrLanguagePackState,
+    ) {
+        _uiState.update { state ->
+            state.copy(
+                ocrLanguagePacks = state.ocrLanguagePacks.map { pack ->
+                    if (pack.language == language) transform(pack) else pack
+                },
+            )
+        }
+    }
+
+    private fun refreshOcrLanguagePackStates() {
+        val state = _uiState.value
+        val selected = state.ocrLanguagePacks
+            .filter { it.selected && it.language.model != OcrLanguageModel.Unsupported }
+            .mapTo(linkedSetOf()) { it.language }
+        _uiState.update {
+            it.copy(ocrLanguagePacks = ocrLanguagePackManager.states(selected, it.scanSettings.ocrLanguage))
+        }
+    }
+
     fun discoverDevices() {
         if (_uiState.value.isBusy) return
 
@@ -153,17 +274,24 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 // only options the scanner actually supports.
                 val caps = if (mode == IntegrationMode.Real) {
                     devices.firstOrNull { it.kind == DeviceKind.Scanner }
-                        ?.let { scanner -> runCatching { providers.scan.scannerCapabilities(scanner) }.getOrNull() }
+                        ?.let { scanner -> fetchScannerCapabilities(providers.scan, scanner) }
                 } else {
                     ScannerCapabilities.DEFAULT
                 }
+                val resolvedCaps = caps ?: ScannerCapabilities.DEFAULT
+                val currentSettings = _uiState.value.scanSettings
+                val adjustedSettings = resolvedCaps.reconcile(currentSettings)
                 _uiState.update {
                     it.copy(
                         isDiscovering = false,
                         devices = devices,
-                        scannerCapabilities = caps ?: ScannerCapabilities.DEFAULT,
+                        scannerCapabilities = resolvedCaps,
+                        scanSettings = adjustedSettings,
                     )
                 }
+                if (adjustedSettings != currentSettings) settingsStore.saveScanSettings(adjustedSettings)
+                notifyEnhancementDisabled(currentSettings, adjustedSettings)
+                notifyOcrDisabled(currentSettings, adjustedSettings)
                 _events.tryEmit(discoveryMessage(mode, devices))
             } catch (error: CancellationException) {
                 _uiState.update { it.copy(isDiscovering = false) }
@@ -179,34 +307,52 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
     fun applyScanPreset(preset: ScanPreset) {
         val current = _uiState.value.scanSettings
         val defaults = preset.defaultSettings(current)
-        // Intersect with scanner capabilities if in Real mode
-        val caps = _uiState.value.scannerCapabilities
-        val adjusted = defaults.copy(
-            resolutionDpi = if (defaults.resolutionDpi in caps.supportedResolutions) defaults.resolutionDpi
-                else nearestResolution(defaults.resolutionDpi, caps.supportedResolutions),
-            colorMode = if (defaults.colorMode in caps.supportedColorModes) defaults.colorMode
-                else caps.supportedColorModes.firstOrNull() ?: defaults.colorMode,
-            enhanceBackground = if (preset == ScanPreset.Document) EnhancementStrength.Normal else null,
-        )
+        val adjusted = _uiState.value.scannerCapabilities.reconcile(defaults)
         _uiState.update { it.copy(scanPreset = preset, scanSettings = adjusted) }
         settingsStore.saveScanSettings(adjusted)
         settingsStore.saveScanPreset(preset)
+        notifyEnhancementDisabled(defaults, adjusted)
+        notifyOcrDisabled(defaults, adjusted)
     }
 
     fun updateScanSettings(settings: ScanSettings) {
         if (_uiState.value.isBusy) return
-        settingsStore.saveScanSettings(settings)
-        _uiState.update { it.copy(scanSettings = settings) }
+        val wasOcrEnabled = _uiState.value.scanSettings.ocrMode != OcrMode.Disabled
+        val adjusted = _uiState.value.scannerCapabilities.reconcile(settings)
+        val selected = _uiState.value.ocrLanguagePacks
+            .filter { it.selected && it.language.model != OcrLanguageModel.Unsupported }
+            .mapTo(linkedSetOf()) { it.language }
+            .ifEmpty { OcrLanguagePack.defaultSelection }
+        val safeLanguage = adjusted.ocrLanguage.takeIf { it in selected } ?: selected.first()
+        val safeSettings = adjusted.copy(ocrLanguage = safeLanguage)
+        settingsStore.saveScanSettings(safeSettings)
+        _uiState.update {
+            it.copy(
+                scanSettings = safeSettings,
+                ocrLanguagePacks = ocrLanguagePackManager.states(selected, safeLanguage),
+            )
+        }
+        notifyEnhancementDisabled(settings, safeSettings)
+        notifyOcrDisabled(settings, safeSettings)
+        if (!wasOcrEnabled && safeSettings.ocrMode != OcrMode.Disabled) {
+            downloadSelectedOcrLanguagePacks()
+        }
     }
 
     fun scan() {
         if (_uiState.value.isBusy) return
 
+        // Claim the scan slot before launching so a second tap cannot start another coroutine
+        // while optional ML Kit modules are being requested.
+        _uiState.update { it.copy(isDiscovering = true) }
+
         viewModelScope.launch {
             val mode = _uiState.value.integrationMode
             var jobId: String? = null
             try {
-                _uiState.update { it.copy(isDiscovering = true) }
+                if (_uiState.value.scanSettings.ocrMode != OcrMode.Disabled) {
+                    downloadSelectedOcrLanguagePacksInternal()
+                }
                 val providers = providersFor(mode)
                 val cachedDevices = _uiState.value.devices
                 val devices = if (cachedDevices.any { it.kind == DeviceKind.Scanner }) {
@@ -227,6 +373,23 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     return@launch
                 }
 
+                val scannerCaps = if (mode == IntegrationMode.Real) {
+                    fetchScannerCapabilities(providers.scan, scanner) ?: _uiState.value.scannerCapabilities
+                } else {
+                    ScannerCapabilities.DEFAULT
+                }
+                val requestedSettings = _uiState.value.scanSettings
+                val settings = scannerCaps.reconcile(requestedSettings)
+                _uiState.update {
+                    it.copy(
+                        scannerCapabilities = scannerCaps,
+                        scanSettings = settings,
+                    )
+                }
+                if (settings != requestedSettings) settingsStore.saveScanSettings(settings)
+                notifyEnhancementDisabled(requestedSettings, settings)
+                notifyOcrDisabled(requestedSettings, settings)
+
                 val currentJobId = "scan-job-${System.currentTimeMillis()}"
                 jobId = currentJobId
                 val queuedJob = JobRecord(
@@ -246,8 +409,46 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 }
                 updateJob(currentJobId, JobStatus.Running, 35, text(R.string.event_scan_working))
-                val settings = _uiState.value.scanSettings
-                val document = providers.scan.scan(scanner, settings)
+                val document = providers.scan.scan(scanner, settings) { progress ->
+                    val (percentage, detail) = progress.toJobUpdate()
+                    updateJob(currentJobId, JobStatus.Running, percentage, detail)
+                }
+                document.enhancementResults.distinct().forEach { result ->
+                    when (result) {
+                        EnhancementResult.Applied -> Unit
+                        is EnhancementResult.Skipped -> _events.tryEmit(
+                            text(R.string.event_scan_enhancement_skipped, text(result.reason.messageStringRes())),
+                        )
+                        is EnhancementResult.Failed -> _events.tryEmit(
+                            text(R.string.event_scan_enhancement_failed, text(result.error.messageStringRes())),
+                        )
+                    }
+                }
+                document.imageProcessingResults.distinct().forEach { result ->
+                    when (result) {
+                        ScanImageResult.Applied,
+                        ScanImageResult.Unchanged,
+                        -> Unit
+                        ScanImageResult.DroppedBlankPage -> _events.tryEmit(text(R.string.event_scan_blank_page_dropped))
+                        is ScanImageResult.Skipped -> _events.tryEmit(
+                            text(R.string.event_scan_image_processing_skipped, text(result.reason.messageStringRes())),
+                        )
+                        is ScanImageResult.Failed -> _events.tryEmit(
+                            text(R.string.event_scan_image_processing_failed, text(result.error.messageStringRes())),
+                        )
+                    }
+                }
+                document.ocrResults.distinct().forEach { result ->
+                    when (result) {
+                        is OcrResult.Applied -> Unit
+                        is OcrResult.Skipped -> _events.tryEmit(
+                            text(R.string.event_scan_ocr_skipped, text(result.reason.messageStringRes())),
+                        )
+                        is OcrResult.Failed -> _events.tryEmit(
+                            text(R.string.event_scan_ocr_failed, text(result.error.messageStringRes())),
+                        )
+                    }
+                }
                 updateJob(currentJobId, JobStatus.Running, 85, text(R.string.event_scan_organizing))
                 when {
                     settings.inputSource == ScanInputSource.Flatbed && settings.combineAsPdf -> {
@@ -577,6 +778,104 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         is ScanError.NoImages -> R.string.scan_error_no_images
     }
 
+    private fun EnhancementSkipReason.messageStringRes(): Int = when (this) {
+        EnhancementSkipReason.OpenCvUnavailable -> R.string.scan_enhancement_reason_unavailable
+        EnhancementSkipReason.UnsupportedPdf -> R.string.scan_enhancement_reason_pdf
+        EnhancementSkipReason.UnsupportedFormat -> R.string.scan_enhancement_reason_format
+        EnhancementSkipReason.ImageTooLarge -> R.string.scan_enhancement_reason_large
+    }
+
+    private fun EnhancementError.messageStringRes(): Int = when (this) {
+        EnhancementError.InvalidSource -> R.string.scan_enhancement_reason_invalid
+        EnhancementError.DecodeFailed -> R.string.scan_enhancement_reason_decode
+        EnhancementError.ProcessingFailed -> R.string.scan_enhancement_reason_processing
+        EnhancementError.EncodeFailed -> R.string.scan_enhancement_reason_encode
+        EnhancementError.OutputValidationFailed -> R.string.scan_enhancement_reason_output
+        EnhancementError.ReplaceFailed -> R.string.scan_enhancement_reason_replace
+    }
+
+    private fun ScanImageSkipReason.messageStringRes(): Int = when (this) {
+        ScanImageSkipReason.OpenCvUnavailable -> R.string.scan_image_reason_unavailable
+        ScanImageSkipReason.UnsupportedPdf -> R.string.scan_image_reason_pdf
+        ScanImageSkipReason.UnsupportedFormat -> R.string.scan_image_reason_format
+        ScanImageSkipReason.ImageTooLarge -> R.string.scan_image_reason_large
+    }
+
+    private fun ScanImageError.messageStringRes(): Int = when (this) {
+        ScanImageError.InvalidSource -> R.string.scan_image_reason_invalid
+        ScanImageError.DecodeFailed -> R.string.scan_image_reason_decode
+        ScanImageError.ProcessingFailed -> R.string.scan_image_reason_processing
+        ScanImageError.EncodeFailed -> R.string.scan_image_reason_encode
+        ScanImageError.OutputValidationFailed -> R.string.scan_image_reason_output
+        ScanImageError.ReplaceFailed -> R.string.scan_image_reason_replace
+    }
+
+    private fun OcrSkipReason.messageStringRes(): Int = when (this) {
+        OcrSkipReason.ModelsMissing -> R.string.scan_ocr_reason_models
+        OcrSkipReason.LanguagePackUnavailable -> R.string.scan_ocr_reason_language_pack
+        OcrSkipReason.RuntimeUnavailable -> R.string.scan_ocr_reason_runtime
+        OcrSkipReason.UnsupportedFormat -> R.string.scan_ocr_reason_format
+        OcrSkipReason.ImageTooLarge -> R.string.scan_ocr_reason_large
+    }
+
+    private fun OcrError.messageStringRes(): Int = when (this) {
+        OcrError.InvalidSource -> R.string.scan_ocr_reason_invalid
+        OcrError.InferenceFailed -> R.string.scan_ocr_reason_inference
+    }
+
+    private fun ScanProgress.toJobUpdate(): Pair<Int, String> = when (stage) {
+        ScanProgressStage.Preparing -> 35 to text(R.string.event_scan_working)
+        ScanProgressStage.Downloading -> {
+            val total = totalPages?.coerceAtLeast(1) ?: 1
+            val completed = completedPages.coerceIn(0, total)
+            val progress = 40 + (completed * 30 / total)
+            progress to text(R.string.event_scan_downloading, completed, total)
+        }
+        ScanProgressStage.Processing -> {
+            val total = totalPages?.coerceAtLeast(1) ?: 1
+            val completed = completedPages.coerceIn(0, total)
+            val progress = 70 + (completed * 5 / total)
+            progress to text(R.string.event_scan_processing, completed, total)
+        }
+        ScanProgressStage.Enhancing -> {
+            val total = totalPages?.coerceAtLeast(1) ?: 1
+            val completed = completedPages.coerceIn(0, total)
+            val progress = 75 + (completed * 10 / total)
+            progress to text(R.string.event_scan_enhancing, completed, total)
+        }
+        ScanProgressStage.Ocr -> {
+            val total = totalPages?.coerceAtLeast(1) ?: 1
+            val completed = completedPages.coerceIn(0, total)
+            val progress = 85 + (completed * 10 / total)
+            progress to text(R.string.event_scan_ocr, completed, total)
+        }
+    }
+
+    private suspend fun fetchScannerCapabilities(
+        provider: ScanAcquisitionProvider,
+        scanner: IntegrationDevice,
+    ): ScannerCapabilities? = try {
+        provider.scannerCapabilities(scanner)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun notifyEnhancementDisabled(requested: ScanSettings, adjusted: ScanSettings) {
+        if (requested.enhanceBackground != null && adjusted.enhanceBackground == null) {
+            _events.tryEmit(text(R.string.event_scan_enhancement_disabled_high_resolution, adjusted.resolutionDpi))
+        }
+    }
+
+    private fun notifyOcrDisabled(requested: ScanSettings, adjusted: ScanSettings) {
+        if (requested.ocrMode != OcrMode.Disabled &&
+            adjusted.ocrMode == OcrMode.Disabled
+        ) {
+            _events.tryEmit(text(R.string.event_scan_ocr_disabled_high_resolution, adjusted.resolutionDpi))
+        }
+    }
+
     fun export(documentId: String? = null) {
         saveScan(documentId, ScanOutputFormat.Pdf)
     }
@@ -724,10 +1023,6 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         IntegrationMode.Mock -> ProviderSet(mockProvider, mockProvider, mockProvider)
         IntegrationMode.Real -> ProviderSet(realProvider, realProvider, realProvider)
     }
-
-    /** Pick the supported resolution nearest to [target]; ties go to the higher value. */
-    private fun nearestResolution(target: Int, supported: Set<Int>): Int =
-        supported.minByOrNull { kotlin.math.abs(it - target) } ?: target
 
     private fun discoveryMessage(mode: IntegrationMode, devices: List<IntegrationDevice>): String = when {
         mode == IntegrationMode.Mock -> text(R.string.event_discovery_mock, devices.size)

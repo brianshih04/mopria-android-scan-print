@@ -11,6 +11,7 @@ object ScanDocumentOrganizer {
         return base.copy(
             sourceLabel = "${scanned.sourceLabel.substringBeforeLast(" · Multi-page PDF")} · Multi-page PDF",
             pages = combinedPages,
+            searchablePdf = base.searchablePdf || scanned.searchablePdf,
         )
     }
 

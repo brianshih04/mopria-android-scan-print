@@ -1,141 +1,530 @@
 package com.brianshih.mopria.android.scanprint.domain
 
-import android.graphics.Bitmap
-import androidx.core.graphics.createBitmap
+import android.graphics.BitmapFactory
 import java.io.File
-import java.io.FileOutputStream
+import java.io.FileInputStream
+import java.io.IOException
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.util.ArrayDeque
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import org.opencv.android.OpenCVLoader
+import org.opencv.core.Core
+import org.opencv.core.CvType
+import org.opencv.core.Mat
+import org.opencv.core.MatOfInt
+import org.opencv.core.Rect
+import org.opencv.core.Scalar
+import org.opencv.core.Size
+import org.opencv.imgcodecs.Imgcodecs
+import org.opencv.imgproc.Imgproc
 
-/**
- * Post-scan document background cleanup using illumination normalization.
- *
- * Implements a morphological-division pipeline similar to OpenCV's:
- *   1. Convert to grayscale.
- *   2. Estimate the background illumination map via a large box blur (approximates
- *      morphological CLOSE — removes text/detail, preserves shadows/creases/lighting).
- *   3. Divide the original by the background model (scale=255) to flatten uneven lighting.
- *   4. Contrast adjustment (alpha/beta linear transform) to make colors more vivid.
- *   5. Threshold: pixels above a strength-dependent cutoff → white, below → preserved.
- *
- * [EnhancementStrength] controls how aggressive the contrast and threshold are:
- * - [EnhancementStrength.Light]: subtle cleanup (alpha=1.0, threshold=210)
- * - [EnhancementStrength.Normal]: balanced (alpha=1.05, beta=-10, threshold=200)
- * - [EnhancementStrength.Strong]: aggressive (alpha=1.15, beta=-20, threshold=185)
- *
- * See: https://docs.opencv.org/4.x/d7/d1b/group__imgproc__misc.html (morphologyEx + divide)
- */
-object BackgroundEnhancer {
+sealed interface EnhancementResult {
+    data object Applied : EnhancementResult
 
-    /**
-     * Apply background enhancement to an ARGB [bitmap] at the given [strength].
-     *
-     * Uses pyramid downsampling for performance: the background illumination map is estimated
-     * at 1/4 resolution (since shadows are smooth gradients, low-res is sufficient), then
-     * upscaled back to full resolution for the per-pixel division. This reduces the expensive
-     * box blur cost by ~16x while maintaining full-resolution text clarity.
-     *
-     * Returns a new bitmap with the background normalized to white. The input is not modified.
-     */
-    fun apply(bitmap: Bitmap, strength: EnhancementStrength = EnhancementStrength.Normal): Bitmap {
-        val width = bitmap.width
-        val height = bitmap.height
-        val pixels = IntArray(width * height)
-        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+    data class Skipped(val reason: EnhancementSkipReason) : EnhancementResult
 
-        val enhanced = processPixels(pixels, width, height, strength)
+    data class Failed(val error: EnhancementError) : EnhancementResult
+}
 
-        val result = createBitmap(width, height)
-        result.setPixels(enhanced, 0, width, 0, 0, width, height)
-        return result
+enum class EnhancementSkipReason {
+    OpenCvUnavailable,
+    UnsupportedPdf,
+    UnsupportedFormat,
+    ImageTooLarge,
+}
+
+enum class EnhancementError {
+    InvalidSource,
+    DecodeFailed,
+    ProcessingFailed,
+    EncodeFailed,
+    OutputValidationFailed,
+    ReplaceFailed,
+}
+
+/** One cached initialization result for the OpenCV native runtime. */
+object OpenCvRuntime {
+    sealed interface State {
+        data object Available : State
+
+        data class Unavailable(val reason: UnavailabilityReason) : State
     }
 
+    enum class UnavailabilityReason {
+        InitializationFailed,
+    }
+
+    @Volatile
+    private var cachedState: State? = null
+
+    fun state(): State = cachedState ?: synchronized(this) {
+        cachedState ?: initialize().also { cachedState = it }
+    }
+
+    private fun initialize(): State = try {
+        if (OpenCVLoader.initLocal()) {
+            State.Available
+        } else {
+            State.Unavailable(UnavailabilityReason.InitializationFailed)
+        }
+    } catch (_: Exception) {
+        State.Unavailable(UnavailabilityReason.InitializationFailed)
+    } catch (_: LinkageError) {
+        State.Unavailable(UnavailabilityReason.InitializationFailed)
+    }
+}
+
+/** Owns OpenCV matrices and releases every matrix on success, failure, and cancellation. */
+class MatScope : AutoCloseable {
+    private val mats = ArrayDeque<Mat>()
+
+    fun own(mat: Mat): Mat = mat.also(mats::addFirst)
+
+    fun release(mat: Mat) {
+        val iterator = mats.iterator()
+        while (iterator.hasNext()) {
+            if (iterator.next() === mat) {
+                iterator.remove()
+                mat.release()
+                return
+            }
+        }
+    }
+
+    override fun close() {
+        while (mats.isNotEmpty()) {
+            mats.removeFirst().release()
+        }
+    }
+}
+
+internal enum class EnhancementImageFormat {
+    Jpeg,
+    Png,
+}
+
+internal sealed interface EnhancementInput {
+    data object Invalid : EnhancementInput
+    data object Pdf : EnhancementInput
+    data object Unsupported : EnhancementInput
+    data class Image(
+        val format: EnhancementImageFormat,
+        val width: Int,
+        val height: Int,
+    ) : EnhancementInput
+}
+
+internal fun interface EnhancementInputInspector {
+    fun inspect(source: File): EnhancementInput
+}
+
+internal fun interface EnhancementEncoder {
+    suspend fun encode(
+        source: File,
+        destination: File,
+        format: EnhancementImageFormat,
+        strength: EnhancementStrength,
+    ): EnhancementError?
+}
+
+internal fun interface EnhancementOutputValidator {
+    fun validate(file: File, format: EnhancementImageFormat, width: Int, height: Int): Boolean
+}
+
+internal fun interface EnhancementFileReplacer {
+    fun replace(temporary: File, target: File)
+}
+
+internal fun interface EnhancementTemporaryFileFactory {
+    fun create(source: File, format: EnhancementImageFormat): File
+}
+
+internal data class EnhancementDependencies(
+    val inspector: EnhancementInputInspector,
+    val runtimeAvailable: () -> Boolean,
+    val encoder: EnhancementEncoder,
+    val validator: EnhancementOutputValidator,
+    val replacer: EnhancementFileReplacer,
+    val temporaryFileFactory: EnhancementTemporaryFileFactory,
+)
+
+/**
+ * File-first background cleanup. The legacy pixel function remains for JVM algorithm fixtures;
+ * production file processing uses the OpenCV path below and never overwrites the source directly.
+ */
+object BackgroundEnhancer {
+    const val MAX_ENHANCEMENT_PIXELS = 12_000_000L
+
+    private const val DOWNSAMPLE_FACTOR = 4
+    private const val MIN_BACKGROUND_LEVEL = 128
+    private const val JPEG_QUALITY = 92
+    private const val STRIP_HEIGHT = 256
+
+    private val productionDependencies = EnhancementDependencies(
+        inspector = EnhancementInputInspector(::inspect),
+        runtimeAvailable = { OpenCvRuntime.state() is OpenCvRuntime.State.Available },
+        encoder = EnhancementEncoder(::encodeWithOpenCv),
+        validator = EnhancementOutputValidator(::isValidEncodedImage),
+        replacer = EnhancementFileReplacer(AtomicFileReplacer::replace),
+        temporaryFileFactory = EnhancementTemporaryFileFactory { source, format ->
+            val parent = source.parentFile ?: throw IOException("Source has no parent directory")
+            val suffix = if (format == EnhancementImageFormat.Png) ".png" else ".jpg"
+            File.createTempFile("${source.name}.enhancing-", suffix, parent)
+        },
+    )
+
     /**
-     * Pure pixel-processing pipeline (testable without Android Bitmap APIs).
-     *
-     * [pixels] is a row-major ARGB array of [width]×[height] pixels.
+     * Enhance a scanner-returned JPEG or PNG using a sibling temporary file and atomic replace.
+     * Unsupported input and unavailable native runtime preserve the source and return [Skipped].
+     * All processing failures preserve the source and return [Failed].
      */
+    suspend fun enhanceImageFile(
+        source: File,
+        strength: EnhancementStrength = EnhancementStrength.Normal,
+    ): EnhancementResult = enhanceImageFile(source, strength, productionDependencies)
+
+    internal suspend fun enhanceImageFile(
+        source: File,
+        strength: EnhancementStrength,
+        dependencies: EnhancementDependencies,
+    ): EnhancementResult = withContext(Dispatchers.IO) {
+        val input = when (val inspection = dependencies.inspector.inspect(source)) {
+            EnhancementInput.Invalid -> return@withContext EnhancementResult.Failed(EnhancementError.InvalidSource)
+            EnhancementInput.Pdf -> return@withContext EnhancementResult.Skipped(EnhancementSkipReason.UnsupportedPdf)
+            EnhancementInput.Unsupported -> return@withContext EnhancementResult.Skipped(EnhancementSkipReason.UnsupportedFormat)
+            is EnhancementInput.Image -> {
+                if (inspection.width.toLong() * inspection.height > MAX_ENHANCEMENT_PIXELS) {
+                    return@withContext EnhancementResult.Skipped(EnhancementSkipReason.ImageTooLarge)
+                }
+                inspection
+            }
+        }
+
+        if (!dependencies.runtimeAvailable()) {
+            return@withContext EnhancementResult.Skipped(EnhancementSkipReason.OpenCvUnavailable)
+        }
+
+        currentCoroutineContext().ensureActive()
+        val temporary = try {
+            dependencies.temporaryFileFactory.create(source, input.format)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            return@withContext EnhancementResult.Failed(EnhancementError.EncodeFailed)
+        }
+
+        try {
+            currentCoroutineContext().ensureActive()
+            dependencies.encoder.encode(source, temporary, input.format, strength)?.let { error ->
+                return@withContext EnhancementResult.Failed(error)
+            }
+            currentCoroutineContext().ensureActive()
+            if (!dependencies.validator.validate(temporary, input.format, input.width, input.height)) {
+                return@withContext EnhancementResult.Failed(EnhancementError.OutputValidationFailed)
+            }
+
+            currentCoroutineContext().ensureActive()
+            try {
+                dependencies.replacer.replace(temporary, source)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                return@withContext EnhancementResult.Failed(EnhancementError.ReplaceFailed)
+            }
+            EnhancementResult.Applied
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            EnhancementResult.Failed(EnhancementError.ProcessingFailed)
+        } finally {
+            temporary.delete()
+        }
+    }
+
+    private suspend fun encodeWithOpenCv(
+        source: File,
+        destination: File,
+        format: EnhancementImageFormat,
+        strength: EnhancementStrength,
+    ): EnhancementError? {
+        val scope = MatScope()
+        try {
+            val sourceMat = scope.own(Imgcodecs.imread(source.absolutePath, Imgcodecs.IMREAD_UNCHANGED))
+            if (sourceMat.empty()) return EnhancementError.DecodeFailed
+
+            currentCoroutineContext().ensureActive()
+            val enhanced = withContext(Dispatchers.Default) {
+                currentCoroutineContext().ensureActive()
+                enhanceMat(sourceMat, strength, scope)
+            }
+            currentCoroutineContext().ensureActive()
+
+            val parameters = if (format == EnhancementImageFormat.Png) {
+                MatOfInt(Imgcodecs.IMWRITE_PNG_COMPRESSION, 3)
+            } else {
+                MatOfInt(Imgcodecs.IMWRITE_JPEG_QUALITY, JPEG_QUALITY)
+            }
+            val encoded = try {
+                Imgcodecs.imwrite(destination.absolutePath, enhanced, parameters)
+            } catch (_: Exception) {
+                false
+            } finally {
+                parameters.release()
+            }
+            return if (encoded) null else EnhancementError.EncodeFailed
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            return EnhancementError.ProcessingFailed
+        } finally {
+            scope.close()
+        }
+    }
+
+    private suspend fun enhanceMat(
+        source: Mat,
+        strength: EnhancementStrength,
+        scope: MatScope,
+    ): Mat {
+        require(source.channels() in 1..4 && source.channels() != 2) {
+            "Unsupported channel count: ${source.channels()}"
+        }
+
+        val smallSize = Size(
+            max(1, source.cols() / DOWNSAMPLE_FACTOR).toDouble(),
+            max(1, source.rows() / DOWNSAMPLE_FACTOR).toDouble(),
+        )
+        val smallColor = scope.own(Mat())
+        when (source.channels()) {
+            1 -> {
+                val smallGraySource = scope.own(Mat())
+                Imgproc.resize(source, smallGraySource, smallSize, 0.0, 0.0, Imgproc.INTER_AREA)
+                Imgproc.cvtColor(smallGraySource, smallColor, Imgproc.COLOR_GRAY2BGR)
+                scope.release(smallGraySource)
+            }
+            3 -> Imgproc.resize(source, smallColor, smallSize, 0.0, 0.0, Imgproc.INTER_AREA)
+            4 -> {
+                val smallBgra = scope.own(Mat())
+                Imgproc.resize(source, smallBgra, smallSize, 0.0, 0.0, Imgproc.INTER_AREA)
+                Imgproc.cvtColor(smallBgra, smallColor, Imgproc.COLOR_BGRA2BGR)
+                scope.release(smallBgra)
+            }
+        }
+        val smallGray = scope.own(Mat())
+        Imgproc.cvtColor(smallColor, smallGray, Imgproc.COLOR_BGR2GRAY)
+        scope.release(smallColor)
+
+        val kernelSize = (max(smallGray.cols(), smallGray.rows()) / 16)
+            .coerceIn(3, 31)
+            .let { if (it % 2 == 0) it + 1 else it }
+        val kernel = scope.own(
+            Imgproc.getStructuringElement(
+                Imgproc.MORPH_ELLIPSE,
+                Size(kernelSize.toDouble(), kernelSize.toDouble()),
+            ),
+        )
+        val smallBackground = scope.own(Mat())
+        Imgproc.morphologyEx(smallGray, smallBackground, Imgproc.MORPH_CLOSE, kernel)
+        scope.release(smallGray)
+        scope.release(kernel)
+
+        val background = scope.own(Mat())
+        Imgproc.resize(smallBackground, background, source.size(), 0.0, 0.0, Imgproc.INTER_LINEAR)
+        scope.release(smallBackground)
+
+        val parameters = strengthParameters(strength)
+        val output = scope.own(Mat(source.rows(), source.cols(), source.type()))
+        val bufferScope = MatScope()
+        try {
+            val colorBuffer = bufferScope.own(Mat())
+            val lowBackgroundMask = bufferScope.own(Mat())
+            val safeBackground = bufferScope.own(Mat())
+            val colorBackground = bufferScope.own(Mat())
+            val normalized = bufferScope.own(Mat())
+            val contrast = bufferScope.own(Mat())
+            val whiteMask = bufferScope.own(Mat())
+
+            var top = 0
+            while (top < source.rows()) {
+                currentCoroutineContext().ensureActive()
+                val height = min(STRIP_HEIGHT, source.rows() - top)
+                val rect = Rect(0, top, source.cols(), height)
+                val stripScope = MatScope()
+                try {
+                    val sourceStrip = stripScope.own(source.submat(rect))
+                    val colorStrip = when (source.channels()) {
+                        1 -> colorBuffer.also {
+                            Imgproc.cvtColor(sourceStrip, it, Imgproc.COLOR_GRAY2BGR)
+                        }
+                        3 -> sourceStrip
+                        4 -> colorBuffer.also {
+                            Imgproc.cvtColor(sourceStrip, it, Imgproc.COLOR_BGRA2BGR)
+                        }
+                        else -> error("Unsupported channel count: ${source.channels()}")
+                    }
+
+                    val backgroundStrip = stripScope.own(background.submat(rect))
+                    Core.inRange(
+                        backgroundStrip,
+                        Scalar(0.0),
+                        Scalar((MIN_BACKGROUND_LEVEL - 1).toDouble()),
+                        lowBackgroundMask,
+                    )
+                    backgroundStrip.copyTo(safeBackground)
+                    safeBackground.setTo(Scalar(255.0), lowBackgroundMask)
+                    Imgproc.cvtColor(safeBackground, colorBackground, Imgproc.COLOR_GRAY2BGR)
+
+                    Core.divide(colorStrip, colorBackground, normalized, 255.0)
+                    normalized.convertTo(contrast, -1, parameters.alpha, parameters.beta)
+
+                    // Only make pixels white when all BGR channels are bright. This protects
+                    // colored signatures and stamps from a luminance-only threshold.
+                    val threshold = parameters.whiteThreshold
+                    Core.inRange(
+                        contrast,
+                        Scalar(threshold, threshold, threshold, threshold),
+                        Scalar(255.0, 255.0, 255.0, 255.0),
+                        whiteMask,
+                    )
+                    contrast.setTo(Scalar(255.0, 255.0, 255.0, 255.0), whiteMask)
+
+                    val outputStrip = stripScope.own(output.submat(rect))
+                    when (source.channels()) {
+                        1 -> Imgproc.cvtColor(contrast, outputStrip, Imgproc.COLOR_BGR2GRAY)
+                        3 -> contrast.copyTo(outputStrip)
+                        4 -> {
+                            val alphaStrip = stripScope.own(Mat())
+                            Core.extractChannel(sourceStrip, alphaStrip, 3)
+                            val channels = mutableListOf<Mat>()
+                            Core.split(contrast, channels)
+                            channels.forEach(stripScope::own)
+                            channels += alphaStrip
+                            Core.merge(channels, outputStrip)
+                        }
+                    }
+                } finally {
+                    stripScope.close()
+                }
+                top += height
+            }
+            scope.release(background)
+            return output
+        } finally {
+            bufferScope.close()
+        }
+    }
+
+    /** Instrumentation hook so native Mat ownership can be stress-tested without file codecs. */
+    internal suspend fun enhanceMatForTesting(
+        source: Mat,
+        strength: EnhancementStrength,
+        scope: MatScope,
+    ): Mat = enhanceMat(source, strength, scope)
+
+    private fun strengthParameters(strength: EnhancementStrength): EnhancementParameters = when (strength) {
+        EnhancementStrength.Light -> EnhancementParameters(alpha = 1.0, beta = 0.0, whiteThreshold = 210.0)
+        EnhancementStrength.Normal -> EnhancementParameters(alpha = 1.05, beta = -10.0, whiteThreshold = 200.0)
+        EnhancementStrength.Strong -> EnhancementParameters(alpha = 1.15, beta = -20.0, whiteThreshold = 185.0)
+    }
+
+    /** JVM-only reference pipeline retained for algorithm fixtures; production does not call it. */
     internal fun processPixels(
         pixels: IntArray,
         width: Int,
         height: Int,
         strength: EnhancementStrength = EnhancementStrength.Normal,
     ): IntArray {
-        if (pixels.isEmpty() || width <= 0 || height <= 0) return pixels
+        if (pixels.isEmpty() || width <= 0 || height <= 0 || pixels.size < width * height) return pixels
 
-        val (alpha, beta, threshold) = strengthParams(strength)
-
-        // Step 1: Extract grayscale luminance map.
+        val parameters = strengthParameters(strength)
         val gray = IntArray(pixels.size) { luminance(pixels[it]) }
-
-        // Step 2: Estimate background via pyramid downsampling + box blur.
-        // Downsample to 1/4 resolution for the expensive blur (shadows are smooth,
-        // don't need full-res), then bilinear-upscale back. ~16x faster for A4 300dpi.
         val background = downsampledBackground(gray, width, height)
-
-        // Step 3-5: Division normalization + contrast + threshold per RGB channel.
         return IntArray(pixels.size) { i ->
-            val bg = max(background[i], 1)
-            val orig = gray[i]
-            val factor = orig.toFloat() / bg.toFloat()
-
-            val r = (pixels[i] shr 16) and 0xFF
-            val g = (pixels[i] shr 8) and 0xFF
-            val b = pixels[i] and 0xFF
+            val safeBackground = if (background[i] < MIN_BACKGROUND_LEVEL) {
+                255f
+            } else {
+                background[i].toFloat()
+            }
+            val r = normalizeChannel((pixels[i] shr 16) and 0xFF, safeBackground, parameters)
+            val g = normalizeChannel((pixels[i] shr 8) and 0xFF, safeBackground, parameters)
+            val b = normalizeChannel(pixels[i] and 0xFF, safeBackground, parameters)
             val a = (pixels[i] shr 24) and 0xFF
 
-            // Normalize (divide by background), then apply contrast (alpha*x + beta).
-            val nr = applyContrast(r * factor, alpha, beta)
-            val ng = applyContrast(g * factor, alpha, beta)
-            val nb = applyContrast(b * factor, alpha, beta)
-
-            val nLum = (0.2126 * nr + 0.7152 * ng + 0.0722 * nb).roundToInt()
-
-            if (nLum >= threshold) {
-                0xFFFFFFFF.toInt() // push to pure white
+            if (r >= parameters.whiteThreshold && g >= parameters.whiteThreshold && b >= parameters.whiteThreshold) {
+                (a shl 24) or (255 shl 16) or (255 shl 8) or 255
             } else {
-                (a shl 24) or (nr shl 16) or (ng shl 8) or nb
+                (a shl 24) or (r shl 16) or (g shl 8) or b
             }
         }
     }
 
-    /** Returns (alphaMultiplier, betaOffset, whiteThreshold) for each strength level. */
-    private fun strengthParams(strength: EnhancementStrength): Triple<Float, Float, Int> = when (strength) {
-        EnhancementStrength.Light -> Triple(1.0f, 0.0f, 210)
-        EnhancementStrength.Normal -> Triple(1.05f, -10.0f, 200)
-        EnhancementStrength.Strong -> Triple(1.15f, -20.0f, 185)
+    private fun normalizeChannel(value: Int, background: Float, parameters: EnhancementParameters): Int =
+        min(255.0, max(0.0, parameters.alpha * (value * 255.0 / background) + parameters.beta))
+            .roundToInt()
+
+    private fun inspect(file: File): EnhancementInput {
+        if (!file.isFile || file.length() <= 0L) return EnhancementInput.Invalid
+        val format = readFormat(file) ?: return EnhancementInput.Unsupported
+        if (format == DetectedFileFormat.Pdf) return EnhancementInput.Pdf
+
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, options)
+        if (options.outWidth <= 0 || options.outHeight <= 0) return EnhancementInput.Invalid
+        val imageFormat = when (format) {
+            DetectedFileFormat.Jpeg -> EnhancementImageFormat.Jpeg
+            DetectedFileFormat.Png -> EnhancementImageFormat.Png
+            DetectedFileFormat.Pdf -> error("PDF handled before image inspection")
+        }
+        return EnhancementInput.Image(imageFormat, options.outWidth, options.outHeight)
     }
 
-    /** Linear contrast transform: out = clamp(alpha * value + beta, 0, 255). */
-    private fun applyContrast(value: Float, alpha: Float, beta: Float): Int =
-        min(255f, max(0f, alpha * value + beta)).roundToInt()
+    private fun readFormat(file: File): DetectedFileFormat? = try {
+        val signature = ByteArray(8)
+        FileInputStream(file).use { input ->
+            val count = input.read(signature)
+            when {
+                count >= 4 && signature[0] == '%'.code.toByte() && signature[1] == 'P'.code.toByte() &&
+                    signature[2] == 'D'.code.toByte() && signature[3] == 'F'.code.toByte() -> DetectedFileFormat.Pdf
+                count >= 8 && signature.contentEquals(byteArrayOf(
+                    0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+                )) -> DetectedFileFormat.Png
+                count >= 2 && signature[0] == 0xFF.toByte() && signature[1] == 0xD8.toByte() -> DetectedFileFormat.Jpeg
+                else -> null
+            }
+        }
+    } catch (_: IOException) {
+        null
+    }
 
-    /**
-     * Pyramid downsampling background estimation:
-     * 1. Downsample grayscale to 1/4 size.
-     * 2. Box blur on the small image (kernel also 1/4 size).
-     * 3. Bilinear upscale back to original dimensions.
-     *
-     * This is ~16x faster than full-resolution blur for large images (A4 300dpi ≈ 2480×3508),
-     * with negligible quality loss since background illumination is inherently smooth.
-     */
+    private fun isValidEncodedImage(
+        file: File,
+        expected: EnhancementImageFormat,
+        width: Int,
+        height: Int,
+    ): Boolean {
+        if (!file.isFile || file.length() <= 0L) return false
+        val inspection = inspect(file) as? EnhancementInput.Image ?: return false
+        return inspection.format == expected && inspection.width == width && inspection.height == height
+    }
+
     private fun downsampledBackground(gray: IntArray, width: Int, height: Int): IntArray {
-        val smallW = max(1, width / 4)
-        val smallH = max(1, height / 4)
-
-        // Downsample by 4x using area averaging
+        val smallW = max(1, width / DOWNSAMPLE_FACTOR)
+        val smallH = max(1, height / DOWNSAMPLE_FACTOR)
         val small = downsample(gray, width, height, smallW, smallH)
-
-        // Box blur on small image with proportionally smaller kernel
         val smallRadius = (max(smallW, smallH) / 16).coerceIn(3, 16)
         val smallBlurred = boxBlur(small, smallW, smallH, smallRadius)
-
-        // Upscale back to original size using bilinear interpolation
         return upscale(smallBlurred, smallW, smallH, width, height)
     }
 
-    /** Area-average downsample from [srcW]×[srcH] to [dstW]×[dstH]. */
     private fun downsample(src: IntArray, srcW: Int, srcH: Int, dstW: Int, dstH: Int): IntArray {
         val dst = IntArray(dstW * dstH)
         val xRatio = srcW.toFloat() / dstW
@@ -160,7 +549,6 @@ object BackgroundEnhancer {
         return dst
     }
 
-    /** Bilinear upscale from [srcW]×[srcH] to [dstW]×[dstH]. */
     private fun upscale(src: IntArray, srcW: Int, srcH: Int, dstW: Int, dstH: Int): IntArray {
         val dst = IntArray(dstW * dstH)
         val xRatio = (srcW - 1).toFloat() / max(1, dstW - 1)
@@ -187,21 +575,13 @@ object BackgroundEnhancer {
         return dst
     }
 
-    /**
-     * Separable box blur on a grayscale [data] array of [width]×[height].
-     * [radius] is the blur kernel half-size (actual kernel = 2*radius+1).
-     */
     private fun boxBlur(data: IntArray, width: Int, height: Int, radius: Int): IntArray {
         val horizontal = IntArray(data.size)
         val result = IntArray(data.size)
-        val kernel = (radius * 2 + 1)
-
+        val kernel = radius * 2 + 1
         for (y in 0 until height) {
             var sum = 0
-            for (x in -radius..radius) {
-                val cx = min(max(x, 0), width - 1)
-                sum += data[y * width + cx]
-            }
+            for (x in -radius..radius) sum += data[y * width + min(max(x, 0), width - 1)]
             for (x in 0 until width) {
                 horizontal[y * width + x] = sum / kernel
                 val leftX = min(max(x - radius, 0), width - 1)
@@ -209,13 +589,9 @@ object BackgroundEnhancer {
                 sum += data[y * width + rightX] - data[y * width + leftX]
             }
         }
-
         for (x in 0 until width) {
             var sum = 0
-            for (y in -radius..radius) {
-                val cy = min(max(y, 0), height - 1)
-                sum += horizontal[cy * width + x]
-            }
+            for (y in -radius..radius) sum += horizontal[min(max(y, 0), height - 1) * width + x]
             for (y in 0 until height) {
                 result[y * width + x] = sum / kernel
                 val topY = min(max(y - radius, 0), height - 1)
@@ -223,36 +599,41 @@ object BackgroundEnhancer {
                 sum += horizontal[bottomY * width + x] - horizontal[topY * width + x]
             }
         }
-
         return result
     }
 
-    /**
-     * Process a JPEG or PNG [file] in place: decode, enhance, re-encode.
-     * Returns true if the file was successfully enhanced.
-     */
-    fun enhanceImageFile(file: File, strength: EnhancementStrength = EnhancementStrength.Normal): Boolean {
-        val name = file.name.lowercase()
-        if (!name.endsWith(".jpg") && !name.endsWith(".jpeg") && !name.endsWith(".png")) return false
-
-        val bitmap = android.graphics.BitmapFactory.decodeFile(file.absolutePath) ?: return false
-        val enhanced = apply(bitmap, strength)
-        bitmap.recycle()
-
-        val format = if (name.endsWith(".png")) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
-        return try {
-            FileOutputStream(file).use { out -> enhanced.compress(format, 92, out) }
-            true
-        } finally {
-            enhanced.recycle()
-        }
-    }
-
-    /** Compute luminance (0–255) from an Android ARGB int. */
     internal fun luminance(argb: Int): Int {
         val r = (argb shr 16) and 0xFF
         val g = (argb shr 8) and 0xFF
         val b = argb and 0xFF
         return (0.2126 * r + 0.7152 * g + 0.0722 * b).toInt().coerceIn(0, 255)
+    }
+
+    private data class EnhancementParameters(
+        val alpha: Double,
+        val beta: Double,
+        val whiteThreshold: Double,
+    )
+
+    private enum class DetectedFileFormat {
+        Jpeg,
+        Png,
+        Pdf,
+    }
+}
+
+internal object AtomicFileReplacer {
+    @Throws(IOException::class)
+    fun replace(temporary: File, target: File) {
+        try {
+            Files.move(
+                temporary.toPath(),
+                target.toPath(),
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+        } catch (error: AtomicMoveNotSupportedException) {
+            throw IOException("Atomic replace is not supported on this filesystem", error)
+        }
     }
 }

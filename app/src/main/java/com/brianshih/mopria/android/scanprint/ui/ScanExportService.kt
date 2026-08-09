@@ -19,9 +19,18 @@ import androidx.core.net.toUri
 import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
+import com.brianshih.mopria.android.scanprint.domain.OcrLayoutTransforms
+import com.brianshih.mopria.android.scanprint.domain.OcrDownloadableFontPack
+import com.brianshih.mopria.android.scanprint.domain.OcrResult
+import com.brianshih.mopria.android.scanprint.domain.OcrTextLayout
+import com.brianshih.mopria.android.scanprint.domain.PdfBoxSearchableFont
+import com.brianshih.mopria.android.scanprint.domain.PdfBoxSearchableFontRole
+import com.brianshih.mopria.android.scanprint.domain.PdfBoxSearchablePage
+import com.brianshih.mopria.android.scanprint.domain.PdfBoxSearchablePdfWriter
 import com.brianshih.mopria.android.scanprint.domain.SavedScanFile
 import com.brianshih.mopria.android.scanprint.domain.PdfPageRenderer
 import com.brianshih.mopria.android.scanprint.domain.ScanOutputFormat
+import com.brianshih.mopria.android.scanprint.domain.hasPositionedText
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -179,10 +188,94 @@ class ScanExportService(private val context: Context) {
     }
 
     private fun writePdf(document: MopriaDocument, output: OutputStream) {
+        if (document.searchablePdf && document.pages.any { it.ocrResult.hasPositionedText() }) {
+            val requiredFonts = requiredOptionalFonts(document)
+            val optionalFonts = requiredFonts.mapNotNull { pack ->
+                pack.availableFile(context)?.let { fontFile -> pack to fontFile }
+            }
+            if (optionalFonts.size == requiredFonts.size) {
+                writeSearchablePdf(document, optionalFonts, output)
+                return
+            }
+        }
+        writeStandardPdf(document, output)
+    }
+
+    private fun writeStandardPdf(document: MopriaDocument, output: OutputStream) {
         PdfPageRenderer.writePdf(document, output) { canvas, doc, page, _ ->
             drawPage(canvas, doc, page)
         }
     }
+
+    private fun writeSearchablePdf(
+        document: MopriaDocument,
+        optionalFonts: List<Pair<OcrDownloadableFontPack, File>>,
+        output: OutputStream,
+    ) {
+        val staging = File(context.cacheDir, "searchable-pdf-${System.nanoTime()}").apply { mkdirs() }
+        try {
+            val defaultFont = File(staging, SEARCHABLE_FONT_ASSET.fileName).also { destination ->
+                context.assets.open(SEARCHABLE_FONT_ASSET.assetPath).use { input ->
+                        FileOutputStream(destination).use { fileOutput -> input.copyTo(fileOutput) }
+                }
+            }
+            val fontFiles = buildList {
+                add(PdfBoxSearchableFont(defaultFont, SEARCHABLE_FONT_ASSET.role))
+                optionalFonts.forEach { (pack, fontFile) ->
+                    add(PdfBoxSearchableFont(fontFile, pack.role))
+                }
+            }
+
+            val pages = document.pages.mapIndexed { index, page ->
+                val bitmap = requireNotNull(loadPageBitmap(page)) {
+                    "Could not load page ${page.pageNumber} for searchable PDF"
+                }
+                val imageFile = File(staging, "page-${index + 1}.jpg")
+                try {
+                    FileOutputStream(imageFile).use { imageOutput ->
+                        check(bitmap.compress(Bitmap.CompressFormat.JPEG, 92, imageOutput)) {
+                            "Could not encode page ${page.pageNumber} for searchable PDF"
+                        }
+                    }
+                    val layout = (page.ocrResult as? OcrResult.Applied)?.layout
+                        ?.let { ocrLayout ->
+                            OcrLayoutTransforms.forPage(
+                                layout = ocrLayout,
+                                page = page,
+                                outputWidth = bitmap.width,
+                                outputHeight = bitmap.height,
+                            )
+                        }
+                        ?: OcrTextLayout(imageWidth = bitmap.width, imageHeight = bitmap.height)
+                    PdfBoxSearchablePage(imageFile = imageFile, ocrLayout = layout)
+                } finally {
+                    bitmap.recycle()
+                }
+            }
+
+            PdfBoxSearchablePdfWriter.write(
+                context = context,
+                pages = pages,
+                fontFiles = fontFiles,
+                output = output,
+            )
+        } finally {
+            staging.deleteRecursively()
+        }
+    }
+
+    private fun requiredOptionalFonts(document: MopriaDocument): Set<OcrDownloadableFontPack> =
+        document.pages.asSequence()
+            .mapNotNull { page -> (page.ocrResult as? OcrResult.Applied)?.layout }
+            .flatMap { layout -> layout.blocks.asSequence() }
+            .flatMap { block -> block.lines.asSequence() }
+            .filter { line ->
+                line.text.isNotBlank() &&
+                    line.bounds?.let { bounds -> bounds.width > 0 && bounds.height > 0 } == true
+            }
+            .map { line -> PdfBoxSearchableFontRole.forText(line.recognizedLanguage, line.text) }
+            .mapNotNull { role -> OcrDownloadableFontPack.entries.firstOrNull { it.role == role } }
+            .toSet()
 
     private fun saveJpeg(document: MopriaDocument, page: DocumentPage, index: Int): SavedScanFile {
         val name = "${safeName(document.name)}-page-${index + 1}.jpg"
@@ -324,10 +417,21 @@ class ScanExportService(private val context: Context) {
         return true
     }
 
+    private data class SearchableFontAsset(
+        val assetPath: String,
+        val fileName: String,
+        val role: PdfBoxSearchableFontRole,
+    )
+
     private companion object {
         const val PUBLIC_FOLDER = "Mopria Scan & Print/Scans"
         const val PUBLIC_RELATIVE_PATH = "Download/$PUBLIC_FOLDER"
         const val SHARE_FOLDER = "shared-scans"
         const val SHARE_MAX_AGE_MS = 24L * 60L * 60L * 1000L
+        val SEARCHABLE_FONT_ASSET = SearchableFontAsset(
+            "ocr/fonts/NotoSansTC-VF.ttf",
+            "NotoSansTC-VF.ttf",
+            PdfBoxSearchableFontRole.Default,
+        )
     }
 }

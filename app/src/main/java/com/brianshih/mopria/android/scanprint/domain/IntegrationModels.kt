@@ -53,6 +53,15 @@ enum class EnhancementStrength(@StringRes val labelRes: Int) {
     Strong(R.string.enhance_strong),
 }
 
+/** Optional on-device OCR backend. ML Kit keeps script models outside the app when available. */
+enum class OcrMode(
+    @StringRes val labelRes: Int,
+    @StringRes val descriptionRes: Int,
+) {
+    Disabled(R.string.ocr_disabled, R.string.ocr_disabled_description),
+    MlKit(R.string.ocr_ml_kit, R.string.ocr_ml_kit_description),
+}
+
 /**
  * Quick-scan presets that auto-configure [ScanSettings] for common use cases.
  *
@@ -75,11 +84,23 @@ enum class ScanPreset(
             resolutionDpi = 300,
             colorMode = ScanColorMode.Color,
             combineAsPdf = true,
+            searchablePdf = false,
+            enhanceBackground = EnhancementStrength.Normal,
+            ocrMode = OcrMode.Disabled,
+            deskew = false,
+            autoCrop = false,
+            dropBlankPages = false,
         )
         Photo -> current.copy(
             resolutionDpi = 600,
             colorMode = ScanColorMode.Color,
             combineAsPdf = false,
+            searchablePdf = false,
+            enhanceBackground = null,
+            ocrMode = OcrMode.Disabled,
+            deskew = false,
+            autoCrop = false,
+            dropBlankPages = false,
         )
     }
 }
@@ -89,8 +110,49 @@ data class ScanSettings(
     val resolutionDpi: Int = 300,
     val colorMode: ScanColorMode = ScanColorMode.Color,
     val maxPages: Int = 20,
-    val combineAsPdf: Boolean = false,
-    val enhanceBackground: EnhancementStrength? = null,
+    val combineAsPdf: Boolean = true,
+    /** Adds an invisible OCR text layer to the PDF only when the user explicitly opts in. */
+    val searchablePdf: Boolean = false,
+    val enhanceBackground: EnhancementStrength? = EnhancementStrength.Normal,
+    val ocrMode: OcrMode = OcrMode.Disabled,
+    val ocrLanguage: OcrLanguagePack = OcrLanguagePack.SimplifiedChinese,
+    val deskew: Boolean = false,
+    val autoCrop: Boolean = false,
+    val dropBlankPages: Boolean = false,
+)
+
+/** Background cleanup is intentionally limited to 300 dpi and below until memory soak passes. */
+fun ScanSettings.enforceEnhancementSafety(): ScanSettings = if (
+    resolutionDpi > MAX_ENHANCEMENT_DPI && enhanceBackground != null
+) copy(enhanceBackground = null) else this
+
+/** OCR is kept at or below 300 dpi until the selected ML Kit path has a measured memory budget. */
+fun ScanSettings.enforceProcessingSafety(): ScanSettings {
+    val safeEnhancement = enforceEnhancementSafety()
+    val safeOcr = if (safeEnhancement.ocrMode != OcrMode.Disabled && safeEnhancement.resolutionDpi > MAX_OCR_DPI) {
+        safeEnhancement.copy(ocrMode = OcrMode.Disabled)
+    } else {
+        safeEnhancement
+    }
+    return safeOcr.takeIf { it.ocrMode != OcrMode.Disabled }
+        ?: safeOcr.copy(searchablePdf = false)
+}
+
+const val MAX_ENHANCEMENT_DPI = 300
+const val MAX_OCR_DPI = 300
+
+enum class ScanProgressStage {
+    Preparing,
+    Downloading,
+    Processing,
+    Enhancing,
+    Ocr,
+}
+
+data class ScanProgress(
+    val stage: ScanProgressStage,
+    val completedPages: Int = 0,
+    val totalPages: Int? = null,
 )
 
 data class IntegrationDevice(
@@ -134,6 +196,7 @@ data class DocumentPage(
     val pdfPageIndex: Int? = null,
     val rotationDegrees: Int = 0,
     val cropRect: CropRect? = null,
+    val ocrResult: OcrResult? = null,
 )
 
 enum class ScanOutputFormat(@StringRes val labelRes: Int, val extension: String) {
@@ -155,6 +218,11 @@ data class MopriaDocument(
     val createdAt: Long = System.currentTimeMillis(),
     val exportedPath: String? = null,
     val savedFiles: List<SavedScanFile> = emptyList(),
+    val enhancementResults: List<EnhancementResult> = emptyList(),
+    val imageProcessingResults: List<ScanImageResult> = emptyList(),
+    val ocrResults: List<OcrResult> = emptyList(),
+    /** Whether the user opted in to an OCR text layer when exporting this document as PDF. */
+    val searchablePdf: Boolean = false,
 )
 
 enum class JobKind(@StringRes val labelRes: Int) {
@@ -198,6 +266,14 @@ data class MopriaUiState(
     val directIppPrintPrompt: DirectIppPrintPrompt? = null,
     val scannerCapabilities: ScannerCapabilities = ScannerCapabilities.DEFAULT,
     val scanPreset: ScanPreset = ScanPreset.Document,
+    val ocrLanguagePacks: List<OcrLanguagePackState> = OcrLanguagePack.entries.map { language ->
+        OcrLanguagePackState(
+            language = language,
+            selected = language.defaultSelected,
+            active = language == OcrLanguagePack.SimplifiedChinese,
+            status = OcrLanguagePackStatus.ManagedByMlKit,
+        )
+    },
 ) {
     val mockMode: Boolean
         get() = integrationMode == IntegrationMode.Mock

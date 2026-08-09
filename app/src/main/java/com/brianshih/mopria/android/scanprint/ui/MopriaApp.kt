@@ -296,6 +296,10 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                         LanguageManager.setOverride(context, language)
                         (context as? Activity)?.recreate()
                     },
+                    onOcrLanguagePackSelected = viewModel::setOcrLanguagePackSelected,
+                    onActiveOcrLanguageChanged = viewModel::setActiveOcrLanguage,
+                    onDownloadOcrLanguagePack = viewModel::downloadOcrLanguagePack,
+                    onDownloadSelectedOcrLanguagePacks = viewModel::downloadSelectedOcrLanguagePacks,
                 )
                 }
             }

@@ -29,6 +29,18 @@ class DocumentStore(context: Context) {
                 page.imagePath?.let { pageJson.put("imagePath", it) }
                 page.pdfPath?.let { pageJson.put("pdfPath", it) }
                 page.pdfPageIndex?.let { pageJson.put("pdfPageIndex", it) }
+                pageJson.put("rotationDegrees", page.rotationDegrees)
+                page.cropRect?.let { crop ->
+                    pageJson.put(
+                        "cropRect",
+                        JSONObject().apply {
+                            put("left", crop.left)
+                            put("top", crop.top)
+                            put("right", crop.right)
+                            put("bottom", crop.bottom)
+                        },
+                    )
+                }
                 pagesArray.put(pageJson)
             }
             val docJson = JSONObject()
@@ -37,6 +49,7 @@ class DocumentStore(context: Context) {
             docJson.put("sourceLabel", doc.sourceLabel)
             docJson.put("createdAt", doc.createdAt)
             docJson.put("pages", pagesArray)
+            docJson.put("searchablePdf", doc.searchablePdf)
             doc.exportedPath?.let { docJson.put("exportedPath", it) }
             docsArray.put(docJson)
         }
@@ -64,6 +77,17 @@ class DocumentStore(context: Context) {
                         imagePath = p.optString("imagePath").takeIf { it.isNotBlank() },
                         pdfPath = p.optString("pdfPath").takeIf { it.isNotBlank() },
                         pdfPageIndex = p.optInt("pdfPageIndex", -1).takeIf { it >= 0 },
+                        rotationDegrees = p.optInt("rotationDegrees", 0),
+                        cropRect = p.optJSONObject("cropRect")?.let { crop ->
+                            runCatching {
+                                CropRect(
+                                    left = crop.getDouble("left").toFloat(),
+                                    top = crop.getDouble("top").toFloat(),
+                                    right = crop.getDouble("right").toFloat(),
+                                    bottom = crop.getDouble("bottom").toFloat(),
+                                )
+                            }.getOrNull()
+                        },
                     )
                 }
                 MopriaDocument(
@@ -73,6 +97,7 @@ class DocumentStore(context: Context) {
                     sourceLabel = d.optString("sourceLabel", ""),
                     createdAt = d.optLong("createdAt", System.currentTimeMillis()),
                     exportedPath = d.optString("exportedPath").takeIf { it.isNotBlank() },
+                    searchablePdf = d.optBoolean("searchablePdf", false),
                 )
             }
             // Filter out documents whose files no longer exist on disk (stale entries from a previous run).

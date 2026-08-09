@@ -36,22 +36,34 @@ class SettingsStore(context: Context) {
     fun saveScanPreset(preset: ScanPreset) =
         preferences.edit { putString(KEY_SCAN_PRESET, preset.name) }
 
-    fun loadScanSettings(): ScanSettings = ScanSettings(
-        inputSource = preferences.getString(KEY_SCAN_INPUT_SOURCE, ScanInputSource.Flatbed.name)
+    fun loadScanSettings(): ScanSettings {
+        val defaults = loadScanPreset().defaultSettings(ScanSettings())
+        return ScanSettings(
+        inputSource = preferences.getString(KEY_SCAN_INPUT_SOURCE, defaults.inputSource.name)
             ?.let { value -> runCatching { ScanInputSource.valueOf(value) }.getOrDefault(ScanInputSource.Flatbed) }
-            ?: ScanInputSource.Flatbed,
-        resolutionDpi = preferences.getInt(KEY_SCAN_RESOLUTION, 300)
-            .takeIf { it in SUPPORTED_RESOLUTIONS }
-            ?: 300,
-        colorMode = preferences.getString(KEY_SCAN_COLOR_MODE, ScanColorMode.Color.name)
+            ?: defaults.inputSource,
+        resolutionDpi = preferences.getInt(KEY_SCAN_RESOLUTION, defaults.resolutionDpi)
+            .takeIf { it in MIN_SCAN_RESOLUTION..MAX_SCAN_RESOLUTION }
+            ?: defaults.resolutionDpi,
+        colorMode = preferences.getString(KEY_SCAN_COLOR_MODE, defaults.colorMode.name)
             ?.let { value -> runCatching { ScanColorMode.valueOf(value) }.getOrDefault(ScanColorMode.Color) }
-            ?: ScanColorMode.Color,
+            ?: defaults.colorMode,
         maxPages = preferences.getInt(KEY_SCAN_MAX_PAGES, DEFAULT_SCAN_MAX_PAGES)
             .coerceIn(MIN_SCAN_PAGES, MAX_SCAN_PAGES),
-        combineAsPdf = preferences.getBoolean(KEY_SCAN_COMBINE_PDF, false),
-        enhanceBackground = preferences.getString(KEY_SCAN_ENHANCE_BACKGROUND, null)
+        combineAsPdf = preferences.getBoolean(KEY_SCAN_COMBINE_PDF, defaults.combineAsPdf),
+        searchablePdf = preferences.getBoolean(KEY_SCAN_SEARCHABLE_PDF, defaults.searchablePdf),
+        enhanceBackground = preferences.getString(KEY_SCAN_ENHANCE_BACKGROUND, defaults.enhanceBackground?.name)
+            ?.takeUnless { it == ENHANCEMENT_DISABLED }
             ?.let { value -> runCatching { EnhancementStrength.valueOf(value) }.getOrNull() },
-    )
+        ocrMode = preferences.getString(KEY_SCAN_OCR_MODE, defaults.ocrMode.name)
+            ?.let { value -> runCatching { OcrMode.valueOf(value) }.getOrDefault(OcrMode.Disabled) }
+            ?: defaults.ocrMode,
+        ocrLanguage = loadActiveOcrLanguage(),
+        deskew = preferences.getBoolean(KEY_SCAN_DESKEW, defaults.deskew),
+        autoCrop = preferences.getBoolean(KEY_SCAN_AUTO_CROP, defaults.autoCrop),
+        dropBlankPages = preferences.getBoolean(KEY_SCAN_DROP_BLANK_PAGES, defaults.dropBlankPages),
+        ).enforceProcessingSafety()
+    }
 
     fun saveScanSettings(settings: ScanSettings) = preferences.edit {
         putString(KEY_SCAN_INPUT_SOURCE, settings.inputSource.name)
@@ -59,7 +71,40 @@ class SettingsStore(context: Context) {
         putString(KEY_SCAN_COLOR_MODE, settings.colorMode.name)
         putInt(KEY_SCAN_MAX_PAGES, settings.maxPages.coerceIn(MIN_SCAN_PAGES, MAX_SCAN_PAGES))
         putBoolean(KEY_SCAN_COMBINE_PDF, settings.combineAsPdf)
-        putString(KEY_SCAN_ENHANCE_BACKGROUND, settings.enhanceBackground?.name)
+        putBoolean(KEY_SCAN_SEARCHABLE_PDF, settings.searchablePdf)
+        putString(KEY_SCAN_ENHANCE_BACKGROUND, settings.enhanceBackground?.name ?: ENHANCEMENT_DISABLED)
+        putString(KEY_SCAN_OCR_MODE, settings.ocrMode.name)
+        putString(KEY_SCAN_OCR_LANGUAGE, settings.ocrLanguage.name)
+        putBoolean(KEY_SCAN_DESKEW, settings.deskew)
+        putBoolean(KEY_SCAN_AUTO_CROP, settings.autoCrop)
+        putBoolean(KEY_SCAN_DROP_BLANK_PAGES, settings.dropBlankPages)
+    }
+
+    fun loadOcrLanguagePacks(): Set<OcrLanguagePack> = preferences
+        .getStringSet(KEY_OCR_LANGUAGE_PACKS, null)
+        ?.mapNotNull(OcrLanguagePack::fromStoredValue)
+        ?.filterTo(linkedSetOf()) { it.model != OcrLanguageModel.Unsupported }
+        ?.takeIf { it.isNotEmpty() }
+        ?: OcrLanguagePack.defaultSelection
+
+    fun saveOcrLanguagePacks(languages: Set<OcrLanguagePack>) {
+        val safeLanguages = languages
+            .filterTo(linkedSetOf()) { it.model != OcrLanguageModel.Unsupported }
+            .ifEmpty { OcrLanguagePack.defaultSelection }
+        preferences.edit {
+            putStringSet(KEY_OCR_LANGUAGE_PACKS, safeLanguages.map { it.name }.toSet())
+        }
+    }
+
+    fun loadActiveOcrLanguage(): OcrLanguagePack {
+        val selected = loadOcrLanguagePacks()
+        val stored = OcrLanguagePack.fromStoredValue(
+            preferences.getString(KEY_SCAN_OCR_LANGUAGE, null),
+        )
+        return stored?.takeIf { it in selected } ?: when {
+            OcrLanguagePack.SimplifiedChinese in selected -> OcrLanguagePack.SimplifiedChinese
+            else -> OcrLanguagePack.entries.first { it in selected }
+        }
     }
 
     companion object {
@@ -71,11 +116,21 @@ class SettingsStore(context: Context) {
         const val KEY_SCAN_COLOR_MODE = "scan_color_mode"
         const val KEY_SCAN_MAX_PAGES = "scan_max_pages"
         const val KEY_SCAN_COMBINE_PDF = "scan_combine_pdf"
+        const val KEY_SCAN_SEARCHABLE_PDF = "scan_searchable_pdf"
         const val KEY_SCAN_PRESET = "scan_preset"
         const val KEY_SCAN_ENHANCE_BACKGROUND = "scan_enhance_background"
+        const val KEY_SCAN_OCR_MODE = "scan_ocr_mode"
+        const val KEY_SCAN_OCR_LANGUAGE = "scan_ocr_language"
+        const val KEY_OCR_LANGUAGE_PACKS = "ocr_language_packs"
+        const val KEY_SCAN_DESKEW = "scan_deskew"
+        const val KEY_SCAN_AUTO_CROP = "scan_auto_crop"
+        const val KEY_SCAN_DROP_BLANK_PAGES = "scan_drop_blank_pages"
         const val MIN_SCAN_PAGES = 1
         const val MAX_SCAN_PAGES = 50
         const val DEFAULT_SCAN_MAX_PAGES = 20
+        const val MIN_SCAN_RESOLUTION = 75
+        const val MAX_SCAN_RESOLUTION = 1_200
+        const val ENHANCEMENT_DISABLED = "Disabled"
         val SUPPORTED_RESOLUTIONS = setOf(150, 300, 600)
     }
 }

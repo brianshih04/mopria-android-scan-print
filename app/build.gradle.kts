@@ -6,7 +6,6 @@ plugins {
 android {
     namespace = "com.brianshih.mopria.android.scanprint"
     compileSdk = 37
-
     defaultConfig {
         applicationId = "com.brianshih.mopria.android.scanprint"
         minSdk = 28
@@ -57,8 +56,6 @@ android {
         // follow-up; disabled rather than shipping partial/incorrect plural forms.
         disable += "PluralsCandidate"
         disable += "PropertyEscape"
-        disable += "PropertyEscape"
-        disable += "PropertyEscape"
     }
 
     buildFeatures {
@@ -81,6 +78,19 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
+
+    implementation("org.opencv:opencv:4.14.0")
+
+    // PDFBox Android adds the opt-in searchable text layer. Ordinary PDF export keeps using
+    // PdfPageRenderer when OCR is disabled or no positioned OCR text is available.
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+
+    // ML Kit Text Recognition v2 unbundled clients. Google Play services owns the script models;
+    // only Latin and Chinese are install-time defaults. Japanese and Korean are user-requested.
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-chinese:16.0.1")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-japanese:16.0.1")
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition-korean:16.0.1")
 
     implementation("com.hp.jipp:jipp-core:0.7.18")
     implementation("com.hp.jipp:jipp-pdl:0.7.18")

@@ -2,7 +2,7 @@
 
 Kotlin／Jetpack Compose Android App，透過 eSCL（AirScan）掃描文件，並可透過 Android Print Framework 或實驗性的 Direct IPP 列印手機檔案與掃描結果。專案目前版本為 `0.1.0`，`minSdk 28`、`targetSdk 36`。
 
-> 目前狀態（2026-08-08）：Mock 模式、eSCL pull-scan client、Flatbed／ADF 多頁工作流、PDF／JPEG 文件庫、Android 系統列印入口、Direct IPP（PDF／JPEG／PNG／PWG-Raster／PCLm）、10 種語言 UI、Dark Mode、狀態持久化與暫存檔清理均已完成建置／自動測試驗證（126 JVM tests）。Direct IPP 已合併到 `main`，但仍是 opt-in 實驗功能；真實掃描器與印表機的跨品牌驗收尚待實體硬體。
+> 目前狀態（2026-08-09）：Mock 模式、eSCL pull-scan client、Flatbed／ADF 多頁工作流、file-first 影像處理（deskew／auto-crop／blank-page drop／背景淨化）、PDF／JPEG 文件庫、Android 系統列印入口、Direct IPP（PDF／JPEG／PNG／PWG-Raster／PCLm）、10 種語言 UI、Dark Mode、狀態持久化與暫存檔清理均已完成建置／自動測試驗證。OCR option 已切換為 Google ML Kit Text Recognition v2 unbundled clients、設定／capability safety、Google Play services 模型準備與區域語言選擇流程；實機模型下載、辨識準確率、PSS、16 KB 與真實 scanner 驗收仍待外部 gate。Direct IPP 仍是 opt-in 實驗功能；真實掃描器與印表機的跨品牌驗收尚待實體硬體。
 
 ## Android／Mopria 技術邊界
 
@@ -36,6 +36,8 @@ Android 沒有一個同時提供 Mopria 掃描與列印的公開「Mopria API」
 - 掃描文件與 Flatbed 多頁 session 會持久化至內部儲存，App 被系統殺掉後可恢復。
 - 文件可編輯：旋轉頁面（90°/180°/270°）、排序（前後移動）、裁切（視覺覆蓋 + 滑桿）、刪除頁面。
 - 背景淨化：形態學光照正規化（金字塔下採樣 + 除法 + 對比度微調），3 種強度可選（Light / Normal / Strong）。
+- eSCL 影像處理：下載 response 直接寫入檔案；可選 ADF deskew、平台 auto-crop、blank-page drop，避免全尺寸 Bitmap／image ByteArray 中轉。
+- OCR option：可選 Google ML Kit Text Recognition v2；capability reconciliation 會限制至 300 dpi 以下並在支援時要求灰階，OCR 啟用時自動套用 deskew／auto-crop。預設只選取 English、繁中、簡中；日文、韓文及其他地區語言由使用者按需選取與準備。Latin、繁中／簡中、日文、韓文分別使用 ML Kit script recognizer，由 Google Play services 管理 unbundled 模型；JP／KR 的 Searchable PDF Noto 字型也只在使用者請求語言資源後下載到 App 私有目錄。OCR 與 Searchable PDF 是兩個獨立的使用者選項，均預設關閉；只有同時啟用、OCR 具有有效位置文字且必要字型已就緒時，PDFBox 才加入嵌入式不可見文字層，否則安全回到普通 PDF。未宣稱實機 OCR 準確率、語意化表格或多語字型完整覆蓋率。
 - 平板自動適配：≥600dp 使用左側 NavigationRail，內容限制最大寬度。
 - 啟動時自動清理孤兒暫存檔與過期 cache。
 - Dark Mode 完整支援（surfaceContainer tonal palette、adapted error colors）。
@@ -45,6 +47,8 @@ Android 沒有一個同時提供 Mopria 掃描與列印的公開「Mopria API」
 ## 多國語言
 
 App 使用 Android resource qualifiers 管理翻譯，不在 Compose 畫面中硬編碼可見文字。啟動時會依序檢查使用者手動選擇與 Android 系統語系；系統語系不在支援清單時使用 English。手動選擇會在設定頁立即套用並重新建立 Activity，選擇「依系統設定」即可恢復自動判斷。
+
+OCR 語言選項是獨立於 App UI 語系的設定。預設選取 English、繁體中文、簡體中文、日本語、한국어；使用者可在設定頁依 Global、East Asia、Europe and the Americas 分組勾選其他 catalog 語言，並選擇下一次掃描的 active 語言。可支援的 script model 由 ML Kit／Google Play services 管理，使用者按下「準備」後提出模型安裝要求；目前不支援的語言會顯示為不支援且不可選取。
 
 支援語系與資源目錄如下：
 
@@ -79,7 +83,7 @@ App 使用 Android resource qualifiers 管理翻譯，不在 Compose 畫面中�
 - 接受 JPEG、PDF、PNG，並比對 MIME type 與檔案 signature；PDF 以 `PdfRenderer` 對應實際頁數。
 - HTTPS 使用 Android 系統 trust store，不使用 trust-all；TLS provider 必須具備 TLS 1.3。
 
-刻意未宣稱的範圍：Push Scan、Stored Job Requests、OCR／可搜尋 PDF、加密 PDF request、ScanBufferInfo、ADF duplex UI、使用者認證輸入、手動 IP／URL、Mopria 認證（直接 IPP 列印已接線為 Real 模式的 opt-in 選項，預設系統列印，尚未以實體印表機驗證，見 `IppPrintClient` 與「下一階段」）。`426` 可升級為同 host HTTPS；同一 TCP connection 內的 RFC 2817 raw Upgrade 不在目前支援範圍。
+刻意未宣稱的範圍：Push Scan、Stored Job Requests、ML Kit 實機模型下載／辨識準確率、多語字型完整覆蓋率、無 Google Play services 環境的替代 OCR、加密 PDF request、ScanBufferInfo、ADF duplex UI、使用者認證輸入、手動 IP／URL、Mopria 認證（直接 IPP 列印已接線為 Real 模式的 opt-in 選項，預設系統列印，尚未以實體印表機驗證，見 `IppPrintClient` 與「下一階段」）。`426` 可升級為同 host HTTPS；同一 TCP connection 內的 RFC 2817 raw Upgrade 不在目前支援範圍。
 
 Mopria 規格 PDF 是本機、受限制的研究來源，不會複製到此 repository。公開參考入口：[Mopria eSCL Specification](https://mopria.org/mopria-escl-specification)。
 
@@ -140,6 +144,7 @@ MopriaAndroidScanPrint/
 | `ScanDocumentOrganizer.kt` | Flatbed 逐頁合併與 ADF 多頁合併／拆分規則。 |
 | `IppDiscovery.kt`、`IppPrintClient.kt`、`IppTransport.kt` | Direct IPP／IPPS 探索、capability、job lifecycle 與 bounded fixed-length HTTP 傳輸。 |
 | `IppRasterizer.kt`、`PrintRenderSizing.kt`、`SampledBitmapDecoder.kt` | PDF／圖片轉 PWG-Raster／PCLm，以及最高 300 dpi 的受控 render 尺寸。 |
+| `Ocr.kt`、`OcrLanguagePacks.kt`、`OcrPostProcessing.kt` | ML Kit OCR boundary、script recognizer 對應、區域語言 catalog、預設語言、Google Play services 模型準備、結構化座標／confidence 與版面／數字後處理。 |
 
 ### UI 與輸出層
 
@@ -197,14 +202,15 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 
 ## 最新驗證紀錄
 
-2026-08-08 的建置／品質驗證：
+2026-08-09 的建置／品質驗證：
 
 - 工具鏈：AGP 9.3.1、Gradle 9.5.0、JDK 25 daemon、`compileSdk 37`。
-- Release 啟用 R8 minify + resource shrinking；release APK 由 ~42 MB 縮至 ~2.2 MB。
-- Android lint：0 errors，0 warnings（Kotlin compiler warnings 亦清零）。
-- Unit tests：62 passed。
-- `:app:assembleDebug`／`:app:assembleRelease`：passed。
-- API 36 emulator instrumentation：5 passed，包含 app launch、列印方式 persistence、PDF→PWG/PCLm 與 bounded image decode。
+- Release 啟用 R8 minify + resource shrinking；目前 unsigned APK 約 154 MB，因保留四個 ABI 與 OpenCV native library。
+- Android lint：0 errors；Kotlin compiler 僅有既有 rotate icon deprecation warnings。
+- `:app:testDebugUnitTest`、`:app:assembleDebug`、`:app:assembleRelease`：passed。
+- API 36 emulator instrumentation：latest run 22 passed，包含設定持久化、OpenCV pipeline、deskew／crop／blank-page、ML Kit OCR 邊界與 memory soak。
+- OpenCV A4 300 dpi 十頁 soak：hard peak 增量 ≤256 MB，GC/idle 後 retained PSS 增量 ≤64 MB。
+- Release APK `zipalign -c -P 16 -v 4`：passed；目前 API 36 AVD 為 4 KB，16 KB page-size 尚未驗證。
 - GitHub Actions CI：PR #5 與合併後 `main` push 均通過 test + lint + assemble（Linux + JDK 25）。
 - 測試 APK 改由 [GitHub Release v0.1.0](https://github.com/brianshih04/mopria-android-scan-print/releases/tag/v0.1.0) 發布，不再進 repo。
 
@@ -231,7 +237,9 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 2. 以至少兩個品牌的 Mopria 印表機分別驗證 Android Print Service 與 Direct IPP；涵蓋 IPP/IPPS、PDF／JPEG／PNG／PWG-Raster／PCLm、job lifecycle、憑證、紙張、色彩、雙面、成功、取消與離線。
 3. 將真實 scanner capability 反映為動態掃描 UI 選項，加入手動 IP／URL 與認證流程。
 4. 加入工作持久化、程序死亡恢復、暫存檔保留期限與大型文件 soak test。
-5. target SDK 37 時依 Android 官方 local-network permission／picker 模型遷移；target 36 目前不應提前宣告 `ACCESS_LOCAL_NETWORK`。參考：[Local network permission](https://developer.android.com/privacy-and-security/local-network-permission)。
+5. 以含 Google Play services 的 ARM64 實機驗證 ML Kit Latin、繁中／簡中、按需日文／韓文模型與字型下載、cold/warm latency、辨識準確率與 PSS；另以 16 KB page-size 環境驗證 OpenCV／ML Kit，並決定無 Google Play services 裝置的產品 fallback。
+6. 加入語意化表格 cell extraction、欄位／數值驗證，並以真實 scanner payload 與多語字型樣本驗證 OCR／Searchable PDF 的版面保留。
+7. target SDK 37 時依 Android 官方 local-network permission／picker 模型遷移；target 36 目前不應提前宣告 `ACCESS_LOCAL_NETWORK`。參考：[Local network permission](https://developer.android.com/privacy-and-security/local-network-permission)。
 
 詳細規劃、使用方式與接手資訊：[`dev_plan.md`](dev_plan.md)、[`userguide.md`](userguide.md)、[`CHANGELOG.md`](CHANGELOG.md)、[`HANDOFF.md`](HANDOFF.md)、[`DIRECT_IPP_FOLLOWUPS.md`](DIRECT_IPP_FOLLOWUPS.md)。
 

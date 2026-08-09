@@ -47,6 +47,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
+import com.brianshih.mopria.android.scanprint.domain.OcrMode
 import com.brianshih.mopria.android.scanprint.domain.ScanColorMode
 import com.brianshih.mopria.android.scanprint.domain.ScanPreset
 import com.brianshih.mopria.android.scanprint.domain.ScanInputSource
@@ -272,6 +273,52 @@ private fun ScanComposerCard(
                 }
             }
 
+            Text(
+                stringResource(R.string.scan_processing),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = settings.ocrMode != OcrMode.Disabled,
+                    onClick = {
+                        onChanged(
+                            settings.copy(
+                                ocrMode = if (settings.ocrMode == OcrMode.Disabled) OcrMode.MlKit else OcrMode.Disabled,
+                            ),
+                        )
+                    },
+                    enabled = enabled,
+                    label = { Text(stringResource(R.string.scan_ocr)) },
+                )
+                FilterChip(
+                    selected = settings.deskew,
+                    onClick = { onChanged(settings.copy(deskew = !settings.deskew)) },
+                    enabled = enabled,
+                    label = { Text(stringResource(R.string.scan_deskew)) },
+                )
+                FilterChip(
+                    selected = settings.autoCrop,
+                    onClick = { onChanged(settings.copy(autoCrop = !settings.autoCrop)) },
+                    enabled = enabled,
+                    label = { Text(stringResource(R.string.scan_auto_crop)) },
+                )
+                if (settings.inputSource == ScanInputSource.Adf) {
+                    FilterChip(
+                        selected = settings.dropBlankPages,
+                        onClick = { onChanged(settings.copy(dropBlankPages = !settings.dropBlankPages)) },
+                        enabled = enabled,
+                        label = { Text(stringResource(R.string.scan_drop_blank_pages)) },
+                    )
+                }
+            }
+            if (settings.ocrMode != OcrMode.Disabled) {
+                Text(
+                    stringResource(settings.ocrMode.descriptionRes),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             FilterChip(
                 selected = settings.combineAsPdf,
                 onClick = { onChanged(settings.copy(combineAsPdf = !settings.combineAsPdf)) },
@@ -285,6 +332,21 @@ private fun ScanComposerCard(
                     )
                 },
             )
+
+            FilterChip(
+                selected = settings.searchablePdf,
+                onClick = { onChanged(settings.copy(searchablePdf = !settings.searchablePdf)) },
+                enabled = enabled && settings.ocrMode != OcrMode.Disabled,
+                leadingIcon = { Icon(Icons.Outlined.PictureAsPdf, contentDescription = null) },
+                label = { Text(stringResource(R.string.scan_searchable_pdf)) },
+            )
+            if (settings.ocrMode == OcrMode.Disabled) {
+                Text(
+                    stringResource(R.string.scan_searchable_pdf_requires_ocr),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             if (settings.inputSource == ScanInputSource.Adf) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

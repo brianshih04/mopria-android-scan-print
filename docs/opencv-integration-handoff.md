@@ -1,167 +1,175 @@
-# OpenCV 整合接手指南
+# OpenCV 背景淨化整合接手指南
 
 更新日期：2026-08-09
-關聯檔案：`docs/opencv-integration-plan.md`（完整計畫）
-關聯 commit：`3855f1c`（計畫文件）、`8fe10e0`（純 Kotlin fallback）
+狀態：Phase 0–4C 實作完成；Phase 5 實機／模型 gate 待完成
+主計畫：`docs/opencv-integration-plan.md`
 
-## 1. 這份文件是什麼
+## 1. 接手者先知道的事
 
-這份文件讓接手開發者能在不依賴先前對話的情況下，獨立完成 OpenCV 影像處理管線的整合。完整演算法與架構細節在 `docs/opencv-integration-plan.md`，本文件補充接手所需的**專案現況、檔案位置、驗證指令與注意事項**。
+目前 working tree 已完成 Phase 0–4C 的主要實作：官方 OpenCV AAR、file-first pipeline、原子寫回、`EnhancementResult`、ADF deskew／auto-crop／blank-page drop、OCR settings/backend seam、ML Kit Text Recognition v2、五種預設語言、區域語言選擇、本地化降級訊息，以及 OCR 啟用時的自動 deskew／auto-crop、結構化文字座標／confidence 與版面／數字後處理。Release build、OpenCV 四 ABI、`zipalign -P 16` 與 API 36 emulator instrumentation 已驗證；16 KB、真實 scanner、ML Kit 模型下載／accuracy／PSS gate 尚未完成。透視校正仍不在本期範圍。
 
-## 2. 專案現況
+本文件只提供快速接手路線。技術決策、phase gate、測試矩陣與完成條件以 `docs/opencv-integration-plan.md` 為準；若兩份文件不一致，以主計畫為準。
 
-| 項目 | 現狀 |
+## 2. 必读順序
+
+1. `AGENTS.md`：安全紅線、固定建置旗標、i18n 與實機聲明限制。
+2. `docs/opencv-integration-plan.md`：完整設計與 phase gate。
+3. `domain/BackgroundEnhancer.kt`：OpenCV pipeline、runtime 狀態、source-safe file flow 及 JVM reference fixture。
+4. `domain/RealIntegrationProvider.kt`：scanner payload 下載與增強呼叫位置。
+5. `domain/IntegrationModels.kt`：`EnhancementStrength`、`ScanSettings`。
+6. `domain/SettingsStore.kt`：掃描設定持久化。
+7. `domain/ScanImagePipeline.kt`、`domain/Ocr.kt`、`domain/OcrLanguagePacks.kt`、`domain/OcrPostProcessing.kt`：file-first processing、ML Kit boundary、script model 管理與結構化 OCR 版面／數字後處理。
+8. `ui/MopriaViewModel.kt`、`ui/ScanScreen.kt`：preset、capabilities、進度與 UI。
+9. `BackgroundEnhancerTest.kt` 與 Android instrumentation tests：色彩、source integrity、PSS 與 image processing contract。
+
+## 3. 現況與已知風險
+
+| 項目 | 現況 |
 |---|---|
-| 最新 commit | `3855f1c`（docs: update OpenCV plan） |
-| JVM unit tests | 126 tests，全部通過 |
-| BackgroundEnhancer | 純 Kotlin 實作（Box Blur + 金字塔下採樣 + 除法 + 對比度），作為 fallback |
-| EnhancementStrength | 3 種強度（Light / Normal / Strong），已整合至 ScanScreen UI |
-| OpenCV 依賴 | **尚未加入** |
-| OpenCV 管線 | **尚未實作** |
+| OpenCV dependency | `org.opencv:opencv:4.14.0` 已加入；license 已記錄，release／zipalign 已驗證，16 KB emulator 尚待驗證 |
+| Production pipeline | OpenCV file-first morphology close + color divide + contrast |
+| Result／fallback | `Applied`／`Skipped`／`Failed`；原檔失敗路徑保留 |
+| 強度 | Light / Normal / Strong |
+| 檔案格式 | JPEG／PNG 嘗試處理；scanner-returned PDF 跳過 |
+| 單元測試 | 以當次 Gradle 輸出為準，不在文件固定數量 |
+| 實機驗證 | 尚未完成，不可宣稱品牌相容 |
+| eSCL image stream | HTTP response 直接落地 sibling file；不建立影像 ByteArray／full Bitmap |
+| ADF／平台 processing | deskew、auto-crop、blank-page drop 已接線並有 instrumentation contract |
+| OCR option | ML Kit Text Recognition v2 option、settings、capability safety、script model request、language catalog、結構化 bounds／confidence 與版面／數字 formatter；模型由 Google Play services 管理 |
+| memory | `largeHeap=true`；A4 300 dpi 10 頁 gate hard peak 256 MB、retained 64 MB |
 
-## 3. 必讀檔案（接手前依序閱讀）
+仍需注意的風險與未完成 gate：
 
-| 順序 | 檔案 | 內容 |
-|---|---|---|
-| 1 | `AGENTS.md` | 專案安全紅線、建置指令、i18n 規範、平台 gotchas |
-| 2 | `docs/opencv-integration-plan.md` | OpenCV 整合完整計畫（402 行）：目標、架構、4 階段步驟、記憶體估算、風險 |
-| 3 | `app/src/main/.../domain/BackgroundEnhancer.kt` | 現有純 Kotlin 實作（258 行）：API 不變，OpenCV 版本取代內部實作 |
-| 4 | `app/src/main/.../domain/IntegrationModels.kt` | `EnhancementStrength` enum 與 `ScanSettings.enhanceBackground` 定義 |
-| 5 | `app/src/main/.../domain/RealIntegrationProvider.kt` | 掃描流程中呼叫 `BackgroundEnhancer.enhanceImageFile()` 的位置 |
-| 6 | `app/src/main/.../ui/ScanScreen.kt` | `EnhancementStrength` FilterChips UI |
-| 7 | `app/src/test/.../domain/BackgroundEnhancerTest.kt` | 純邏輯測試（processPixels），OpenCV 遷移後仍需通過 |
+- A4 300 dpi 與 ADF 10 頁 PSS 已在目前 emulator 通過 256 MB／64 MB gate；ARM64 實機尚未量測。
+- 16 KB page-size emulator／ARM 實機、ML Kit model download／accuracy／PSS、Google Play services 缺失 fallback 尚未完成；目前 release artifact、OpenCV 四 ABI 與 zipalign 已驗證。
+- 實際低磁碟、取消、replace 失敗與 OpenCV 初始化失敗的 instrumentation gate 尚待補齊。
+- 真實 scanner payload 與彩色文件 fixture 尚未完成實機驗證。
 
-## 4. 現有 API（不可破壞）
+## 4. 已決定的方向
 
-接手者必須保持以下 API 不變，只替換內部實作：
+### Dependency
 
-```kotlin
-// EnhancementStrength — 定義在 IntegrationModels.kt
-enum class EnhancementStrength(@StringRes val labelRes: Int) {
-    Light(R.string.enhance_light),
-    Normal(R.string.enhance_normal),
-    Strong(R.string.enhance_strong),
-}
+- 使用官方 Maven Central AAR：`org.opencv:opencv:4.14.0`；license 記錄於 `docs/third-party-licenses.md`。
+- 不使用 `com.quickbirdstudios:opencv:4.5.3.0`。
+- 第一階段不先排除 x86/x86_64；ABI 瘦身等實測與裝置矩陣完成後再做。
+- Release 前必須驗證 16 KB page-size alignment 與 16 KB emulator；目前 APK alignment 已通過，16 KB emulator 尚未取得。
 
-// ScanSettings — 定義在 IntegrationModels.kt
-data class ScanSettings(
-    // ... 其他欄位 ...
-    val enhanceBackground: EnhancementStrength? = null,  // null = 關閉
-)
+### API
 
-// BackgroundEnhancer — 定義在 BackgroundEnhancer.kt
-// 這個 API 不變，內部從純 Kotlin 改為 OpenCV + fallback
-object BackgroundEnhancer {
-    fun apply(bitmap: Bitmap, strength: EnhancementStrength): Bitmap
-    fun enhanceImageFile(file: File, strength: EnhancementStrength): Boolean
-    internal fun processPixels(pixels: IntArray, width: Int, height: Int, strength: EnhancementStrength): IntArray
-}
-```
+- 將同步 `Boolean` API 改為 suspend `EnhancementResult`。
+- `Applied`、`Skipped`、`Failed` 必須可區分。
+- CPU 工作使用 `Dispatchers.Default`；檔案與 HTTP 使用 `Dispatchers.IO`。
+- 不使用 `runBlocking`，不吞 `CancellationException` 或 `OutOfMemoryError`。
 
-## 5. 驗證指令（照抄即可）
+### File safety
+
+- 永遠寫入同目錄暫存檔。
+- encode、signature、decode validation 全部成功後才 atomic replace。
+- 任何失敗都要證明 source SHA-256 不變。
+
+### Fallback
+
+- OpenCV unavailable／PDF／超大圖片：保留原圖並回傳 `Skipped`。
+- UI 顯示本地化提示，不假裝增強成功。
+- 純 Kotlin pipeline 暫不作 production 自動 fallback。
+
+### Scope
+
+- 本期做 eSCL 文件背景淨化與 file-first image operations；OCR 已接到 ML Kit 與結構化後處理，Searchable PDF 也已接入獨立 opt-in 的 PDFBox export path；真實模型 deployment、語意化表格、多語字型與 scanner payload 仍受外部 gate。
+- `warpPerspective`、相機、相片匯入、四角 UI 另開後續里程碑。
+
+## 5. 實作順序
+
+1. **Phase 0 — Baseline 修正（已完成）**
+   - 純 Kotlin pipeline 僅保留作 reference fixture，不作 production 自動 fallback。
+   - 修正 RGB channel normalization、暗色內容保留、主文件過度宣稱與重複 lint suppression。
+
+2. **Phase 1 — Dependency spike（基礎已完成）**
+   - 官方 OpenCV AAR、`OpenCvRuntime` 與 instrumentation Mat smoke test 已加入。
+   - Debug／Release build、APK、四 ABI、OpenCV license 與 `zipalign -P 16` 已通過；16 KB emulator／ELF runtime 尚待 gate。
+
+3. **Phase 2 — 安全檔案層（主要實作已完成）**
+   - `EnhancementResult`、suspend API、pixel limit、signature/bounds、temp encode、validation、atomic replace 已加入。
+   - JVM 已驗證 PDF／unsupported format source integrity；注入式 failure matrix 尚待 instrumentation。
+
+4. **Phase 3 — OpenCV pipeline（基礎已完成）**
+   - file-first decode、downsampled morphology close、`Core.divide(..., 255.0)`、alpha preservation 與 `MatScope` 已加入。
+   - OpenCV fixture、A4 300 dpi 十頁 emulator memory gate 已通過；真實 scanner fixture、ARM PSS 與畫質驗收尚待完成。
+
+5. **Phase 4 — Provider/UI（最小接線已完成）**
+   - Real provider 已攜帶每頁 enhancement result；PDF、OpenCV unavailable、ImageTooLarge 會回報 Skipped。
+   - ViewModel 已接上 10 語系訊息、進度細分與 capability/preset reconciliation。
+
+6. **Phase 4A — eSCL image operations／OCR（目前已接線）**
+   - `ScanImagePipeline` 執行 blank-page drop、deskew、auto-crop，並與 enhancement 共用 source-safe temp flow。
+   - `OcrMode.MlKit` 只在 <=300 dpi／grayscale-safe capability 下保留；model/runtime 缺失回報 skipped。
+   - ML Kit Text Recognition v2 的 file URI、Latin／Chinese／Japanese／Korean clients 與 ModuleInstall request 已納入；模型下載、accuracy 與 PSS 仍待外部 gate。
+
+7. **Phase 4B — OCR language selection（目前已接線）**
+   - 預設 English、繁中、簡中；日文、韓文及其餘 catalog 由設定頁按 Global／East Asia／Europe and the Americas 分組供使用者按需選取。
+   - ML Kit script model manager 透過 Google Play services `ModuleInstallClient` 發出準備請求，不保存 URL、`.nb` 或模型 hash；JP／KR PDF 字型另以 checksum 驗證後保存於 App 私有目錄，不進主 APK。
+    - Chinese、Japanese、Korean 與 Latin 由 ML Kit script clients 提供；目前不支援的 catalog 語言會顯示明確狀態，不會被當成可用模型。
+
+8. **Phase 4C — OCR 文件品質後處理（目前已接線）**
+   - OCR 啟用時 Real provider 自動把 deskew／auto-crop 納入處理設定。
+   - `OcrResult.Applied` 保留 block／line／element／symbol、bounds、角度、recognized language 與 confidence。
+   - 寬版表格按 y 分列、雙欄保留欄順序、數字 formatter 修正全形／混用千分位；Searchable PDF 以 page-scoped OCR layout、PDFBox invisible text layer 與 crop／rotation transform 接入，尚未做 cell-level extraction、欄位驗證或多語字型完整 coverage。
+
+9. **Phase 5 — 實機與發布 gate**
+   - A4 300 dpi、ADF 10 頁、低記憶體實機。
+   - 4 KB／16 KB ARM64 環境。
+   - 色彩 fixture、取消、低磁碟空間、source integrity。
+
+每個 phase 完成後才進下一階段，不把 dependency、演算法、UI 與透視校正一次混在同一個 diff。
+
+## 6. 最重要的實作品質門檻
+
+- 原始掃描檔在所有失敗路徑保持不變。
+- 每個 OpenCV `Mat`／kernel／channel 在成功、例外與取消時都 release。
+- A4 300 dpi 單頁 peak memory 與 ADF 10 頁 soak 符合主計畫 gate。
+- 600 dpi 或超過像素上限時不嘗試到 OOM；明確 Skipped。
+- 藍色簽名、紅色印章、淡色筆跡不能被壓成黑色或白色。
+- Light／Normal／Strong 在固定 fixture 上必須有嚴格差異。
+- PDF payload 不得靜默顯示增強成功。
+- 未量測前，不寫「0.5 秒」「16x」「記憶體 1/16」等完成式宣稱。
+
+## 7. 固定驗證指令
+
+PowerShell：
 
 ```powershell
-# Windows PowerShell（本專案主要開發環境）
 .\gradlew.bat :app:testDebugUnitTest --max-workers=1 --no-daemon
 .\gradlew.bat :app:lintDebug :app:assembleDebug --max-workers=1 --no-daemon
+git diff --check
 ```
 
-> WSL 環境請用 `cmd.exe /C "set \"JAVA_HOME=C:\Program Files\Android\Android Studio\jbr\" && gradlew.bat ..."`。
-> JDK 25 來自 Android Studio bundled JBR（`C:\Program Files\Android\Android Studio\jbr`）。
-> `local.properties` 需指向 Android SDK（`sdk.dir=C:/Users/Brian/AppData/Local/Android/Sdk`）。
-> Lint PropertyEscape 在 WSL+Windows 會誤報 `local.properties`，CI 在 Linux 上不會有此問題。
+Dependency／Release gate：
 
-## 6. 實作路線圖摘要
-
-詳細步驟見 `docs/opencv-integration-plan.md` 第 3 節，以下為快速索引：
-
-### 第一階段：建置整合（1-2 天）
-1. `app/build.gradle.kts` 加入 `implementation("com.quickbirdstudios:opencv:4.5.3.0")`
-2. 加入 `ndk { abiFilters.addAll(setOf("arm64-v8a", "armeabi-v7a")) }`
-3. `app/proguard-rules.pro` 加入 `-keep class org.opencv.** { *; }`
-4. `MainActivity.onCreate()` 加入 `OpenCVLoader.initDebug()`
-5. 驗收：`assembleDebug` + `assembleRelease` 通過
-
-### 第二階段：核心管線（2-3 天）
-1. 建立 `DocumentScannerPipeline.kt`（`processScanPipeline` suspend fun）
-2. 實作形態學 CLOSE + 金字塔下採樣 + `Core.divide` + `convertTo`
-3. 實作透視校正 `applyPerspectiveTransform`（`warpPerspective`）
-4. `EnhancementStrength` 映射到 kernel size / alpha / beta / downsample factor
-5. 嚴格 `Mat.release()`（參見計畫第 5 節記憶體安全規範）
-6. 保留純 Kotlin `BackgroundEnhancer` 作為 fallback
-
-### 第三階段：UI 整合（1 天）
-1. `RealIntegrationProvider` 呼叫 OpenCV 管線（有 fallback）
-2. `Dispatchers.Default` 非同步處理
-3. UI Loading 進度
-
-### 第四階段：測試驗證（1 天）
-1. 壓力測試：連續 5-10 張 A4 300dpi
-2. 極端樣本：藍色簽名、紅色印章、黑色標題
-3. Lint + assembleDebug + assembleRelease
-
-## 7. 安全紅線（接手者必讀）
-
-1. **TLS 一律使用 Android 系統 trust store，不可加入 trust-all。**
-2. **eSCL job／redirect URL 必須同 host、同 resource root。**
-3. **XML parser 必須停用 DOCTYPE 與 external entities（XXE 防護）。**
-4. **不可用 Mock／fixture 結果宣稱「Mopria Certified」。**
-5. **ScanBridge／eSCLKt 為 GPL：不可複製或連結其程式碼。**
-6. **OpenCV 的每一個 `Mat()` 都必須 `.release()`，否則連續處理會 OOM。**
-
-## 8. EnhancementStrength 參數映射
-
-| 強度 | kernel size | alpha (對比度) | beta (亮度) | downsample | 效果 |
-|---|---|---|---|---|---|
-| Light | 11×11 | 1.0 | 0 | 4x | 溫和清理，保留淡色內容 |
-| Normal | 15×15 | 1.05 | -10 | 4x | 均衡（Document preset 預設） |
-| Strong | 21×21 | 1.15 | -20 | 6x | 激烈漂白，可能丟失極淡內容 |
-
-## 9. 記憶體估算（A4 300dpi RGBA）
-
-| 階段 | 大小 |
-|---|---|
-| srcMat (RGBA) | ~33 MB |
-| colorMat (RGB) | ~25 MB |
-| smallMat (1/4 downsample) | ~1.6 MB |
-| fullBg (upscale 回原尺寸) | ~25 MB |
-| normalized (divide 結果) | ~25 MB |
-| **峰值合計** | **~112 MB** |
-
-> 純 Kotlin 版本峰值約 150-200 MB（多個 IntArray 暫存）。OpenCV 版本因下採樣更激進且 native heap 管理，峰值更低。
-
-## 10. 雙軌 Fallback 策略
-
-```
-BackgroundEnhancer.enhanceImageFile(file, strength)
-    │
-    ├── OpenCVLoader.initDebug() == true?
-    │       │
-    │       ├── YES → DocumentScannerPipeline.processScanPipeline(bitmap, strength)
-    │       │
-    │       └── NO  → 純 Kotlin processPixels（現有實作，不變）
-    │
-    └── 寫回 JPEG/PNG
+```powershell
+.\gradlew.bat :app:assembleRelease --max-workers=1 --no-daemon
+# 使用本機已安裝的 build-tools 版本；以下以 36.1.0 為例
+& "$env:ANDROID_SDK_ROOT\build-tools\36.1.0\zipalign.exe" -c -P 16 -v 4 app\build\outputs\apk\release\app-release-unsigned.apk
 ```
 
-## 11. 回滾
+不要把個人 JDK 或 Android SDK 絕對路徑寫進 repository。`local.properties` 由本機或 Android Studio 產生。
 
-如果 OpenCV 整合失敗：
-1. `BackgroundEnhancer` 內部改回直接呼叫純 Kotlin pipeline
-2. 移除 `build.gradle.kts` 中的 OpenCV 依賴和 ABI filters
-3. 純 Kotlin 版本即為生產版本
+## 8. 安全紅線
 
-回滾成本：**低**（外部 API 不變，只切換內部實作）。
+OpenCV 工作不得改動既有網路安全契約：
 
-## 12. 完成條件 Checklist
+- TLS 使用 Android 系統 trust store。
+- eSCL job／redirect URL 維持同 host、同 resource root 限制。
+- XML parser 維持 DOCTYPE／external entity 禁用。
+- 不複製或連結 GPL ScanBridge／eSCLKt 程式碼。
+- 不以 Mock／fixture 宣稱 Mopria Certified 或品牌相容。
 
-- [ ] OpenCV 依賴加入且 `assembleDebug` + `assembleRelease` 通過
-- [ ] `DocumentScannerPipeline.processScanPipeline()` 產生正確漂白結果
-- [ ] `EnhancementStrength` 3 種強度有可見差異
-- [ ] 透視校正 `warpPerspective` 四角拉正正確
-- [ ] A4 300dpi 處理 < 1 秒
-- [ ] 連續 5-10 張後 Profiler heap 回基準線
-- [ ] 藍色簽名、紅色印章、黑色標題保留且無光暈
-- [ ] OpenCV 初始化失敗時 fallback 到純 Kotlin
-- [ ] Lint clean，126+ JVM tests 通過
-- [ ] CHANGELOG、HANDOFF、README 更新
+## 9. 完成交接時應留下的證據
+
+- dependency 與 license 決策紀錄。
+- APK/AAB before/after size 與 ABI 清單。
+- 16 KB zip/ELF alignment 輸出與 emulator 結果。
+- 色彩 fixture before/after。
+- source integrity failure tests。
+- Java heap、native heap、total PSS 與 10 頁 soak 圖表／數據。
+- 實際 test、lint、build 輸出；不要把舊測試數字複製到新 commit message。
+- 尚未實機驗證的限制與 rollback 步驟。

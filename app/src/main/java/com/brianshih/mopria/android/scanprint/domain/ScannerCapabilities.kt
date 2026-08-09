@@ -13,21 +13,56 @@ data class ScannerCapabilities(
     val supportedColorModes: Set<ScanColorMode> = ScanColorMode.entries.toSet(),
     val maxAdfPages: Int = 50,
 ) {
+    /** Coerce persisted/UI settings to values the current scanner actually advertises. */
+    fun reconcile(settings: ScanSettings): ScanSettings {
+        val supported = supportedResolutions
+            .filter { it > 0 }
+        val ocrResolutions = if (settings.ocrMode != OcrMode.Disabled) {
+            supported.filter { it <= MAX_OCR_DPI }
+        } else {
+            supported
+        }
+        val resolutionPool = ocrResolutions.ifEmpty { supported }
+        val resolution = resolutionPool.let { available ->
+            val minimumDistance = available.minOfOrNull { kotlin.math.abs(it - settings.resolutionDpi) }
+            available.filter { kotlin.math.abs(it - settings.resolutionDpi) == minimumDistance }.maxOrNull()
+            }
+            ?: settings.resolutionDpi
+        val source = settings.inputSource.takeIf(supportedSources::contains)
+            ?: ScanInputSource.Flatbed.takeIf(supportedSources::contains)
+            ?: supportedSources.firstOrNull()
+            ?: settings.inputSource
+        val requestedOcr = settings.ocrMode != OcrMode.Disabled
+        val ocrMode = if (requestedOcr && ocrResolutions.isNotEmpty()) settings.ocrMode else OcrMode.Disabled
+        val colorMode = if (ocrMode != OcrMode.Disabled && ScanColorMode.Grayscale in supportedColorModes) {
+            ScanColorMode.Grayscale
+        } else settings.colorMode.takeIf(supportedColorModes::contains)
+            ?: ScanColorMode.Color.takeIf(supportedColorModes::contains)
+            ?: supportedColorModes.firstOrNull()
+            ?: settings.colorMode
+        return settings.copy(
+            inputSource = source,
+            resolutionDpi = resolution,
+            colorMode = colorMode,
+            maxPages = settings.maxPages.coerceIn(1, maxAdfPages.coerceAtLeast(1)),
+            ocrMode = ocrMode,
+        ).enforceProcessingSafety()
+    }
+
     companion object {
         /** Default capabilities used in Mock mode — everything is available. */
         val DEFAULT = ScannerCapabilities()
 
         /**
-         * Build from parsed eSCL capabilities. Maps raw protocol values to app enums,
-         * keeping only resolutions the app offers (150/300/600) that the scanner also supports.
+         * Build from parsed eSCL capabilities. Maps raw protocol values to app enums and keeps
+         * every sane scanner-advertised resolution so the UI never offers an unsupported DPI.
          */
         fun fromEscl(escl: EsclCapabilities): ScannerCapabilities {
             val appResolutions = setOf(150, 300, 600)
-            val esclResolutions = escl.resolutions.toSet()
-            // Intersect: only show dpi values the app offers AND the scanner supports.
-            val resolutions = appResolutions.intersect(esclResolutions).let {
-                if (it.isEmpty()) appResolutions else it
-            }
+            val resolutions = escl.resolutions
+                .filter { it in SettingsStore.MIN_SCAN_RESOLUTION..SettingsStore.MAX_SCAN_RESOLUTION }
+                .toSet()
+                .ifEmpty { appResolutions }
             val sources = buildSet {
                 if (escl.inputSources.any { it.equals("Platen", true) }) add(ScanInputSource.Flatbed)
                 if (escl.inputSources.any { it.equals("Feeder", true) }) add(ScanInputSource.Adf)

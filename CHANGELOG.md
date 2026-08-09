@@ -4,18 +4,31 @@
 
 ## [Unreleased] - 2026-08-09
 
-### Added — Enhancement Strength & Pyramid Optimization
+### Added — OpenCV Background Cleanup Foundation
 
+- 加入官方 `org.opencv:opencv:4.14.0` Android AAR 與 OpenCV runtime smoke-test 基礎。
 - 新增 `EnhancementStrength` enum：3 種背景淨化強度（Light / Normal / Strong），各有不同的對比度倍率（alpha）與白色閾值（threshold）。
 - ScanScreen 新增 Light / Normal / Strong 強度選擇器（FilterChips），使用者可即時切換。
-- BackgroundEnhancer 加入金字塔下採樣優化：背景光照估計在 1/4 解析度執行（區域平均下採樣 → 小核 Box Blur → 雙線性上採樣），再於原始解析度做除法正規化。A4 300dpi 處理速度提升 ~16x，記憶體降至 1/16。
+- BackgroundEnhancer 改為 file-first OpenCV morphology close + color divide + contrast pipeline，保留 PNG alpha。
+- 新增 `EnhancementResult`：Applied、Skipped、Failed 可區分，並以暫存檔、輸出驗證與 atomic replace 保護原始掃描檔。
+- 新增 JPEG／PNG signature、PDF／超大圖片／OpenCV unavailable 的安全降級，以及本地化狀態訊息。
+- 新增 OpenCV runtime、MatScope、RGB fixture 與 source-integrity unit tests。
 - 新增 3 條強度字串 × 10 種語言（enhance_light / enhance_normal / enhance_strong）。
+
+### Added — eSCL Image Pipeline & OCR Option
+
+- eSCL `NextDocument` 維持 stream-to-file，新增檔案優先的 ADF deskew、平台 auto-crop 與 duplex blank-page drop；失敗時保留原始檔並以 atomic replace 寫回。
+- 新增 `OcrMode.MlKit` 選項、設定持久化、capability safety（不超過 300 dpi，支援時使用灰階）及本地化 skip／failure 狀態。
+- 以 Google ML Kit Text Recognition v2 unbundled clients 實作 OCR；依 Latin、Chinese、Japanese、Korean script 建立 recognizer，模型準備交由 Google Play services 的 ModuleInstall 管理，不在 App 內放置 JNI、`.nb` 或自建模型下載器。
+- 新增 OCR 語言 catalog 與區域分組設定：預設 English、繁中、簡中；日文、韓文與其他地區語言由使用者選擇後再提出 ML Kit script model 準備要求。官方不支援的 catalog 語言會標示為不可選取。
+- OCR 啟用時自動套用 deskew／auto-crop；`OcrResult.Applied` 保留 ML Kit block／line／element／symbol 的座標、角度、語言與 confidence，並新增雙欄／寬版表格閱讀順序與保守數字格式化。OCR 與 Searchable PDF 都是預設關閉的獨立使用者選項；Searchable PDF 以 PDFBox、內建 Noto Sans TC 與按需下載的 JP／KR 地域字型、page-scoped OCR layout 及 crop／rotation 座標轉換產生不可見文字層，並以 NFKC 與明確 ToUnicode CMap 避免 CJK 相容部首破壞搜尋。沒有有效位置文字或缺少必要字型時回到普通 PDF。
+- 新增三張中文樣本的正式輸出 instrumentation proof：三頁 PDF 可由 PDFBox 解析並抽取非空文字，render 後原始影像仍完整；此驗證不代表實機 OCR accuracy 或多語字型完整覆蓋。
+- AndroidManifest 開啟 `android:largeHeap="true"`；OpenCV pipeline 使用 `MatScope` 明確釋放 native matrices，並以 256 MB peak／64 MB retained-PSS gate 驗證十頁 A4 300 dpi soak。
 
 ### Changed
 
 - `ScanSettings.enhanceBackground` 型別從 `Boolean` 改為 `EnhancementStrength?`（null = 關閉）。
-- BackgroundEnhancer pipeline 新增對比度微調步驟（`applyContrast(alpha, beta)`），借鏡 OpenCV `convertTo(alpha, beta)` 讓彩色內容更飽和。
-- `BackgroundEnhancer.apply()` 和 `enhanceImageFile()` 新增 `strength` 參數。
+- `BackgroundEnhancer.enhanceImageFile()` 改為 suspend API，回傳 `EnhancementResult`。
 - Document preset 預設 `EnhancementStrength.Normal`。
 
 ### Fixed — Code Review (commit f751698)
@@ -29,8 +42,9 @@
 
 ### Testing
 
-- JVM unit tests 由 123 增至 126（+3）。
-- 新增 BackgroundEnhancerTest 強度比較測試（3 tests）：Strong 比 Light 漂白更多像素、Normal 介於兩者之間、暗色內容在所有強度下均保留。
+- 背景淨化測試補上 RGB channel／色相、強度差異、PDF／unsupported format 及原始檔不變驗證；測試總數以當次 Gradle 輸出為準。
+- 新增 deskew、auto-crop、blank-page、OCR native boundary、asset/package contract、設定持久化與 OpenCV memory soak instrumentation；最新 API 36 emulator instrumentation 22 tests 全部通過。
+- Debug lint／assemble、Release assemble 與 release APK `zipalign -P 16` 驗證通過；16 KB page-size emulator、ARM model load／accuracy／PSS 與真實 scanner 仍待外部驗證。
 
 
 

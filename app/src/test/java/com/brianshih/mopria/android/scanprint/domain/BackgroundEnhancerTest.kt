@@ -1,7 +1,15 @@
 package com.brianshih.mopria.android.scanprint.domain
 
+import java.io.File
+import java.io.IOException
+import java.security.MessageDigest
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /**
@@ -17,6 +25,29 @@ class BackgroundEnhancerTest {
 
     private fun argb(r: Int, g: Int, b: Int): Int =
         (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+
+    private fun injectedDependencies(
+        input: EnhancementInput = EnhancementInput.Image(EnhancementImageFormat.Jpeg, 20, 20),
+        runtimeAvailable: Boolean = true,
+        encoder: EnhancementEncoder = EnhancementEncoder { _, destination, _, _ ->
+            destination.writeText("encoded fixture")
+            null
+        },
+        validator: EnhancementOutputValidator = EnhancementOutputValidator { _, _, _, _ -> true },
+        replacer: EnhancementFileReplacer = EnhancementFileReplacer(AtomicFileReplacer::replace),
+        temporaryFileFactory: EnhancementTemporaryFileFactory = EnhancementTemporaryFileFactory { source, _ ->
+            File.createTempFile("${source.name}.injected-", ".tmp", source.parentFile)
+        },
+    ) = EnhancementDependencies(
+        inspector = EnhancementInputInspector { input },
+        runtimeAvailable = { runtimeAvailable },
+        encoder = encoder,
+        validator = validator,
+        replacer = replacer,
+        temporaryFileFactory = temporaryFileFactory,
+    )
+
+    private fun sha256(file: File): ByteArray = MessageDigest.getInstance("SHA-256").digest(file.readBytes())
 
     @Test
     fun pureWhiteImageStaysWhite() {
@@ -64,6 +95,24 @@ class BackgroundEnhancerTest {
         val blueLum = BackgroundEnhancer.luminance(result[100])
         assertTrue("blue stamp should be preserved (low luminance <100), got $blueLum", blueLum < 100)
         assertEquals("background should be white", white, result[0])
+    }
+
+    @Test
+    fun dimColoredContentKeepsItsDominantChannel() {
+        val background = argb(205, 205, 205)
+        val blue = argb(45, 90, 180)
+        val red = argb(180, 70, 45)
+        val pixels = IntArray(30 * 10) { background }
+        pixels[100] = blue
+        pixels[101] = red
+
+        val result = BackgroundEnhancer.processPixels(pixels, 30, 10)
+        val enhancedBlue = result[100]
+        val enhancedRed = result[101]
+        assertTrue("blue content must not become white", enhancedBlue != argb(255, 255, 255))
+        assertTrue("red content must not become white", enhancedRed != argb(255, 255, 255))
+        assertTrue("blue hue should be preserved", (enhancedBlue and 0xFF) > ((enhancedBlue shr 16) and 0xFF))
+        assertTrue("red hue should be preserved", ((enhancedRed shr 16) and 0xFF) > (enhancedRed and 0xFF))
     }
 
     @Test
@@ -128,6 +177,12 @@ class BackgroundEnhancerTest {
 
         assertTrue("Normal ($normalWhite) should be between Light ($lightWhite) and Strong ($strongWhite)",
             normalWhite >= lightWhite && strongWhite >= normalWhite)
+
+        val lightResult = BackgroundEnhancer.processPixels(pixels, width, height, EnhancementStrength.Light)
+        val normalResult = BackgroundEnhancer.processPixels(pixels, width, height, EnhancementStrength.Normal)
+        val strongResult = BackgroundEnhancer.processPixels(pixels, width, height, EnhancementStrength.Strong)
+        assertTrue("Normal strength must produce a different fixture output", !lightResult.contentEquals(normalResult))
+        assertTrue("Strong strength must produce a different fixture output", !normalResult.contentEquals(strongResult))
     }
 
     @Test
@@ -154,6 +209,174 @@ class BackgroundEnhancerTest {
             val result = BackgroundEnhancer.processPixels(pixels, 10, 10, strength)
             val lum = BackgroundEnhancer.luminance(result[0])
             assertTrue("dark content should be preserved at $strength (lum <100), got $lum", lum < 100)
+        }
+    }
+
+    @Test
+    fun scannerPdfIsSkippedAndSourceIsUnchanged() = runBlocking {
+        val file = File.createTempFile("background-enhancer-", ".bin")
+        try {
+            val original = "%PDF-1.7\nfixture".toByteArray()
+            file.writeBytes(original)
+            val result = BackgroundEnhancer.enhanceImageFile(file)
+            assertEquals(
+                EnhancementResult.Skipped(EnhancementSkipReason.UnsupportedPdf),
+                result,
+            )
+            assertArrayEquals(original, file.readBytes())
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun unsupportedFormatIsSkippedAndSourceIsUnchanged() = runBlocking {
+        val file = File.createTempFile("background-enhancer-", ".bin")
+        try {
+            val original = "not an image".toByteArray()
+            file.writeBytes(original)
+            val result = BackgroundEnhancer.enhanceImageFile(file)
+            assertEquals(
+                EnhancementResult.Skipped(EnhancementSkipReason.UnsupportedFormat),
+                result,
+            )
+            assertArrayEquals(original, file.readBytes())
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun injectedFailuresKeepSourceShaAndRemoveTemporaryFile() = runBlocking {
+        val failures = listOf(
+            EnhancementError.DecodeFailed to injectedDependencies(
+                encoder = EnhancementEncoder { _, _, _, _ -> EnhancementError.DecodeFailed },
+            ),
+            EnhancementError.ProcessingFailed to injectedDependencies(
+                encoder = EnhancementEncoder { _, _, _, _ -> throw IllegalStateException("processing") },
+            ),
+            EnhancementError.EncodeFailed to injectedDependencies(
+                encoder = EnhancementEncoder { _, _, _, _ -> EnhancementError.EncodeFailed },
+            ),
+            EnhancementError.OutputValidationFailed to injectedDependencies(
+                validator = EnhancementOutputValidator { _, _, _, _ -> false },
+            ),
+            EnhancementError.ReplaceFailed to injectedDependencies(
+                replacer = EnhancementFileReplacer { _, _ -> throw IOException("replace") },
+            ),
+            EnhancementError.EncodeFailed to injectedDependencies(
+                temporaryFileFactory = EnhancementTemporaryFileFactory { _, _ -> throw IOException("disk full") },
+            ),
+        )
+
+        failures.forEachIndexed { index, (expectedError, dependencies) ->
+            val source = File.createTempFile("background-source-$index-", ".bin")
+            try {
+                source.writeText("original fixture $index")
+                val before = sha256(source)
+                val result = BackgroundEnhancer.enhanceImageFile(
+                    source,
+                    EnhancementStrength.Normal,
+                    dependencies,
+                )
+                assertEquals(EnhancementResult.Failed(expectedError), result)
+                assertArrayEquals("source changed for $expectedError", before, sha256(source))
+                val leftovers = source.parentFile?.listFiles { _, name ->
+                    name.startsWith("${source.name}.injected-")
+                }.orEmpty()
+                assertTrue("temporary file leaked for $expectedError", leftovers.isEmpty())
+            } finally {
+                source.delete()
+            }
+        }
+    }
+
+    @Test
+    fun cancellationIsRethrownAndSourceIsUnchanged() {
+        val source = File.createTempFile("background-cancel-", ".bin")
+        try {
+            source.writeText("original cancellation fixture")
+            val before = sha256(source)
+            val dependencies = injectedDependencies(
+                encoder = EnhancementEncoder { _, _, _, _ -> throw CancellationException("cancelled") },
+            )
+
+            assertThrows(CancellationException::class.java) {
+                runBlocking {
+                    BackgroundEnhancer.enhanceImageFile(
+                        source,
+                        EnhancementStrength.Normal,
+                        dependencies,
+                    )
+                }
+            }
+            assertArrayEquals(before, sha256(source))
+            val leftovers = source.parentFile?.listFiles { _, name ->
+                name.startsWith("${source.name}.injected-")
+            }.orEmpty()
+            assertTrue("temporary file leaked after cancellation", leftovers.isEmpty())
+        } finally {
+            source.delete()
+        }
+    }
+
+    @Test
+    fun unavailableRuntimeAndLargeImageSkipBeforeEncoding() = runBlocking {
+        var encodeCalls = 0
+        val encoder = EnhancementEncoder { _, _, _, _ ->
+            encodeCalls += 1
+            null
+        }
+        val source = File.createTempFile("background-skip-", ".bin")
+        try {
+            source.writeText("original skip fixture")
+            val before = sha256(source)
+
+            val unavailable = BackgroundEnhancer.enhanceImageFile(
+                source,
+                EnhancementStrength.Normal,
+                injectedDependencies(runtimeAvailable = false, encoder = encoder),
+            )
+            val tooLarge = BackgroundEnhancer.enhanceImageFile(
+                source,
+                EnhancementStrength.Normal,
+                injectedDependencies(
+                    input = EnhancementInput.Image(
+                        EnhancementImageFormat.Png,
+                        width = 4_000,
+                        height = 4_000,
+                    ),
+                    encoder = encoder,
+                ),
+            )
+
+            assertEquals(
+                EnhancementResult.Skipped(EnhancementSkipReason.OpenCvUnavailable),
+                unavailable,
+            )
+            assertEquals(EnhancementResult.Skipped(EnhancementSkipReason.ImageTooLarge), tooLarge)
+            assertEquals(0, encodeCalls)
+            assertArrayEquals(before, sha256(source))
+        } finally {
+            source.delete()
+        }
+    }
+
+    @Test
+    fun successfulInjectedPipelineAtomicallyReplacesSource() = runBlocking {
+        val source = File.createTempFile("background-success-", ".bin")
+        try {
+            source.writeText("original fixture")
+            val result = BackgroundEnhancer.enhanceImageFile(
+                source,
+                EnhancementStrength.Normal,
+                injectedDependencies(),
+            )
+            assertEquals(EnhancementResult.Applied, result)
+            assertEquals("encoded fixture", source.readText())
+            assertFalse(source.parentFile?.listFiles().orEmpty().any { it.name.startsWith("${source.name}.injected-") })
+        } finally {
+            source.delete()
         }
     }
 }
