@@ -253,6 +253,15 @@ private fun ScanComposerCard(
                 }
             }
 
+            // Document preset: background enhancement toggle
+            if (settings.enhanceBackground) {
+                Text(
+                    stringResource(R.string.scan_enhance_background),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             FilterChip(
                 selected = settings.combineAsPdf,
                 onClick = { onChanged(settings.copy(combineAsPdf = !settings.combineAsPdf)) },

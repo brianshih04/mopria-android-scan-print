@@ -206,8 +206,9 @@
     <string name="edit_confirm">確認</string>
     <string name="edit_no_pages">編集するページがありません</string>
     <string name="preset_document">ドキュメント</string>
-    <string name="preset_document_description">300 dpi · カラー · PDF</string>
+    <string name="preset_document_description">300 dpi · カラー · PDF · 背景クリーンアップ</string>
     <string name="preset_photo">写真</string>
     <string name="preset_photo_description">600 dpi · カラー · 最高品質</string>
     <string name="preset_title">何をスキャンしますか？</string>
+    <string name="scan_enhance_background">白背景を自動補正</string>
 </resources>

@@ -206,8 +206,9 @@
     <string name="edit_confirm">Bestätigen</string>
     <string name="edit_no_pages">Keine Seiten zum Bearbeiten</string>
     <string name="preset_document">Dokument</string>
-    <string name="preset_document_description">300 dpi · Farbe · PDF</string>
+    <string name="preset_document_description">300 dpi · Farbe · PDF · Hintergrund säubern</string>
     <string name="preset_photo">Foto</string>
     <string name="preset_photo_description">600 dpi · Farbe · Höchste Qualität</string>
     <string name="preset_title">Was möchten Sie scannen?</string>
+    <string name="scan_enhance_background">Weißen Hintergrund säubern</string>
 </resources>

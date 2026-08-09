@@ -250,6 +250,16 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
             jobFinished = true
 
             if (payloads.isEmpty()) throw ScanError.NoImages
+
+            // Apply background enhancement if requested (JPEG/PNG only; PDF skipped).
+            if (settings.enhanceBackground) {
+                payloads.forEach { payload ->
+                    if (payload.contentType != "application/pdf") {
+                        runCatching { BackgroundEnhancer.enhanceImageFile(payload.file) }
+                    }
+                }
+            }
+
             val pages = payloads.flatMapIndexed { payloadIndex, payload ->
                 if (payload.contentType == "application/pdf") {
                     val count = pdfPageCount(payload.file)

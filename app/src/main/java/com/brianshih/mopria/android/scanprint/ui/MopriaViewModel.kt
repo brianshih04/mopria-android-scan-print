@@ -185,6 +185,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 else nearestResolution(defaults.resolutionDpi, caps.supportedResolutions),
             colorMode = if (defaults.colorMode in caps.supportedColorModes) defaults.colorMode
                 else caps.supportedColorModes.firstOrNull() ?: defaults.colorMode,
+            enhanceBackground = preset == ScanPreset.Document,
         )
         _uiState.update { it.copy(scanPreset = preset, scanSettings = adjusted) }
         settingsStore.saveScanSettings(adjusted)

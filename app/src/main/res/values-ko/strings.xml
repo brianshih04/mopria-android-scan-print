@@ -206,8 +206,9 @@
     <string name="edit_confirm">확인</string>
     <string name="edit_no_pages">편집할 페이지가 없습니다</string>
     <string name="preset_document">문서</string>
-    <string name="preset_document_description">300 dpi · 컬러 · PDF</string>
+    <string name="preset_document_description">300 dpi · 컬러 · PDF · 배경 정리</string>
     <string name="preset_photo">사진</string>
     <string name="preset_photo_description">600 dpi · 컬러 · 최고 화질</string>
     <string name="preset_title">무엇을 스캔하시겠습니까?</string>
+    <string name="scan_enhance_background">흰 배경 자동 보정</string>
 </resources>

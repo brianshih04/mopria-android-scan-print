@@ -217,8 +217,9 @@
     <string name="edit_confirm">确认</string>
     <string name="edit_no_pages">没有可编辑的页面</string>
     <string name="preset_document">文档</string>
-    <string name="preset_document_description">300 dpi · 彩色 · PDF</string>
+    <string name="preset_document_description">300 dpi · 彩色 · PDF · 背景净化</string>
     <string name="preset_photo">照片</string>
     <string name="preset_photo_description">600 dpi · 彩色 · 原画质</string>
     <string name="preset_title">要扫描什么？</string>
+    <string name="scan_enhance_background">自动白化背景</string>
 </resources>

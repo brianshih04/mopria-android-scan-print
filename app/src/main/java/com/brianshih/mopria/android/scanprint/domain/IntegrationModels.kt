@@ -79,6 +79,7 @@ data class ScanSettings(
     val colorMode: ScanColorMode = ScanColorMode.Color,
     val maxPages: Int = 20,
     val combineAsPdf: Boolean = false,
+    val enhanceBackground: Boolean = false,
 )
 
 data class IntegrationDevice(

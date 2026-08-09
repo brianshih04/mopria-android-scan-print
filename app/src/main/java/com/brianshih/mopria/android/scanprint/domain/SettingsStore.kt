@@ -49,6 +49,7 @@ class SettingsStore(context: Context) {
         maxPages = preferences.getInt(KEY_SCAN_MAX_PAGES, DEFAULT_SCAN_MAX_PAGES)
             .coerceIn(MIN_SCAN_PAGES, MAX_SCAN_PAGES),
         combineAsPdf = preferences.getBoolean(KEY_SCAN_COMBINE_PDF, false),
+        enhanceBackground = preferences.getBoolean(KEY_SCAN_ENHANCE_BACKGROUND, false),
     )
 
     fun saveScanSettings(settings: ScanSettings) = preferences.edit {
@@ -57,6 +58,7 @@ class SettingsStore(context: Context) {
         putString(KEY_SCAN_COLOR_MODE, settings.colorMode.name)
         putInt(KEY_SCAN_MAX_PAGES, settings.maxPages.coerceIn(MIN_SCAN_PAGES, MAX_SCAN_PAGES))
         putBoolean(KEY_SCAN_COMBINE_PDF, settings.combineAsPdf)
+        putBoolean(KEY_SCAN_ENHANCE_BACKGROUND, settings.enhanceBackground)
     }
 
     companion object {
@@ -69,6 +71,7 @@ class SettingsStore(context: Context) {
         const val KEY_SCAN_MAX_PAGES = "scan_max_pages"
         const val KEY_SCAN_COMBINE_PDF = "scan_combine_pdf"
         const val KEY_SCAN_PRESET = "scan_preset"
+        const val KEY_SCAN_ENHANCE_BACKGROUND = "scan_enhance_background"
         const val MIN_SCAN_PAGES = 1
         const val MAX_SCAN_PAGES = 50
         const val DEFAULT_SCAN_MAX_PAGES = 20
