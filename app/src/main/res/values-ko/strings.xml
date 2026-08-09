@@ -195,4 +195,14 @@
     <string name="scan_searching_devices">장치 검색 중</string>
     <string name="documents_delete">삭제</string>
     <string name="event_document_deleted">문서가 삭제되었습니다</string>
+    <string name="edit_title">문서 편집</string>
+    <string name="edit_rotate_left">왼쪽으로 회전</string>
+    <string name="edit_rotate_right">오른쪽으로 회전</string>
+    <string name="edit_move_left">왼쪽으로 이동</string>
+    <string name="edit_move_right">오른쪽으로 이동</string>
+    <string name="edit_delete_page">페이지 삭제</string>
+    <string name="edit_delete_page_confirm">이 페이지를 삭제하시겠습니까?</string>
+    <string name="edit_cancel">취소</string>
+    <string name="edit_confirm">확인</string>
+    <string name="edit_no_pages">편집할 페이지가 없습니다</string>
 </resources>

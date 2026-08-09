@@ -14,6 +14,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -31,6 +32,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -47,6 +50,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
@@ -80,9 +84,10 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
     val selectedLanguage = LanguageManager.currentOverride(context)
     var selectedDestinationName by rememberSaveable { mutableStateOf(AppDestination.Home.name) }
     var pendingExport by remember { mutableStateOf<PendingExport?>(null) }
+    var editingDocumentId by remember { mutableStateOf<String?>(null) }
     val selectedDestination = AppDestination.entries
         .firstOrNull { it.name == selectedDestinationName }
-        ?: AppDestination.Home
+    val isTablet: Boolean = LocalConfiguration.current.screenWidthDp.let { it > 0 && it >= 600 }
 
     BackHandler(enabled = selectedDestination != AppDestination.Home) {
         selectedDestinationName = AppDestination.Home.name
@@ -174,9 +179,9 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
     Box {
         Scaffold(
         topBar = {
-            if (selectedDestination != AppDestination.Home) {
+            if ((selectedDestination ?: AppDestination.Home) != AppDestination.Home) {
                 TopAppBar(
-                    title = { Text(stringResource(selectedDestination.labelRes), style = MaterialTheme.typography.titleLarge) },
+                    title = { Text(stringResource((selectedDestination ?: AppDestination.Home).labelRes), style = MaterialTheme.typography.titleLarge) },
                     navigationIcon = {
                         IconButton(onClick = { selectedDestinationName = AppDestination.Home.name }) {
                             Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.action_back_home))
@@ -201,28 +206,46 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                AppDestination.entries
-                    .filter { it != AppDestination.Scan && it != AppDestination.Print }
-                    .forEach { destination ->
-                    NavigationBarItem(
-                        selected = destination == selectedDestination,
-                        onClick = { selectedDestinationName = destination.name },
-                        icon = { Icon(destination.icon, contentDescription = null) },
-                        label = { Text(stringResource(destination.labelRes)) },
-                    )
+            if (!isTablet) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                    AppDestination.entries
+                        .filter { it != AppDestination.Scan && it != AppDestination.Print }
+                        .forEach { destination ->
+                        NavigationBarItem(
+                            selected = destination == selectedDestination,
+                            onClick = { selectedDestinationName = destination.name },
+                            icon = { Icon(destination.icon, contentDescription = null) },
+                            label = { Text(stringResource(destination.labelRes)) },
+                        )
+                    }
                 }
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.surface,
     ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-        ) {
-            when (selectedDestination) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (isTablet) {
+                NavigationRail(containerColor = MaterialTheme.colorScheme.surface) {
+                    AppDestination.entries
+                        .filter { it != AppDestination.Scan && it != AppDestination.Print }
+                        .forEach { destination ->
+                            NavigationRailItem(
+                                selected = destination == selectedDestination,
+                                onClick = { selectedDestinationName = destination.name },
+                                icon = { Icon(destination.icon, contentDescription = null) },
+                                label = { Text(stringResource(destination.labelRes)) },
+                            )
+                        }
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize()
+                    .padding(if (isTablet) androidx.compose.foundation.layout.PaddingValues(0.dp) else innerPadding),
+            ) {
+                when (selectedDestination ?: AppDestination.Home) {
                 AppDestination.Home -> HomeScreen(
                     uiState = uiState,
                     onOpenScan = { selectedDestinationName = AppDestination.Scan.name },
@@ -258,6 +281,7 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                         openPrint(document.name, SystemPrintAdapter(document, context))
                     },
                     onDeleteDocument = viewModel::deleteDocument,
+                    onEditDocument = { editingDocumentId = it },
                 )
 
                 AppDestination.History -> HistoryScreen(uiState)
@@ -272,7 +296,21 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                         (context as? Activity)?.recreate()
                     },
                 )
+                }
             }
+        }
+    }
+
+    editingDocumentId?.let { docId ->
+        uiState.documents.firstOrNull { it.id == docId }?.let { document ->
+            EditScreen(
+                document = document,
+                onRotatePage = { pageId, degrees -> viewModel.rotatePage(docId, pageId, degrees) },
+                onMovePage = { from, to -> viewModel.movePage(docId, from, to) },
+                onDeletePage = { pageId -> viewModel.deletePage(docId, pageId) },
+                onCropPage = { pageId, crop -> viewModel.cropPage(docId, pageId, crop) },
+                onBack = { editingDocumentId = null },
+            )
         }
     }
 

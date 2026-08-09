@@ -206,4 +206,14 @@
     <string name="scan_searching_devices">正在搜索设备</string>
     <string name="documents_delete">删除</string>
     <string name="event_document_deleted">文档已删除</string>
+    <string name="edit_title">编辑文档</string>
+    <string name="edit_rotate_left">向左旋转</string>
+    <string name="edit_rotate_right">向右旋转</string>
+    <string name="edit_move_left">向左移动</string>
+    <string name="edit_move_right">向右移动</string>
+    <string name="edit_delete_page">删除页面</string>
+    <string name="edit_delete_page_confirm">删除此页面？</string>
+    <string name="edit_cancel">取消</string>
+    <string name="edit_confirm">确认</string>
+    <string name="edit_no_pages">没有可编辑的页面</string>
 </resources>

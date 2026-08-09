@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -71,8 +72,11 @@ internal fun ScanScreen(
             dismissButton = { TextButton(onClick = onFinishFlatbed) { Text(stringResource(R.string.scan_finish_pdf)) } },
         )
     }
+    val isTablet = isTabletLayout()
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .run { if (isTablet) this.widthIn(max = 720.dp) else this },
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {

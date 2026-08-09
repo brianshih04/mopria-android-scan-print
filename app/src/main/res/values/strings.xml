@@ -207,4 +207,14 @@
     <string name="scan_searching_devices">Searching for devices</string>
     <string name="documents_delete">Delete</string>
     <string name="event_document_deleted">Document deleted</string>
+    <string name="edit_title">Edit document</string>
+    <string name="edit_rotate_left">Rotate left</string>
+    <string name="edit_rotate_right">Rotate right</string>
+    <string name="edit_move_left">Move left</string>
+    <string name="edit_move_right">Move right</string>
+    <string name="edit_delete_page">Delete page</string>
+    <string name="edit_delete_page_confirm">Delete this page?</string>
+    <string name="edit_cancel">Cancel</string>
+    <string name="edit_confirm">Confirm</string>
+    <string name="edit_no_pages">No pages to edit</string>
 </resources>

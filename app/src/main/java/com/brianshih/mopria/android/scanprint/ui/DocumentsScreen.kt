@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Share
@@ -64,6 +66,7 @@ import com.brianshih.mopria.android.scanprint.R
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 
 @Composable
 internal fun DocumentsScreen(
@@ -74,11 +77,15 @@ internal fun DocumentsScreen(
     onShare: (String) -> Unit,
     onSystemPreview: (MopriaDocument) -> Unit,
     onDeleteDocument: (String) -> Unit,
+    onEditDocument: (String) -> Unit,
 ) {
     var previewPage by remember { mutableStateOf<DocumentPage?>(null) }
+    val isTablet = isTabletLayout()
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .run { if (isTablet) this.widthIn(max = 720.dp) else this },
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
@@ -107,6 +114,7 @@ internal fun DocumentsScreen(
                     onSystemPreview = onSystemPreview,
                     onPreviewPage = { previewPage = it },
                     onDeleteDocument = onDeleteDocument,
+                    onEditDocument = onEditDocument,
                 )
             }
         }
@@ -130,6 +138,7 @@ private fun DocumentCard(
     onSystemPreview: (MopriaDocument) -> Unit,
     onPreviewPage: (DocumentPage) -> Unit,
     onDeleteDocument: (String) -> Unit,
+    onEditDocument: (String) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -239,6 +248,15 @@ private fun DocumentCard(
                 ) {
                     Text(stringResource(R.string.documents_system_preview))
                 }
+            }
+            TextButton(
+                onClick = { onEditDocument(document.id) },
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.edit_title))
             }
             TextButton(
                 onClick = { onDeleteDocument(document.id) },

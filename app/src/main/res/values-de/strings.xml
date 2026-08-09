@@ -195,4 +195,14 @@
     <string name="scan_searching_devices">Geräte werden gesucht</string>
     <string name="documents_delete">Löschen</string>
     <string name="event_document_deleted">Dokument gelöscht</string>
+    <string name="edit_title">Dokument bearbeiten</string>
+    <string name="edit_rotate_left">Nach links drehen</string>
+    <string name="edit_rotate_right">Nach rechts drehen</string>
+    <string name="edit_move_left">Nach links verschieben</string>
+    <string name="edit_move_right">Nach rechts verschieben</string>
+    <string name="edit_delete_page">Seite löschen</string>
+    <string name="edit_delete_page_confirm">Diese Seite löschen?</string>
+    <string name="edit_cancel">Abbrechen</string>
+    <string name="edit_confirm">Bestätigen</string>
+    <string name="edit_no_pages">Keine Seiten zum Bearbeiten</string>
 </resources>

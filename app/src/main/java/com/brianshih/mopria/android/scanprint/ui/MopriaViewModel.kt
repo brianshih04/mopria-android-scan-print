@@ -12,6 +12,8 @@ import com.brianshih.mopria.android.scanprint.domain.DeviceDiscovery
 import com.brianshih.mopria.android.scanprint.domain.DirectIppPrintPrompt
 import com.brianshih.mopria.android.scanprint.domain.DeviceKind
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
+import com.brianshih.mopria.android.scanprint.domain.CropRect
+import com.brianshih.mopria.android.scanprint.domain.DocumentEditor
 import com.brianshih.mopria.android.scanprint.domain.DocumentStore
 import com.brianshih.mopria.android.scanprint.domain.IntegrationDevice
 import com.brianshih.mopria.android.scanprint.domain.IntegrationMode
@@ -337,6 +339,45 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         }
         persistDocuments()
         _events.tryEmit(text(R.string.event_document_deleted))
+    }
+
+
+    fun rotatePage(documentId: String, pageId: String, degrees: Int) {
+        val document = _uiState.value.documents.firstOrNull { it.id == documentId } ?: return
+        val edited = DocumentEditor.rotatePage(document, pageId, degrees)
+        updateDocument(edited)
+    }
+
+    fun movePage(documentId: String, fromIndex: Int, toIndex: Int) {
+        val document = _uiState.value.documents.firstOrNull { it.id == documentId } ?: return
+        val edited = DocumentEditor.movePage(document, fromIndex, toIndex)
+        updateDocument(edited)
+    }
+
+    fun deletePage(documentId: String, pageId: String) {
+        val document = _uiState.value.documents.firstOrNull { it.id == documentId } ?: return
+        val edited = DocumentEditor.deletePage(document, pageId)
+        if (edited != null) {
+            updateDocument(edited)
+        } else {
+            // Last page deleted — delete the whole document
+            deleteDocument(documentId)
+        }
+    }
+
+    fun cropPage(documentId: String, pageId: String, crop: CropRect?) {
+        val document = _uiState.value.documents.firstOrNull { it.id == documentId } ?: return
+        val edited = DocumentEditor.cropPage(document, pageId, crop)
+        updateDocument(edited)
+    }
+
+    private fun updateDocument(document: MopriaDocument) {
+        _uiState.update { state ->
+            state.copy(
+                documents = state.documents.map { if (it.id == document.id) document else it },
+            )
+        }
+        persistDocuments()
     }
 
     fun createDemoDocument() {

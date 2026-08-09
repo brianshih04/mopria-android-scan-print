@@ -206,4 +206,14 @@
     <string name="scan_searching_devices">正在搜尋裝置</string>
     <string name="documents_delete">刪除</string>
     <string name="event_document_deleted">文件已刪除</string>
+    <string name="edit_title">編輯文件</string>
+    <string name="edit_rotate_left">向左旋轉</string>
+    <string name="edit_rotate_right">向右旋轉</string>
+    <string name="edit_move_left">向左移動</string>
+    <string name="edit_move_right">向右移動</string>
+    <string name="edit_delete_page">刪除頁面</string>
+    <string name="edit_delete_page_confirm">刪除此頁面？</string>
+    <string name="edit_cancel">取消</string>
+    <string name="edit_confirm">確認</string>
+    <string name="edit_no_pages">沒有可編輯的頁面</string>
 </resources>

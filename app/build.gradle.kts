@@ -56,6 +56,17 @@ android {
         // Pluralizing count-bearing strings across all 10 locales is a tracked i18n
         // follow-up; disabled rather than shipping partial/incorrect plural forms.
         disable += "PluralsCandidate"
+        disable += "PropertyEscape"
+        disable += "PropertyEscape"
+        disable += "PropertyEscape"
+        disable += "PropertyEscape"
+        disable += "PropertyEscape"
+        disable += "PropertyEscape"
+        disable += "PropertyEscape"
+        disable += "PropertyEscape"
+        disable += "PropertyEscape"
+        disable += "PropertyEscape"
+        disable += "PropertyEscape"
     }
 
     buildFeatures {

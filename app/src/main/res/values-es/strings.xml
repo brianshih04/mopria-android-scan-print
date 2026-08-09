@@ -195,4 +195,14 @@
     <string name="scan_searching_devices">Buscando dispositivos</string>
     <string name="documents_delete">Eliminar</string>
     <string name="event_document_deleted">Documento eliminado</string>
+    <string name="edit_title">Editar documento</string>
+    <string name="edit_rotate_left">Girar a la izquierda</string>
+    <string name="edit_rotate_right">Girar a la derecha</string>
+    <string name="edit_move_left">Mover a la izquierda</string>
+    <string name="edit_move_right">Mover a la derecha</string>
+    <string name="edit_delete_page">Eliminar página</string>
+    <string name="edit_delete_page_confirm">¿Eliminar esta página?</string>
+    <string name="edit_cancel">Cancelar</string>
+    <string name="edit_confirm">Confirmar</string>
+    <string name="edit_no_pages">No hay páginas para editar</string>
 </resources>

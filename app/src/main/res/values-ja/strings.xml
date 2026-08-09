@@ -195,4 +195,14 @@
     <string name="scan_searching_devices">デバイスを検索中</string>
     <string name="documents_delete">削除</string>
     <string name="event_document_deleted">ドキュメントを削除しました</string>
+    <string name="edit_title">ドキュメントを編集</string>
+    <string name="edit_rotate_left">左に回転</string>
+    <string name="edit_rotate_right">右に回転</string>
+    <string name="edit_move_left">左に移動</string>
+    <string name="edit_move_right">右に移動</string>
+    <string name="edit_delete_page">ページを削除</string>
+    <string name="edit_delete_page_confirm">このページを削除しますか？</string>
+    <string name="edit_cancel">キャンセル</string>
+    <string name="edit_confirm">確認</string>
+    <string name="edit_no_pages">編集するページがありません</string>
 </resources>

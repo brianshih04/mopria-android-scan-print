@@ -195,4 +195,14 @@
     <string name="scan_searching_devices">Поиск устройств</string>
     <string name="documents_delete">Удалить</string>
     <string name="event_document_deleted">Документ удалён</string>
+    <string name="edit_title">Редактировать документ</string>
+    <string name="edit_rotate_left">Повернуть влево</string>
+    <string name="edit_rotate_right">Повернуть вправо</string>
+    <string name="edit_move_left">Переместить влево</string>
+    <string name="edit_move_right">Переместить вправо</string>
+    <string name="edit_delete_page">Удалить страницу</string>
+    <string name="edit_delete_page_confirm">Удалить эту страницу?</string>
+    <string name="edit_cancel">Отмена</string>
+    <string name="edit_confirm">Подтвердить</string>
+    <string name="edit_no_pages">Нет страниц для редактирования</string>
 </resources>

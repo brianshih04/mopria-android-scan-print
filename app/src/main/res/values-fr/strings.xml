@@ -195,4 +195,14 @@
     <string name="scan_searching_devices">Recherche d\'appareils</string>
     <string name="documents_delete">Supprimer</string>
     <string name="event_document_deleted">Document supprimé</string>
+    <string name="edit_title">Modifier le document</string>
+    <string name="edit_rotate_left">Rotation à gauche</string>
+    <string name="edit_rotate_right">Rotation à droite</string>
+    <string name="edit_move_left">Déplacer à gauche</string>
+    <string name="edit_move_right">Déplacer à droite</string>
+    <string name="edit_delete_page">Supprimer la page</string>
+    <string name="edit_delete_page_confirm">Supprimer cette page ?</string>
+    <string name="edit_cancel">Annuler</string>
+    <string name="edit_confirm">Confirmer</string>
+    <string name="edit_no_pages">Aucune page à modifier</string>
 </resources>

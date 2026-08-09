@@ -65,6 +65,22 @@ data class IntegrationDevice(
     val advertisedFormats: List<String> = emptyList(),
 )
 
+/**
+ * Crop region as normalized fractions (0.0 to 1.0) relative to the original page dimensions.
+ * null means no cropping. Used by [DocumentEditor.cropPage] and the UI to apply a crop overlay.
+ */
+data class CropRect(val left: Float, val top: Float, val right: Float, val bottom: Float) {
+    init {
+        require(left in 0f..1f && right in 0f..1f && top in 0f..1f && bottom in 0f..1f) {
+            "Crop fractions must be 0..1"
+        }
+        require(left < right && top < bottom) { "left must be < right and top < bottom" }
+    }
+
+    val width: Float get() = right - left
+    val height: Float get() = bottom - top
+}
+
 data class DocumentPage(
     val id: String,
     val pageNumber: Int,
@@ -72,6 +88,8 @@ data class DocumentPage(
     val imagePath: String? = null,
     val pdfPath: String? = null,
     val pdfPageIndex: Int? = null,
+    val rotationDegrees: Int = 0,
+    val cropRect: CropRect? = null,
 )
 
 enum class ScanOutputFormat(@StringRes val labelRes: Int, val extension: String) {
