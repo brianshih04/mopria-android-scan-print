@@ -205,4 +205,9 @@
     <string name="edit_cancel">Отмена</string>
     <string name="edit_confirm">Подтвердить</string>
     <string name="edit_no_pages">Нет страниц для редактирования</string>
+    <string name="preset_document">Документ</string>
+    <string name="preset_document_description">300 dpi · Цвет · PDF</string>
+    <string name="preset_photo">Фото</string>
+    <string name="preset_photo_description">600 dpi · Цвет · Макс. качество</string>
+    <string name="preset_title">Что сканируем?</string>
 </resources>

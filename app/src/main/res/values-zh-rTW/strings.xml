@@ -216,4 +216,9 @@
     <string name="edit_cancel">取消</string>
     <string name="edit_confirm">確認</string>
     <string name="edit_no_pages">沒有可編輯的頁面</string>
+    <string name="preset_document">文件</string>
+    <string name="preset_document_description">300 dpi · 彩色 · PDF</string>
+    <string name="preset_photo">相片</string>
+    <string name="preset_photo_description">600 dpi · 彩色 · 原畫質</string>
+    <string name="preset_title">要掃描什麼？</string>
 </resources>

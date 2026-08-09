@@ -259,6 +259,7 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                     uiState = uiState,
                     onScan = viewModel::scan,
                     onScanSettingsChanged = viewModel::updateScanSettings,
+                    onPresetChange = viewModel::applyScanPreset,
                     onContinueFlatbed = viewModel::continueFlatbedScan,
                     onFinishFlatbed = viewModel::finishFlatbedScan,
                 )

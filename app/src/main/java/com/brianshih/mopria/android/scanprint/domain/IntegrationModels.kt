@@ -41,6 +41,38 @@ enum class ScanColorMode(@StringRes val labelRes: Int, val eSclValue: String) {
     BlackAndWhite(R.string.color_black_white, "BlackAndWhite1"),
 }
 
+
+/**
+ * Quick-scan presets that auto-configure [ScanSettings] for common use cases.
+ *
+ * The user picks a purpose (document vs photo) and gets sensible defaults; individual
+ * settings can still be fine-tuned below the preset selector.
+ */
+enum class ScanPreset(
+    @StringRes val labelRes: Int,
+    @StringRes val descriptionRes: Int,
+) {
+    Document(R.string.preset_document, R.string.preset_document_description),
+    Photo(R.string.preset_photo, R.string.preset_photo_description);
+
+    /**
+     * The default [ScanSettings] for this preset. The caller (ViewModel) intersects
+     * these with the scanner's [ScannerCapabilities] to ensure only supported values are used.
+     */
+    fun defaultSettings(current: ScanSettings): ScanSettings = when (this) {
+        Document -> current.copy(
+            resolutionDpi = 300,
+            colorMode = ScanColorMode.Color,
+            combineAsPdf = true,
+        )
+        Photo -> current.copy(
+            resolutionDpi = 600,
+            colorMode = ScanColorMode.Color,
+            combineAsPdf = false,
+        )
+    }
+}
+
 data class ScanSettings(
     val inputSource: ScanInputSource = ScanInputSource.Flatbed,
     val resolutionDpi: Int = 300,
@@ -153,6 +185,7 @@ data class MopriaUiState(
     val awaitingNextFlatbedPage: Boolean = false,
     val directIppPrintPrompt: DirectIppPrintPrompt? = null,
     val scannerCapabilities: ScannerCapabilities = ScannerCapabilities.DEFAULT,
+    val scanPreset: ScanPreset = ScanPreset.Document,
 ) {
     val mockMode: Boolean
         get() = integrationMode == IntegrationMode.Mock

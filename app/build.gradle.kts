@@ -57,16 +57,6 @@ android {
         // follow-up; disabled rather than shipping partial/incorrect plural forms.
         disable += "PluralsCandidate"
         disable += "PropertyEscape"
-        disable += "PropertyEscape"
-        disable += "PropertyEscape"
-        disable += "PropertyEscape"
-        disable += "PropertyEscape"
-        disable += "PropertyEscape"
-        disable += "PropertyEscape"
-        disable += "PropertyEscape"
-        disable += "PropertyEscape"
-        disable += "PropertyEscape"
-        disable += "PropertyEscape"
     }
 
     buildFeatures {

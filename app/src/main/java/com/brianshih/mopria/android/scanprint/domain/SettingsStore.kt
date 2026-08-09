@@ -28,6 +28,14 @@ class SettingsStore(context: Context) {
     fun savePrintMethod(method: PrintMethod) =
         preferences.edit { putString(KEY_PRINT_METHOD, method.name) }
 
+    fun loadScanPreset(): ScanPreset = preferences
+        .getString(KEY_SCAN_PRESET, ScanPreset.Document.name)
+        ?.let { value -> runCatching { ScanPreset.valueOf(value) }.getOrDefault(ScanPreset.Document) }
+        ?: ScanPreset.Document
+
+    fun saveScanPreset(preset: ScanPreset) =
+        preferences.edit { putString(KEY_SCAN_PRESET, preset.name) }
+
     fun loadScanSettings(): ScanSettings = ScanSettings(
         inputSource = preferences.getString(KEY_SCAN_INPUT_SOURCE, ScanInputSource.Flatbed.name)
             ?.let { value -> runCatching { ScanInputSource.valueOf(value) }.getOrDefault(ScanInputSource.Flatbed) }
@@ -60,6 +68,7 @@ class SettingsStore(context: Context) {
         const val KEY_SCAN_COLOR_MODE = "scan_color_mode"
         const val KEY_SCAN_MAX_PAGES = "scan_max_pages"
         const val KEY_SCAN_COMBINE_PDF = "scan_combine_pdf"
+        const val KEY_SCAN_PRESET = "scan_preset"
         const val MIN_SCAN_PAGES = 1
         const val MAX_SCAN_PAGES = 50
         const val DEFAULT_SCAN_MAX_PAGES = 20

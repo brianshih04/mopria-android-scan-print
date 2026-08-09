@@ -1,6 +1,8 @@
 package com.brianshih.mopria.android.scanprint.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +19,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.DocumentScanner
+import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -44,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
 import com.brianshih.mopria.android.scanprint.domain.ScanColorMode
+import com.brianshih.mopria.android.scanprint.domain.ScanPreset
 import com.brianshih.mopria.android.scanprint.domain.ScanInputSource
 import com.brianshih.mopria.android.scanprint.domain.ScanSettings
 import com.brianshih.mopria.android.scanprint.domain.ScannerCapabilities
@@ -54,6 +59,7 @@ internal fun ScanScreen(
     uiState: MopriaUiState,
     onScan: () -> Unit,
     onScanSettingsChanged: (ScanSettings) -> Unit,
+    onPresetChange: (ScanPreset) -> Unit,
     onContinueFlatbed: () -> Unit,
     onFinishFlatbed: () -> Unit,
 ) {
@@ -82,6 +88,13 @@ internal fun ScanScreen(
     ) {
         item { Text(stringResource(R.string.scan_title), style = MaterialTheme.typography.headlineSmall) }
         item {
+            PresetSelectorCard(
+                selectedPreset = uiState.scanPreset,
+                enabled = !uiState.isBusy,
+                onSelect = onPresetChange,
+            )
+        }
+        item {
             ScanComposerCard(
                 settings = uiState.scanSettings,
                 caps = uiState.scannerCapabilities,
@@ -91,6 +104,87 @@ internal fun ScanScreen(
             )
         }
         if (uiState.isBusy) item { OperationProgressCard(uiState) }
+    }
+}
+
+
+@Composable
+private fun PresetSelectorCard(
+    selectedPreset: ScanPreset,
+    enabled: Boolean,
+    onSelect: (ScanPreset) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            stringResource(R.string.preset_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ScanPreset.entries.forEach { preset ->
+                PresetOption(
+                    preset = preset,
+                    selected = preset == selectedPreset,
+                    enabled = enabled,
+                    onClick = { onSelect(preset) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PresetOption(
+    preset: ScanPreset,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow
+    val contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .selectable(
+                selected = selected,
+                enabled = enabled,
+                role = Role.RadioButton,
+                onClick = onClick,
+            ),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = when (preset) {
+                    ScanPreset.Document -> Icons.Outlined.Description
+                    ScanPreset.Photo -> Icons.Outlined.Photo
+                },
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint = if (selected) MaterialTheme.colorScheme.primary else contentColor,
+            )
+            Text(
+                stringResource(preset.labelRes),
+                style = MaterialTheme.typography.titleSmall,
+                color = contentColor,
+            )
+            Text(
+                stringResource(preset.descriptionRes),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+        }
     }
 }
 

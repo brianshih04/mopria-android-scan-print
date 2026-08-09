@@ -34,6 +34,7 @@ import com.brianshih.mopria.android.scanprint.domain.ScanColorMode
 import com.brianshih.mopria.android.scanprint.domain.ScanDocumentOrganizer
 import com.brianshih.mopria.android.scanprint.domain.ScanInputSource
 import com.brianshih.mopria.android.scanprint.domain.ScanOutputFormat
+import com.brianshih.mopria.android.scanprint.domain.ScanPreset
 import com.brianshih.mopria.android.scanprint.domain.ScanSettings
 import com.brianshih.mopria.android.scanprint.domain.ScannerCapabilities
 import com.brianshih.mopria.android.scanprint.domain.TempFileCleanup
@@ -58,6 +59,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             integrationMode = settingsStore.loadIntegrationMode(),
             printMethod = settingsStore.loadPrintMethod(),
             scanSettings = settingsStore.loadScanSettings(),
+            scanPreset = settingsStore.loadScanPreset(),
         ),
     )
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
@@ -144,8 +146,23 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             val mode = _uiState.value.integrationMode
             _uiState.update { it.copy(isDiscovering = true) }
             try {
-                val devices = providersFor(mode).discovery.discover()
-                _uiState.update { it.copy(isDiscovering = false, devices = devices) }
+                val providers = providersFor(mode)
+                val devices = providers.discovery.discover()
+                // In Real mode, fetch scanner capabilities so the scan settings UI shows
+                // only options the scanner actually supports.
+                val caps = if (mode == IntegrationMode.Real) {
+                    devices.firstOrNull { it.kind == DeviceKind.Scanner }
+                        ?.let { scanner -> runCatching { providers.scan.scannerCapabilities(scanner) }.getOrNull() }
+                } else {
+                    ScannerCapabilities.DEFAULT
+                }
+                _uiState.update {
+                    it.copy(
+                        isDiscovering = false,
+                        devices = devices,
+                        scannerCapabilities = caps ?: ScannerCapabilities.DEFAULT,
+                    )
+                }
                 _events.tryEmit(discoveryMessage(mode, devices))
             } catch (error: CancellationException) {
                 _uiState.update { it.copy(isDiscovering = false) }
@@ -155,6 +172,23 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 _events.tryEmit(text(R.string.event_discovery_failed, text(mode.labelRes), error.message ?: text(R.string.common_retry)))
             }
         }
+    }
+
+
+    fun applyScanPreset(preset: ScanPreset) {
+        val current = _uiState.value.scanSettings
+        val defaults = preset.defaultSettings(current)
+        // Intersect with scanner capabilities if in Real mode
+        val caps = _uiState.value.scannerCapabilities
+        val adjusted = defaults.copy(
+            resolutionDpi = if (defaults.resolutionDpi in caps.supportedResolutions) defaults.resolutionDpi
+                else nearestResolution(defaults.resolutionDpi, caps.supportedResolutions),
+            colorMode = if (defaults.colorMode in caps.supportedColorModes) defaults.colorMode
+                else caps.supportedColorModes.firstOrNull() ?: defaults.colorMode,
+        )
+        _uiState.update { it.copy(scanPreset = preset, scanSettings = adjusted) }
+        settingsStore.saveScanSettings(adjusted)
+        settingsStore.saveScanPreset(preset)
     }
 
     fun updateScanSettings(settings: ScanSettings) {
@@ -688,6 +722,10 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         IntegrationMode.Mock -> ProviderSet(mockProvider, mockProvider, mockProvider)
         IntegrationMode.Real -> ProviderSet(realProvider, realProvider, realProvider)
     }
+
+    /** Pick the supported resolution nearest to [target]; ties go to the higher value. */
+    private fun nearestResolution(target: Int, supported: Set<Int>): Int =
+        supported.minByOrNull { kotlin.math.abs(it - target) } ?: target
 
     private fun discoveryMessage(mode: IntegrationMode, devices: List<IntegrationDevice>): String = when {
         mode == IntegrationMode.Mock -> text(R.string.event_discovery_mock, devices.size)

@@ -205,4 +205,9 @@
     <string name="edit_cancel">Annuler</string>
     <string name="edit_confirm">Confirmer</string>
     <string name="edit_no_pages">Aucune page à modifier</string>
+    <string name="preset_document">Document</string>
+    <string name="preset_document_description">300 dpi · Couleur · PDF</string>
+    <string name="preset_photo">Photo</string>
+    <string name="preset_photo_description">600 dpi · Couleur · Qualité max</string>
+    <string name="preset_title">Que voulez-vous numériser ?</string>
 </resources>

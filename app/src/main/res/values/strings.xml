@@ -217,4 +217,9 @@
     <string name="edit_cancel">Cancel</string>
     <string name="edit_confirm">Confirm</string>
     <string name="edit_no_pages">No pages to edit</string>
+    <string name="preset_document">Document</string>
+    <string name="preset_document_description">300 dpi · Color · PDF</string>
+    <string name="preset_photo">Photo</string>
+    <string name="preset_photo_description">600 dpi · Color · Full quality</string>
+    <string name="preset_title">What are you scanning?</string>
 </resources>
