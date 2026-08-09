@@ -4,6 +4,36 @@
 
 ## [Unreleased] - 2026-08-09
 
+### Added — Enhancement Strength & Pyramid Optimization
+
+- 新增 `EnhancementStrength` enum：3 種背景淨化強度（Light / Normal / Strong），各有不同的對比度倍率（alpha）與白色閾值（threshold）。
+- ScanScreen 新增 Light / Normal / Strong 強度選擇器（FilterChips），使用者可即時切換。
+- BackgroundEnhancer 加入金字塔下採樣優化：背景光照估計在 1/4 解析度執行（區域平均下採樣 → 小核 Box Blur → 雙線性上採樣），再於原始解析度做除法正規化。A4 300dpi 處理速度提升 ~16x，記憶體降至 1/16。
+- 新增 3 條強度字串 × 10 種語言（enhance_light / enhance_normal / enhance_strong）。
+
+### Changed
+
+- `ScanSettings.enhanceBackground` 型別從 `Boolean` 改為 `EnhancementStrength?`（null = 關閉）。
+- BackgroundEnhancer pipeline 新增對比度微調步驟（`applyContrast(alpha, beta)`），借鏡 OpenCV `convertTo(alpha, beta)` 讓彩色內容更飽和。
+- `BackgroundEnhancer.apply()` 和 `enhanceImageFile()` 新增 `strength` 參數。
+- Document preset 預設 `EnhancementStrength.Normal`。
+
+### Fixed — Code Review (commit f751698)
+
+- P1: 移除不存在的 enhanceBackground 功能承諾 → 已重新實作為真實的影像處理 pipeline。
+- P2: scanPreset 持久化至 SettingsStore，重啟後不再還原為 Document。
+- P2: discoverDevices() 在 Real 模式下取得 scanner capabilities 並寫入 UI state。
+- P2: 不支援的 DPI 改用 `nearestResolution()` 取最近值，不再取最低值。
+- P2: PresetOption 改用 `Role.RadioButton` + `selectable` 語意，TalkBack 可辨識選取狀態。
+- P3: PropertyEscape lint suppression 從 12 次清理為 1 次。
+
+### Testing
+
+- JVM unit tests 由 123 增至 126（+3）。
+- 新增 BackgroundEnhancerTest 強度比較測試（3 tests）：Strong 比 Light 漂白更多像素、Normal 介於兩者之間、暗色內容在所有強度下均保留。
+
+
+
 ### Added — Scan Editing & Tablet Adaptation
 
 - 新增 `DocumentEditor` 純邏輯類：旋轉頁面（90°/180°/270°，累加 mod 360）、排序（前/後移動並重新編號）、刪除頁面（最後一頁刪除時連帶刪除文件）、裁切頁面（normalized CropRect）。

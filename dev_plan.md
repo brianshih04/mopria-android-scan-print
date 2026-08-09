@@ -91,7 +91,7 @@
 |---|---|---|
 | M0 App shell／Mock／Print Framework | 完成 | 可建置、Mock scan、文件輸出、系統列印預覽 |
 | M1 現代化 UI／UX | 完成 | 清楚導覽、scan/documents 分離、返回行為、縮圖與分享 |
-| M2 eSCL v2.97 pull-scan client | 程式與 fixture 完成 | 116 unit tests、lint、build；尚缺實機 |
+| M2 eSCL v2.97 pull-scan client | 程式與 fixture 完成 | 126 unit tests、lint、build；尚缺實機 |
 | M3 Flatbed／ADF 多頁 PDF | Mock／UI 完成 | Flatbed 2 頁、ADF 6 頁 emulator smoke |
 | M3.1 多國語言 | 完成 | 10 種 resource locale、系統偵測、English fallback、手動選擇與 JVM tests |
 | M3.2 Direct IPP | 程式與自動測試完成 | opt-in 路徑、格式／capability／job lifecycle；尚缺跨品牌實機與高 DPI soak |

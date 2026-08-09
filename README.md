@@ -2,7 +2,7 @@
 
 Kotlin／Jetpack Compose Android App，透過 eSCL（AirScan）掃描文件，並可透過 Android Print Framework 或實驗性的 Direct IPP 列印手機檔案與掃描結果。專案目前版本為 `0.1.0`，`minSdk 28`、`targetSdk 36`。
 
-> 目前狀態（2026-08-08）：Mock 模式、eSCL pull-scan client、Flatbed／ADF 多頁工作流、PDF／JPEG 文件庫、Android 系統列印入口、Direct IPP（PDF／JPEG／PNG／PWG-Raster／PCLm）、10 種語言 UI、Dark Mode、狀態持久化與暫存檔清理均已完成建置／自動測試驗證（116 JVM tests）。Direct IPP 已合併到 `main`，但仍是 opt-in 實驗功能；真實掃描器與印表機的跨品牌驗收尚待實體硬體。
+> 目前狀態（2026-08-08）：Mock 模式、eSCL pull-scan client、Flatbed／ADF 多頁工作流、PDF／JPEG 文件庫、Android 系統列印入口、Direct IPP（PDF／JPEG／PNG／PWG-Raster／PCLm）、10 種語言 UI、Dark Mode、狀態持久化與暫存檔清理均已完成建置／自動測試驗證（126 JVM tests）。Direct IPP 已合併到 `main`，但仍是 opt-in 實驗功能；真實掃描器與印表機的跨品牌驗收尚待實體硬體。
 
 ## Android／Mopria 技術邊界
 
@@ -35,6 +35,7 @@ Android 沒有一個同時提供 Mopria 掃描與列印的公開「Mopria API」
 - 文件可輸出 PDF／JPEG、透過 Android Sharesheet 分享、直接送往系統列印預覽，或刪除（同時清除原始掃描暫存檔）。
 - 掃描文件與 Flatbed 多頁 session 會持久化至內部儲存，App 被系統殺掉後可恢復。
 - 文件可編輯：旋轉頁面（90°/180°/270°）、排序（前後移動）、裁切（視覺覆蓋 + 滑桿）、刪除頁面。
+- 背景淨化：形態學光照正規化（金字塔下採樣 + 除法 + 對比度微調），3 種強度可選（Light / Normal / Strong）。
 - 平板自動適配：≥600dp 使用左側 NavigationRail，內容限制最大寬度。
 - 啟動時自動清理孤兒暫存檔與過期 cache。
 - Dark Mode 完整支援（surfaceContainer tonal palette、adapted error colors）。
