@@ -211,4 +211,7 @@
     <string name="preset_photo_description">600 dpi · Color · Máxima calidad</string>
     <string name="preset_title">¿Qué va a escanear?</string>
     <string name="scan_enhance_background">Limpiar fondo blanco</string>
+    <string name="enhance_light">Suave</string>
+    <string name="enhance_normal">Normal</string>
+    <string name="enhance_strong">Fuerte</string>
 </resources>

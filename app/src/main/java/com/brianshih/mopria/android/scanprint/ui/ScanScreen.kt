@@ -52,6 +52,7 @@ import com.brianshih.mopria.android.scanprint.domain.ScanPreset
 import com.brianshih.mopria.android.scanprint.domain.ScanInputSource
 import com.brianshih.mopria.android.scanprint.domain.ScanSettings
 import com.brianshih.mopria.android.scanprint.domain.ScannerCapabilities
+import com.brianshih.mopria.android.scanprint.domain.EnhancementStrength
 import kotlin.math.roundToInt
 
 @Composable
@@ -253,13 +254,22 @@ private fun ScanComposerCard(
                 }
             }
 
-            // Document preset: background enhancement toggle
-            if (settings.enhanceBackground) {
+            // Background enhancement: strength selector (Light / Normal / Strong)
+            if (settings.enhanceBackground != null) {
                 Text(
                     stringResource(R.string.scan_enhance_background),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelLarge,
                 )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EnhancementStrength.entries.forEach { strength ->
+                        FilterChip(
+                            selected = settings.enhanceBackground == strength,
+                            onClick = { onChanged(settings.copy(enhanceBackground = strength)) },
+                            enabled = enabled,
+                            label = { Text(stringResource(strength.labelRes)) },
+                        )
+                    }
+                }
             }
 
             FilterChip(

@@ -211,4 +211,7 @@
     <string name="preset_photo_description">600 dpi · 컬러 · 최고 화질</string>
     <string name="preset_title">무엇을 스캔하시겠습니까?</string>
     <string name="scan_enhance_background">흰 배경 자동 보정</string>
+    <string name="enhance_light">약하게</string>
+    <string name="enhance_normal">보통</string>
+    <string name="enhance_strong">강하게</string>
 </resources>

@@ -14,6 +14,7 @@ import com.brianshih.mopria.android.scanprint.domain.DeviceKind
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
 import com.brianshih.mopria.android.scanprint.domain.CropRect
 import com.brianshih.mopria.android.scanprint.domain.DocumentEditor
+import com.brianshih.mopria.android.scanprint.domain.EnhancementStrength
 import com.brianshih.mopria.android.scanprint.domain.DocumentStore
 import com.brianshih.mopria.android.scanprint.domain.IntegrationDevice
 import com.brianshih.mopria.android.scanprint.domain.IntegrationMode
@@ -185,7 +186,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 else nearestResolution(defaults.resolutionDpi, caps.supportedResolutions),
             colorMode = if (defaults.colorMode in caps.supportedColorModes) defaults.colorMode
                 else caps.supportedColorModes.firstOrNull() ?: defaults.colorMode,
-            enhanceBackground = preset == ScanPreset.Document,
+            enhanceBackground = if (preset == ScanPreset.Document) EnhancementStrength.Normal else null,
         )
         _uiState.update { it.copy(scanPreset = preset, scanSettings = adjusted) }
         settingsStore.saveScanSettings(adjusted)

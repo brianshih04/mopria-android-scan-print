@@ -222,4 +222,7 @@
     <string name="preset_photo_description">600 dpi · 彩色 · 原畫質</string>
     <string name="preset_title">要掃描什麼？</string>
     <string name="scan_enhance_background">自動白化背景</string>
+    <string name="enhance_light">輕度</string>
+    <string name="enhance_normal">標準</string>
+    <string name="enhance_strong">強烈</string>
 </resources>

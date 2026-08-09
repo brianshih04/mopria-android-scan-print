@@ -43,6 +43,17 @@ enum class ScanColorMode(@StringRes val labelRes: Int, val eSclValue: String) {
 
 
 /**
+ * Enhancement strength for background cleanup. Higher levels apply more aggressive
+ * contrast boost and thresholding, producing whiter backgrounds at the cost of
+ * potentially losing very faint content.
+ */
+enum class EnhancementStrength(@StringRes val labelRes: Int) {
+    Light(R.string.enhance_light),
+    Normal(R.string.enhance_normal),
+    Strong(R.string.enhance_strong),
+}
+
+/**
  * Quick-scan presets that auto-configure [ScanSettings] for common use cases.
  *
  * The user picks a purpose (document vs photo) and gets sensible defaults; individual
@@ -79,7 +90,7 @@ data class ScanSettings(
     val colorMode: ScanColorMode = ScanColorMode.Color,
     val maxPages: Int = 20,
     val combineAsPdf: Boolean = false,
-    val enhanceBackground: Boolean = false,
+    val enhanceBackground: EnhancementStrength? = null,
 )
 
 data class IntegrationDevice(

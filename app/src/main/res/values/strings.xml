@@ -223,4 +223,7 @@
     <string name="preset_photo_description">600 dpi · Color · Full quality</string>
     <string name="preset_title">What are you scanning?</string>
     <string name="scan_enhance_background">Clean white background</string>
+    <string name="enhance_light">Light</string>
+    <string name="enhance_normal">Normal</string>
+    <string name="enhance_strong">Strong</string>
 </resources>

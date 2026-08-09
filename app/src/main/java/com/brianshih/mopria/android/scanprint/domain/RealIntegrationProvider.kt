@@ -252,10 +252,10 @@ class RealIntegrationProvider(context: Context) : DeviceDiscovery, ScanAcquisiti
             if (payloads.isEmpty()) throw ScanError.NoImages
 
             // Apply background enhancement if requested (JPEG/PNG only; PDF skipped).
-            if (settings.enhanceBackground) {
+            settings.enhanceBackground?.let { strength ->
                 payloads.forEach { payload ->
                     if (payload.contentType != "application/pdf") {
-                        runCatching { BackgroundEnhancer.enhanceImageFile(payload.file) }
+                        runCatching { BackgroundEnhancer.enhanceImageFile(payload.file, strength) }
                     }
                 }
             }

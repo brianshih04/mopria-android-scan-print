@@ -211,4 +211,7 @@
     <string name="preset_photo_description">600 dpi · Цвет · Макс. качество</string>
     <string name="preset_title">Что сканируем?</string>
     <string name="scan_enhance_background">Очистить белый фон</string>
+    <string name="enhance_light">Лёгкая</string>
+    <string name="enhance_normal">Обычная</string>
+    <string name="enhance_strong">Сильная</string>
 </resources>

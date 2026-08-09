@@ -58,6 +58,7 @@ android {
         disable += "PluralsCandidate"
         disable += "PropertyEscape"
         disable += "PropertyEscape"
+        disable += "PropertyEscape"
     }
 
     buildFeatures {

@@ -49,7 +49,8 @@ class SettingsStore(context: Context) {
         maxPages = preferences.getInt(KEY_SCAN_MAX_PAGES, DEFAULT_SCAN_MAX_PAGES)
             .coerceIn(MIN_SCAN_PAGES, MAX_SCAN_PAGES),
         combineAsPdf = preferences.getBoolean(KEY_SCAN_COMBINE_PDF, false),
-        enhanceBackground = preferences.getBoolean(KEY_SCAN_ENHANCE_BACKGROUND, false),
+        enhanceBackground = preferences.getString(KEY_SCAN_ENHANCE_BACKGROUND, null)
+            ?.let { value -> runCatching { EnhancementStrength.valueOf(value) }.getOrNull() },
     )
 
     fun saveScanSettings(settings: ScanSettings) = preferences.edit {
@@ -58,7 +59,7 @@ class SettingsStore(context: Context) {
         putString(KEY_SCAN_COLOR_MODE, settings.colorMode.name)
         putInt(KEY_SCAN_MAX_PAGES, settings.maxPages.coerceIn(MIN_SCAN_PAGES, MAX_SCAN_PAGES))
         putBoolean(KEY_SCAN_COMBINE_PDF, settings.combineAsPdf)
-        putBoolean(KEY_SCAN_ENHANCE_BACKGROUND, settings.enhanceBackground)
+        putString(KEY_SCAN_ENHANCE_BACKGROUND, settings.enhanceBackground?.name)
     }
 
     companion object {

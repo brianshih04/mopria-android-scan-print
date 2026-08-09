@@ -211,4 +211,7 @@
     <string name="preset_photo_description">600 dpi · カラー · 最高品質</string>
     <string name="preset_title">何をスキャンしますか？</string>
     <string name="scan_enhance_background">白背景を自動補正</string>
+    <string name="enhance_light">軽め</string>
+    <string name="enhance_normal">標準</string>
+    <string name="enhance_strong">強め</string>
 </resources>
