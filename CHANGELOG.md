@@ -2,6 +2,30 @@
 
 本專案依 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 的概念記錄重要變更；GitHub Release `v0.1.0` 已建立，目前合併後續變更記錄在 Unreleased。
 
+## [Unreleased] - 2026-08-09
+
+### Added — Scan Editing & Tablet Adaptation
+
+- 新增 `DocumentEditor` 純邏輯類：旋轉頁面（90°/180°/270°，累加 mod 360）、排序（前/後移動並重新編號）、刪除頁面（最後一頁刪除時連帶刪除文件）、裁切頁面（normalized CropRect）。
+- 新增 `CropRect` data class：以 0.0–1.0 正規化座標表示裁切區域，含驗證（left < right, top < bottom, 0..1 範圍）。
+- 新增 `EditScreen` composable：頁面列表含縮圖預覽（含旋轉），每頁可旋轉左/右、左/右移動、裁切（CropDialog 視覺覆蓋 + 四向滑桿）、刪除（確認對話框）。
+- 新增 `WindowSizeHelper`：`isTabletLayout()` composable，偵測 ≥600dp 螢幕。
+- `DocumentPage` 新增 `rotationDegrees` 和 `cropRect` 欄位。
+- `ViewModel` 新增 `rotatePage`、`movePage`、`deletePage`、`cropPage` 方法。
+- DocumentsScreen 新增「編輯」按鈕，進入 EditScreen。
+- `MopriaApp` 平板模式：≥600dp 使用 `NavigationRail`（左側）取代 `NavigationBar`（底部），底部導航隱藏。
+- HomeScreen、ScanScreen、DocumentsScreen、SupportScreens 平板模式限制最大 720dp 內容寬度。
+- 新增編輯相關字串 × 10 種語言（edit_title, edit_rotate_left/right, edit_move_left/right, edit_delete_page, edit_delete_page_confirm, edit_cancel, edit_confirm, edit_no_pages）。
+
+### Changed
+
+- 透視校正從規劃中移除：eSCL 掃描器產生的影像已是物理擺正，不需要軟體透視校正。
+
+### Testing
+
+- JVM unit tests 由 99 增至 116（+17）。
+- 新增 `DocumentEditorTest`（17 tests）：旋轉累加/wrap-around/無效角度、排序前後移動/邊界、刪除頁面/最後一頁/不存在頁面、裁切設定/清除/驗證。
+
 ## [Unreleased] - 2026-08-08
 
 ### Added — Architecture & Quality Refactor

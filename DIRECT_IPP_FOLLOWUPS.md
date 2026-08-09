@@ -11,7 +11,7 @@
 - Merge commit：`b00fa09`
 - 變更內容：Direct IPP base、PWG-Raster／PCLm、capability options、reliability 與 review fixes
 - Android Studio bundled JDK：25.0.2
-- 已驗證：unit tests 99/99、lint、debug assemble、5 個 emulator instrumentation tests 均成功
+- 已驗證：unit tests 116/116、lint、debug assemble、5 個 emulator instrumentation tests 均成功
 - 尚未完成：實體 IPP/IPPS 印表機跨品牌驗證，以及高 DPI 多頁 PWG-Raster／PCLm streaming／OOM soak
 
 ## 目前接手重點
