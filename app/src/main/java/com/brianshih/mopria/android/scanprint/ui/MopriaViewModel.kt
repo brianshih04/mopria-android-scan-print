@@ -57,14 +57,19 @@ import com.brianshih.mopria.android.scanprint.domain.ScanSettings
 import com.brianshih.mopria.android.scanprint.domain.ScannerCapabilities
 import com.brianshih.mopria.android.scanprint.domain.TempFileCleanup
 import com.brianshih.mopria.android.scanprint.domain.SettingsStore
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 internal data class ShareRequest(val uri: String, val title: String)
 
@@ -92,6 +97,9 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
     private val _shareRequests = MutableSharedFlow<ShareRequest>(extraBufferCapacity = 4)
     private val scanExportService = ScanExportService(application)
     private val documentStore = DocumentStore(application)
+    private val documentStoreReady = CompletableDeferred<Unit>()
+    private val documentPersistenceMutex = Mutex()
+    private val documentPersistenceGeneration = AtomicLong()
 
     val uiState = _uiState.asStateFlow()
     val events = _events.asSharedFlow()
@@ -105,28 +113,36 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         localizedContext.getString(resourceId, *arguments)
 
     init {
-        // Restore in-memory documents and Flatbed session from internal storage first (survives process death).
-        val persisted = documentStore.load()
-        if (persisted != null) {
-            _uiState.update {
-                it.copy(
-                    documents = persisted.documents,
-                    pendingFlatbedDocumentId = persisted.pendingFlatbedDocumentId,
-                    awaitingNextFlatbedPage = persisted.pendingFlatbedDocumentId != null,
-                )
-            }
-        }
-        // Reclaim storage: delete orphaned scan files and stale cache temp files from previous sessions.
-        val referencedPaths = _uiState.value.documents
-            .flatMap { it.pages }
-            .flatMap { listOfNotNull(it.imagePath, it.pdfPath) }
-            .map { it.removePrefix("file://") }
-            .toSet()
-        TempFileCleanup.deleteOrphanedScans(application, referencedPaths)
-        TempFileCleanup.sweepStaleCache(application)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Restore documents and OCR sidecars off the main thread. Merge with any state created
+                // during startup instead of replacing it if the user acts before disk loading finishes.
+                documentStore.load()?.let { persisted ->
+                    _uiState.update { current ->
+                        val currentIds = current.documents.mapTo(mutableSetOf()) { it.id }
+                        val restored = persisted.documents.filter { it.id !in currentIds }
+                        val pendingId = current.pendingFlatbedDocumentId ?: persisted.pendingFlatbedDocumentId
+                        current.copy(
+                            documents = current.documents + restored,
+                            pendingFlatbedDocumentId = pendingId,
+                            awaitingNextFlatbedPage = pendingId != null,
+                        )
+                    }
+                }
 
-        // Then load any additional documents saved to the public Downloads folder via MediaStore.
-        viewModelScope.launch {
+                // Reclaim storage only after restored documents have contributed their referenced paths.
+                val referencedPaths = _uiState.value.documents
+                    .flatMap { it.pages }
+                    .flatMap { listOfNotNull(it.imagePath, it.pdfPath) }
+                    .map { it.removePrefix("file://") }
+                    .toSet()
+                TempFileCleanup.deleteOrphanedScans(application, referencedPaths)
+                TempFileCleanup.sweepStaleCache(application)
+            } finally {
+                documentStoreReady.complete(Unit)
+            }
+
+            // Then load any additional documents saved to the public Downloads folder via MediaStore.
             try {
                 val savedDocuments = scanExportService.loadSavedDocuments()
                 if (savedDocuments.isNotEmpty()) {
@@ -775,6 +791,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         is ScanError.JobAborted -> R.string.scan_error_job_stopped
         is ScanError.JobTimeout -> R.string.scan_error_timeout
         is ScanError.CapabilityNotSupported -> R.string.scan_error_capability
+        is ScanError.OcrImageFormatUnsupported -> R.string.scan_error_ocr_image_format
         is ScanError.NoImages -> R.string.scan_error_no_images
     }
 
@@ -821,6 +838,12 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
     private fun OcrError.messageStringRes(): Int = when (this) {
         OcrError.InvalidSource -> R.string.scan_ocr_reason_invalid
         OcrError.InferenceFailed -> R.string.scan_ocr_reason_inference
+    }
+
+    private fun SearchablePdfExportFailure.messageStringRes(): Int = when (this) {
+        SearchablePdfExportFailure.MissingOcrLayout -> R.string.searchable_pdf_error_missing_ocr
+        SearchablePdfExportFailure.MissingFont -> R.string.searchable_pdf_error_missing_font
+        SearchablePdfExportFailure.EmptyTextLayer -> R.string.searchable_pdf_error_empty_text_layer
     }
 
     private fun ScanProgress.toJobUpdate(): Pair<Int, String> = when (stage) {
@@ -897,6 +920,8 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 _shareRequests.emit(ShareRequest(uri.toString(), document.name))
             } catch (error: CancellationException) {
                 throw error
+            } catch (error: SearchablePdfExportException) {
+                _events.tryEmit(text(error.failure.messageStringRes()))
             } catch (error: Exception) {
                 _events.tryEmit(text(R.string.event_share_failed, error.message ?: text(R.string.common_retry)))
             }
@@ -947,6 +972,11 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 updateJob(jobId, JobStatus.Cancelled, 0, text(R.string.event_export_cancelled, text(format.labelRes)))
                 _uiState.update { it.copy(activeJobId = null) }
                 throw error
+            } catch (error: SearchablePdfExportException) {
+                val message = text(error.failure.messageStringRes())
+                _uiState.update { it.copy(activeJobId = null) }
+                updateJob(jobId, JobStatus.Failed, 0, message)
+                _events.tryEmit(message)
             } catch (error: Exception) {
                 _uiState.update { it.copy(activeJobId = null) }
                 updateJob(jobId, JobStatus.Failed, 0, error.message ?: text(R.string.event_export_failed, text(format.labelRes)))
@@ -998,8 +1028,16 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
 
 
     private fun persistDocuments() {
-        val state = _uiState.value
-        runCatching { documentStore.save(state.documents, state.pendingFlatbedDocumentId) }
+        val generation = documentPersistenceGeneration.incrementAndGet()
+        viewModelScope.launch(Dispatchers.IO) {
+            documentStoreReady.await()
+            documentPersistenceMutex.withLock {
+                // Collapse queued writes and always snapshot state immediately before the newest save.
+                if (generation != documentPersistenceGeneration.get()) return@withLock
+                val state = _uiState.value
+                runCatching { documentStore.save(state.documents, state.pendingFlatbedDocumentId) }
+            }
+        }
     }
 
     fun reportMessage(message: String) {

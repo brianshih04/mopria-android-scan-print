@@ -152,12 +152,20 @@ object OcrTextFormatter {
 /** Conservative normalisation for OCR output that looks like a number. */
 object OcrTextNormalizer {
     private val numericToken = Regex(
-        """(?<![\p{L}\d])[+\-]?[\d][\d,，.．·⋅﹒｡\p{Zs}\t]*[\d](?:[%％]|[元円$€£])?(?![\p{L}\d])""",
+        """(?<![\p{L}\d])[+\-]?[\d][\d,，.．·⋅﹒｡]*[\d](?:[%％]|[元円$€£])?(?![\p{L}\d])""",
+    )
+    private val splitGroupedNumber = Regex(
+        """(?<![\p{L}\d])([+\-]?\d{1,3}(?:[,.]\d{3})+[,.]\d{1,2})[\p{Zs}\t]+(\d{1,2})(?=(?:[%％]|[元円$€£])?(?![\p{L}\d]))""",
     )
 
     fun normalize(text: String): String {
         val mapped = text.map(::mapCharacter).joinToString("")
-        return numericToken.replace(mapped) { match -> normalizeNumber(match.value) }
+        // Repair only a clearly incomplete final thousands group (for example 1,559,43 1).
+        // General spaces stay intact so adjacent table cells such as 20,000 9.34% never merge.
+        val repaired = splitGroupedNumber.replace(mapped) { match ->
+            match.groupValues[1] + match.groupValues[2]
+        }
+        return numericToken.replace(repaired) { match -> normalizeNumber(match.value) }
     }
 
     private fun normalizeNumber(value: String): String {
@@ -170,7 +178,6 @@ object OcrTextNormalizer {
             .replace('⋅', '.')
             .replace('﹒', '.')
             .replace('｡', '.')
-            .replace(Regex("[\\p{Zs}\\t]+"), "")
         if ('/' in compact) return compact + suffix
 
         val sign = compact.firstOrNull()

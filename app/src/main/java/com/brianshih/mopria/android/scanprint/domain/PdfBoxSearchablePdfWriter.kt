@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.cos.COSName
+import com.tom_roush.pdfbox.io.MemoryUsageSetting
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
@@ -67,6 +68,7 @@ object PdfBoxSearchablePdfWriter {
     private const val pageMargin = 36f
     private const val minimumFontSize = 4f
     private const val maximumFontSize = 48f
+    private const val maximumMainMemoryBytes = 32L * 1024L * 1024L
 
     /**
      * Writes a PDF with the supplied image pages and OCR layouts.
@@ -104,7 +106,10 @@ object PdfBoxSearchablePdfWriter {
         var textLineCount = 0
         var textCharacterCount = 0
 
-        PDDocument().use { document ->
+        val memoryUsage = MemoryUsageSetting
+            .setupMixed(maximumMainMemoryBytes)
+            .setTempDir(context.applicationContext.cacheDir)
+        PDDocument(memoryUsage).use { document ->
             val fonts = fontFiles.map { source ->
                 LoadedFont(
                     font = FileInputStream(source.file).use { input ->

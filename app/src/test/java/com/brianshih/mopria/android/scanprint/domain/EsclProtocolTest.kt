@@ -44,6 +44,85 @@ class EsclProtocolTest {
     }
 
     @Test
+    fun ocrRejectsPdfOnlyScannerProfileBeforeCreatingAJob() {
+        val capabilities = EsclProtocol.parseCapabilities(CAPABILITIES_XML)
+
+        assertThrows(ScanError.OcrImageFormatUnsupported::class.java) {
+            EsclProtocol.negotiate(
+                capabilities,
+                ScanSettings(
+                    inputSource = ScanInputSource.Adf,
+                    resolutionDpi = 300,
+                    colorMode = ScanColorMode.Grayscale,
+                    ocrMode = OcrMode.MlKit,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun ocrNegotiatesJpegWhenTheSelectedProfileSupportsIt() {
+        val capabilities = EsclProtocol.parseCapabilities(CAPABILITIES_XML)
+
+        val negotiated = EsclProtocol.negotiate(
+            capabilities,
+            ScanSettings(
+                inputSource = ScanInputSource.Flatbed,
+                resolutionDpi = 300,
+                colorMode = ScanColorMode.Color,
+                ocrMode = OcrMode.MlKit,
+            ),
+        )
+
+        assertEquals("image/jpeg", negotiated.documentFormat)
+    }
+
+    @Test
+    fun ocrFallsBackToAColorModeThatCanReturnJpeg() {
+        val capabilities = EsclCapabilities(
+            inputs = mapOf(
+                "Platen" to EsclInputCapabilities(
+                    inputSource = "Platen",
+                    profiles = listOf(
+                        EsclSettingProfile(
+                            colorModes = setOf("Grayscale8"),
+                            documentFormats = setOf("application/pdf"),
+                            resolutions = listOf(
+                                EsclResolutionSupport(
+                                    colorMode = "Grayscale8",
+                                    discreteResolutions = setOf(EsclResolution(300, 300)),
+                                ),
+                            ),
+                        ),
+                        EsclSettingProfile(
+                            colorModes = setOf("RGB24"),
+                            documentFormats = setOf("image/jpeg"),
+                            resolutions = listOf(
+                                EsclResolutionSupport(
+                                    colorMode = "RGB24",
+                                    discreteResolutions = setOf(EsclResolution(300, 300)),
+                                ),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        val negotiated = EsclProtocol.negotiate(
+            capabilities,
+            ScanSettings(
+                colorMode = ScanColorMode.Grayscale,
+                resolutionDpi = 300,
+                ocrMode = OcrMode.MlKit,
+            ),
+        )
+
+        assertEquals("image/jpeg", negotiated.documentFormat)
+        assertEquals("RGB24", negotiated.colorMode)
+    }
+
+    @Test
     fun rejectsOutOfRangeAdfPageLimit() {
         val capabilities = EsclProtocol.parseCapabilities(CAPABILITIES_XML)
 

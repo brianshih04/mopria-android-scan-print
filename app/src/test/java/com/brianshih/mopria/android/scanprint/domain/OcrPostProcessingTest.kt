@@ -60,6 +60,12 @@ class OcrPostProcessingTest {
     }
 
     @Test
+    fun numberNormalizationNeverJoinsAdjacentTableColumns() {
+        assertEquals("20,000 9.34%", OcrTextNormalizer.normalize("20,000 9.34%"))
+        assertEquals("123 456", OcrTextNormalizer.normalize("123 456"))
+    }
+
+    @Test
     fun ordersStrongTwoColumnLayoutByColumnThenLine() {
         fun line(text: String, left: Int, top: Int) = OcrTextLine(
             text = text,

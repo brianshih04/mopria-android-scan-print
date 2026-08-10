@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val releaseAbiSplitsEnabled = providers.gradleProperty("releaseAbiSplits").orNull.toBoolean()
+
 android {
     namespace = "com.brianshih.mopria.android.scanprint"
     compileSdk = 37
@@ -23,6 +25,12 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            // Phone release artifacts do not carry the emulator-only x86 OpenCV binaries.
+            if (!releaseAbiSplitsEnabled) {
+                ndk {
+                    abiFilters += setOf("arm64-v8a", "armeabi-v7a")
+                }
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -33,6 +41,18 @@ android {
     bundle {
         language {
             enableSplit = false
+        }
+    }
+
+    // GitHub distribution can opt into one small APK per phone ABI with
+    // `:app:assembleRelease -PreleaseAbiSplits=true`. Normal debug builds remain universal so
+    // connected emulator tests continue to select x86/x86_64 automatically.
+    splits {
+        abi {
+            isEnable = releaseAbiSplitsEnabled
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = false
         }
     }
 

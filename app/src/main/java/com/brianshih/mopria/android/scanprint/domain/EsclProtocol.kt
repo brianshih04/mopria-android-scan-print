@@ -205,25 +205,46 @@ object EsclProtocol {
         val source = settings.inputSource.eSclValue
         val input = capabilities.inputs.entries.firstOrNull { it.key.equals(source, true) }?.value
             ?: throw ScanError.CapabilityNotSupported
-        val formatPreference = if (settings.colorMode == ScanColorMode.BlackAndWhite) {
+        val ocrRequiresRasterImage = settings.ocrMode != OcrMode.Disabled
+        val formatPreference = if (ocrRequiresRasterImage) {
+            // ML Kit's Android InputImage path accepts raster images, not PDF documents. Do not
+            // create a scan job that can only produce a payload the selected OCR backend cannot use.
+            listOf("image/jpeg")
+        } else if (settings.colorMode == ScanColorMode.BlackAndWhite) {
             listOf("application/pdf")
         } else {
             listOf("image/jpeg", "application/pdf")
         }
-        val selection = formatPreference.firstNotNullOfOrNull { format ->
-            input.profiles.firstNotNullOfOrNull { profile ->
-                profile.takeIf { it.supports(settings.colorMode.eSclValue, format) }
-                    ?.nearestResolution(settings.colorMode.eSclValue, settings.resolutionDpi)
-                    ?.let { Triple(profile, format, it) }
+        val colorModePreference = if (ocrRequiresRasterImage) {
+            listOf(
+                settings.colorMode.eSclValue,
+                ScanColorMode.Grayscale.eSclValue,
+                ScanColorMode.Color.eSclValue,
+                ScanColorMode.BlackAndWhite.eSclValue,
+            ).distinct()
+        } else {
+            listOf(settings.colorMode.eSclValue)
+        }
+        val selection = colorModePreference.firstNotNullOfOrNull { colorMode ->
+            formatPreference.firstNotNullOfOrNull { format ->
+                input.profiles.firstNotNullOfOrNull { profile ->
+                    profile.takeIf { it.supports(colorMode, format) }
+                        ?.nearestResolution(colorMode, settings.resolutionDpi)
+                        ?.let { Triple(format, colorMode, it) }
+                }
             }
-        } ?: throw ScanError.CapabilityNotSupported
+        } ?: if (ocrRequiresRasterImage) {
+            throw ScanError.OcrImageFormatUnsupported
+        } else {
+            throw ScanError.CapabilityNotSupported
+        }
         val resolution = selection.third
         return EsclNegotiatedSettings(
             version = compatibleVersion(capabilities.version),
             inputSource = source,
-            documentFormat = selection.second,
+            documentFormat = selection.first,
             resolution = resolution.xDpi,
-            colorMode = settings.colorMode.eSclValue,
+            colorMode = selection.second,
             yResolution = resolution.yDpi,
             numberOfPages = settings.maxPages.takeIf { settings.inputSource == ScanInputSource.Adf && input.selectSinglePage },
         )

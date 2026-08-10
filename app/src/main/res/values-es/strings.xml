@@ -194,6 +194,7 @@
     <string name="scan_error_timeout">El escaneo ha superado el tiempo de espera. Inténtelo de nuevo.</string>
     <string name="scan_error_job_stopped">El trabajo de escaneo se detuvo o canceló.</string>
     <string name="scan_error_capability">El escáner no admite la configuración seleccionada. Pruebe otras opciones.</string>
+    <string name="scan_error_ocr_image_format">El escáner no puede devolver una imagen JPEG para OCR con el origen y el modo de color seleccionados. Cambie los ajustes o desactive OCR.</string>
     <string name="scan_error_no_images">El escaneo se completó pero no se devolvieron imágenes.</string>
     <string name="scan_searching_devices">Buscando dispositivos</string>
     <string name="documents_delete">Eliminar</string>
@@ -237,6 +238,9 @@
     <string name="scan_ocr">OCR</string>
     <string name="scan_searchable_pdf">PDF con texto buscable</string>
     <string name="scan_searchable_pdf_requires_ocr">Activa OCR para añadir una capa de texto buscable al PDF.</string>
+    <string name="searchable_pdf_error_missing_ocr">Faltan datos de OCR. Vuelva a escanear con OCR activado antes de exportar un PDF con texto buscable.</string>
+    <string name="searchable_pdf_error_missing_font">Descargue el paquete de fuentes OCR necesario antes de exportar un PDF con texto buscable.</string>
+    <string name="searchable_pdf_error_empty_text_layer">No se pudo crear la capa de texto buscable. Ejecute OCR de nuevo o desactive PDF con texto buscable.</string>
     <string name="scan_deskew">Enderezar páginas del ADF</string>
     <string name="scan_auto_crop">Recortar página automáticamente</string>
     <string name="scan_drop_blank_pages">Omitir páginas en blanco del ADF</string>

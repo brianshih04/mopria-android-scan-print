@@ -25,7 +25,7 @@ enum class OcrDownloadableFontPack(
         language = OcrLanguagePack.Japanese,
         role = PdfBoxSearchableFontRole.Japanese,
         fileName = "NotoSansJP-VF.ttf",
-        downloadUrl = "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/Variable/TTF/Subset/NotoSansJP-VF.ttf",
+        downloadUrl = "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/Variable/TTF/Subset/NotoSansJP-VF.ttf",
         byteLength = 9_590_732L,
         sha256 = "F4B373B226668EE33A6E54B02823DCD2D1209F17159F777421AE8C2275160369",
     ),
@@ -33,7 +33,7 @@ enum class OcrDownloadableFontPack(
         language = OcrLanguagePack.Korean,
         role = PdfBoxSearchableFontRole.Korean,
         fileName = "NotoSansKR-VF.ttf",
-        downloadUrl = "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/Variable/TTF/Subset/NotoSansKR-VF.ttf",
+        downloadUrl = "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/Variable/TTF/Subset/NotoSansKR-VF.ttf",
         byteLength = 10_415_420L,
         sha256 = "9E1D729E7E2B36F9EF439DA102F8C134C10AABE46F1C843BF0ACA5C043B86F76",
     ),
@@ -47,9 +47,7 @@ enum class OcrDownloadableFontPack(
     fun availableFile(context: Context): File? = destination(context)
         .takeIf { OcrFontPackDownloader.matchesChecksum(it, sha256) }
 
-    fun isInstalled(context: Context): Boolean = destination(context).let { file ->
-        file.isFile && file.length() == byteLength
-    }
+    fun isInstalled(context: Context): Boolean = availableFile(context) != null
 
     companion object {
         fun forLanguage(language: OcrLanguagePack): OcrDownloadableFontPack? = entries

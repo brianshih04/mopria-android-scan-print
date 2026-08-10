@@ -194,6 +194,7 @@
     <string name="scan_error_timeout">Der Scan-Vorgang hat ein Zeitlimit überschritten. Bitte erneut versuchen.</string>
     <string name="scan_error_job_stopped">Der Scan-Auftrag wurde gestoppt oder abgebrochen.</string>
     <string name="scan_error_capability">Der Scanner unterstützt die gewählten Einstellungen nicht. Versuchen Sie andere Optionen.</string>
+    <string name="scan_error_ocr_image_format">Der Scanner kann mit der gewählten Quelle und dem Farbmodus kein JPEG-Bild für OCR liefern. Wählen Sie andere Einstellungen oder deaktivieren Sie OCR.</string>
     <string name="scan_error_no_images">Der Scan wurde abgeschlossen, aber es wurden keine Bilder zurückgegeben.</string>
     <string name="scan_searching_devices">Geräte werden gesucht</string>
     <string name="documents_delete">Löschen</string>
@@ -237,6 +238,9 @@
     <string name="scan_ocr">OCR</string>
     <string name="scan_searchable_pdf">Durchsuchbares PDF</string>
     <string name="scan_searchable_pdf_requires_ocr">Aktivieren Sie OCR, um dem PDF eine durchsuchbare Textebene hinzuzufügen.</string>
+    <string name="searchable_pdf_error_missing_ocr">OCR-Daten fehlen. Scannen Sie mit aktivierter OCR erneut, bevor Sie ein durchsuchbares PDF exportieren.</string>
+    <string name="searchable_pdf_error_missing_font">Laden Sie das erforderliche OCR-Schriftpaket herunter, bevor Sie ein durchsuchbares PDF exportieren.</string>
+    <string name="searchable_pdf_error_empty_text_layer">Die durchsuchbare Textebene konnte nicht erstellt werden. Führen Sie OCR erneut aus oder deaktivieren Sie „Durchsuchbares PDF“.</string>
     <string name="scan_deskew">ADF-Seiten begradigen</string>
     <string name="scan_auto_crop">Seite automatisch zuschneiden</string>
     <string name="scan_drop_blank_pages">Leere ADF-Seiten entfernen</string>

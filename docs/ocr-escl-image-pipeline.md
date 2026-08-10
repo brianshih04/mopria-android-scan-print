@@ -2,7 +2,7 @@
 
 ## 目前已落地的流程
 
-eSCL `NextDocument` 的 HTTP response 由 `EsclHttpClient` 以 bounded `InputStream.copyTo` 直接寫入 `filesDir/scans` 的暫存檔，再以同目錄檔案 rename 成頁面檔。掃描影像不會先進入 `ByteArray`，也不會在 Kotlin／Compose 建立 full-resolution `Bitmap`。
+eSCL `NextDocument` 的 HTTP response 由 `EsclHttpClient` 以 bounded `InputStream.copyTo` 直接寫入 `filesDir/scans` 的暫存檔，再以同目錄檔案 rename 成頁面檔。掃描影像不會先進入 `ByteArray`；OpenCV 不建立 Android Bitmap，ML Kit OCR 只建立受 12 MP／4096 px 長邊限制的取樣 Bitmap。
 
 檔案落地後，Real provider 可依 `ScanSettings` 執行：
 
@@ -10,7 +10,7 @@ eSCL `NextDocument` 的 HTTP response 由 `EsclHttpClient` 以 bounded `InputStr
 - deskew：灰階、反向 Otsu、水平膨脹、`findContours`／`minAreaRect` 中位角度，再以白色 border 的 `warpAffine` 旋轉。
 - auto-crop：Canny 邊緣、膨脹與最大紙張輪廓的 bounding rectangle；找不到可信紙張輪廓時保留原圖。
 - background cleanup：既有 OpenCV pipeline。
-- OCR：在影像處理完成後呼叫 `OcrEngine`；production 使用 Google ML Kit Text Recognition v2 的 file URI API。辨識文字才會回到掃描流程，原始影像不會轉成 Kotlin `ByteArray`。
+- OCR：在影像處理完成後呼叫 `OcrEngine`；production 先讀檔案 bounds、計算 power-of-two sample，再使用 Google ML Kit Text Recognition v2 的 bounded Bitmap API。辨識文字才會回到掃描流程，原始影像不會轉成 Kotlin `ByteArray`。OCR eSCL 工作只協商 JPEG，PDF-only profile 會在建立工作前回報。
 
 所有會改檔的步驟都寫到 sibling temporary file，通過 decode／format／bounds 驗證後才做 atomic replace；失敗或取消不改動 source。OpenCV `Mat` 由 `MatScope` 明確持有並在成功、例外與 cancellation 路徑 release。
 
@@ -49,7 +49,7 @@ ML Kit 模型由 Google Play services 下載與更新，不由 App 直接保存�
 1. 真實 ARM 裝置上的 ML Kit Chinese／Japanese／Korean／Latin accuracy、cold/warm latency、PSS 與取消壓力測試。
 2. Google Play services 缺失、模型下載中、JP／KR 字型下載或 checksum 失敗與低磁碟空間的完整 UI／instrumentation 覆蓋。
 3. 以真實 eSCL scanner payload 驗證 deskew／auto-crop 與不同紙張品質；目前 `Brian.jpg`、`b1.jpg`、`b2.jpg` 只在 API 36 emulator 做過 ML Kit sample smoke test，不是產品準確率證據。
-4. 語意化表格 cell extraction、欄位驗證，以及日文／韓文等多語字型 coverage 與真實 scanner payload 的 Searchable PDF 驗收；目前 Searchable PDF 已是獨立 opt-in，OCR layout 以 page-scoped `DocumentPage.ocrResult` 接到正式 PDF export，process death 後沒有 layout 的文件會安全回到普通 PDF。
+4. 語意化表格 cell extraction、欄位驗證，以及日文／韓文等多語字型 coverage 與真實 scanner payload 的 Searchable PDF 驗收；目前 Searchable PDF 已是獨立 opt-in，OCR layout 除了 page-scoped `DocumentPage.ocrResult`，也會以 gzip sidecar 原子保存。process death 或 sidecar 損毀後缺少 layout 時會要求重新 OCR，不會靜默輸出普通 PDF。
 
 官方參考：
 

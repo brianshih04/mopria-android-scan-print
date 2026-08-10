@@ -1,10 +1,10 @@
 package com.brianshih.mopria.android.scanprint.domain
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Point
 import android.graphics.Rect
-import android.net.Uri
 import com.google.android.gms.common.moduleinstall.ModuleInstall
 import com.google.android.gms.common.moduleinstall.ModuleInstallRequest
 import com.google.android.gms.tasks.Task
@@ -17,7 +17,6 @@ import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
 import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.io.File
-import java.io.IOException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.CancellationException
@@ -69,6 +68,76 @@ interface LanguageAwareOcrEngine : OcrEngine {
     suspend fun recognize(imageFile: File, language: OcrLanguagePack): OcrResult
 }
 
+/** Hard decode limits keep one OCR bitmap below roughly 48 MiB in ARGB_8888. */
+const val MAX_OCR_PIXELS = 12_000_000L
+const val MAX_OCR_LONG_EDGE = 4_096
+
+/** Pure sizing policy shared by the production decoder and unit tests. */
+internal object OcrImageSizing {
+    fun sampleSize(
+        width: Int,
+        height: Int,
+        maximumPixels: Long = MAX_OCR_PIXELS,
+        maximumLongEdge: Int = MAX_OCR_LONG_EDGE,
+    ): Int? {
+        if (width <= 0 || height <= 0 || maximumPixels <= 0L || maximumLongEdge <= 0) return null
+        var sampleSize = 1
+        while (!withinLimits(width, height, sampleSize, maximumPixels, maximumLongEdge)) {
+            if (sampleSize > 1 shl 20) return null
+            sampleSize *= 2
+        }
+        return sampleSize
+    }
+
+    fun withinLimits(
+        width: Int,
+        height: Int,
+        sampleSize: Int,
+        maximumPixels: Long = MAX_OCR_PIXELS,
+        maximumLongEdge: Int = MAX_OCR_LONG_EDGE,
+    ): Boolean {
+        if (width <= 0 || height <= 0 || sampleSize <= 0) return false
+        val sampledWidth = (width.toLong() + sampleSize - 1L) / sampleSize
+        val sampledHeight = (height.toLong() + sampleSize - 1L) / sampleSize
+        return sampledWidth <= maximumLongEdge &&
+            sampledHeight <= maximumLongEdge &&
+            sampledWidth * sampledHeight <= maximumPixels
+    }
+}
+
+private sealed interface OcrBitmapLoadResult {
+    data class Loaded(val bitmap: Bitmap) : OcrBitmapLoadResult
+    data object UnsupportedFormat : OcrBitmapLoadResult
+    data object ImageTooLarge : OcrBitmapLoadResult
+}
+
+private object OcrBitmapLoader {
+    fun load(imageFile: File): OcrBitmapLoadResult {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(imageFile.absolutePath, bounds)
+        val sampleSize = OcrImageSizing.sampleSize(bounds.outWidth, bounds.outHeight)
+            ?: return OcrBitmapLoadResult.UnsupportedFormat
+
+        return try {
+            val bitmap = BitmapFactory.decodeFile(
+                imageFile.absolutePath,
+                BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                },
+            ) ?: return OcrBitmapLoadResult.UnsupportedFormat
+            if (!OcrImageSizing.withinLimits(bitmap.width, bitmap.height, 1)) {
+                bitmap.recycle()
+                OcrBitmapLoadResult.ImageTooLarge
+            } else {
+                OcrBitmapLoadResult.Loaded(bitmap)
+            }
+        } catch (_: OutOfMemoryError) {
+            OcrBitmapLoadResult.ImageTooLarge
+        }
+    }
+}
+
 /** Creates the unbundled ML Kit recognizer matching the selected script model. */
 object MlKitOcrRecognizerFactory {
     fun create(language: OcrLanguagePack): TextRecognizer = when (language.model) {
@@ -86,9 +155,9 @@ object MlKitOcrRecognizerFactory {
 }
 
 /**
- * Google ML Kit Text Recognition v2 backend. Input stays file-first: ML Kit receives an
- * app-private file URI and the recognized text is the only result returned to the scan pipeline.
- * Unbundled script models are requested through Google Play services rather than app-hosted files.
+ * Google ML Kit Text Recognition v2 backend. The source stays file-first until a bounded, sampled
+ * bitmap is decoded for inference. Unbundled script models are requested through Google Play
+ * services rather than app-hosted files.
  */
 class MlKitOcrEngine(
     context: Context,
@@ -116,14 +185,9 @@ class MlKitOcrEngine(
         } catch (_: Exception) {
             return@withContext OcrResult.Skipped(OcrSkipReason.RuntimeUnavailable)
         }
+        var closeRecognizerOnExit = true
 
         try {
-            val image = try {
-                InputImage.fromFilePath(appContext, Uri.fromFile(imageFile))
-            } catch (_: IOException) {
-                return@withContext OcrResult.Failed(OcrError.InvalidSource)
-            }
-
             val modules = awaitMlKitTask(moduleInstallClient.areModulesAvailable(recognizer))
             if (!modules.areModulesAvailable()) {
                 runCatching {
@@ -138,12 +202,40 @@ class MlKitOcrEngine(
                 return@withContext OcrResult.Skipped(OcrSkipReason.ModelsMissing)
             }
 
-            val result = awaitMlKitTask(recognizer.process(image))
-            val layout = result.toOcrTextLayout(imageFile)
-            OcrResult.Applied(
-                text = OcrTextFormatter.format(layout, result.text),
-                layout = layout,
-            )
+            val bitmap = when (val loaded = OcrBitmapLoader.load(imageFile)) {
+                is OcrBitmapLoadResult.Loaded -> loaded.bitmap
+                OcrBitmapLoadResult.UnsupportedFormat ->
+                    return@withContext OcrResult.Skipped(OcrSkipReason.UnsupportedFormat)
+                OcrBitmapLoadResult.ImageTooLarge ->
+                    return@withContext OcrResult.Skipped(OcrSkipReason.ImageTooLarge)
+            }
+            var recycleBitmapOnExit = true
+            try {
+                // Rotation stays zero so ML Kit coordinates use the same decoded pixel space as
+                // DocumentPageBitmapLoader and the searchable-PDF transform.
+                val image = InputImage.fromBitmap(bitmap, 0)
+                val inferenceTask = recognizer.process(image)
+                val result = try {
+                    awaitMlKitTask(inferenceTask)
+                } catch (error: CancellationException) {
+                    // Coroutine cancellation does not guarantee cancellation of the Google Task.
+                    // Keep its input and recognizer alive until native inference actually finishes.
+                    recycleBitmapOnExit = false
+                    closeRecognizerOnExit = false
+                    inferenceTask.addOnCompleteListener {
+                        bitmap.recycle()
+                        recognizer.close()
+                    }
+                    throw error
+                }
+                val layout = result.toOcrTextLayout(bitmap.width, bitmap.height)
+                OcrResult.Applied(
+                    text = OcrTextFormatter.format(layout, result.text),
+                    layout = layout,
+                )
+            } finally {
+                if (recycleBitmapOnExit) bitmap.recycle()
+            }
         } catch (error: CancellationException) {
             throw error
         } catch (_: MlKitException) {
@@ -153,20 +245,19 @@ class MlKitOcrEngine(
         } catch (_: Exception) {
             OcrResult.Failed(OcrError.InferenceFailed)
         } finally {
-            recognizer.close()
+            if (closeRecognizerOnExit) recognizer.close()
         }
     }
 }
 
-private fun com.google.mlkit.vision.text.Text.toOcrTextLayout(imageFile: File): OcrTextLayout {
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(imageFile.absolutePath, bounds)
-    return OcrTextLayout(
+private fun com.google.mlkit.vision.text.Text.toOcrTextLayout(
+    imageWidth: Int,
+    imageHeight: Int,
+): OcrTextLayout = OcrTextLayout(
         blocks = textBlocks.map { it.toOcrTextBlock() },
-        imageWidth = bounds.outWidth.coerceAtLeast(0),
-        imageHeight = bounds.outHeight.coerceAtLeast(0),
+        imageWidth = imageWidth.coerceAtLeast(0),
+        imageHeight = imageHeight.coerceAtLeast(0),
     )
-}
 
 private fun com.google.mlkit.vision.text.Text.TextBlock.toOcrTextBlock(): OcrTextBlock = OcrTextBlock(
     text = text,

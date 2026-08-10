@@ -9,7 +9,7 @@
 - License source：[OpenCV LICENSE](https://github.com/opencv/opencv/blob/4.x/LICENSE)
 - Project source：[OpenCV](https://opencv.org/)
 
-目前 release artifact 已包含 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64`，並已通過 `zipalign -P 16`；16 KB page-size runtime 與 ARM 實機仍待驗證。
+一般 release artifact 只包含 `arm64-v8a`、`armeabi-v7a`；debug 保留 emulator 使用的 `x86`、`x86_64`。Release 已通過 `zipalign -P 16`，16 KB page-size runtime 與 ARM 實機仍待驗證。
 
 ## PDFBox Android 2.0.27.0
 
@@ -29,7 +29,7 @@
 - Bundled Traditional Chinese font：`Sans/Variable/TTF/Subset/NotoSansTC-VF.ttf`（SHA-256 `C6481C5D93420AEAC11087367DAE56AE7492EB1989CE42F4CA5D5AA5E2DB3116`）
 - On-demand Japanese font：`Sans/Variable/TTF/Subset/NotoSansJP-VF.ttf`（SHA-256 `F4B373B226668EE33A6E54B02823DCD2D1209F17159F777421AE8C2275160369`）
 - On-demand Korean font：`Sans/Variable/TTF/Subset/NotoSansKR-VF.ttf`（SHA-256 `9E1D729E7E2B36F9EF439DA102F8C134C10AABE46F1C843BF0ACA5C043B86F76`）
-- 用途：嵌入 searchable PDF 的 Unicode 文字層。TC 隨 APK 提供；JP／KR 只在使用者要求對應語言資源時從官方 repository 以 HTTPS 串流下載、驗證固定 SHA-256，並寫入 App 私有目錄。匯出時只載入文件實際需要的地域字型，並以明確 ToUnicode CMap 保存正規化的搜尋碼位；缺少必要字型則回到普通 PDF。
+- 用途：嵌入 searchable PDF 的 Unicode 文字層。TC 隨 APK 提供；JP／KR 只在使用者要求對應語言資源時從官方 repository 的固定 commit 以 HTTPS 串流下載、驗證大小與 SHA-256，並寫入 App 私有目錄。匯出時只載入裁切後實際需要的地域字型，並以明確 ToUnicode CMap 保存正規化的搜尋碼位；缺少必要字型時明確要求下載，不會靜默降級。
 
 ## Google ML Kit Text Recognition v2
 

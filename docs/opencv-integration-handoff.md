@@ -1,12 +1,12 @@
 # OpenCV 背景淨化整合接手指南
 
-更新日期：2026-08-09
+更新日期：2026-08-10
 狀態：Phase 0–4C 實作完成；Phase 5 實機／模型 gate 待完成
 主計畫：`docs/opencv-integration-plan.md`
 
 ## 1. 接手者先知道的事
 
-目前 working tree 已完成 Phase 0–4C 的主要實作：官方 OpenCV AAR、file-first pipeline、原子寫回、`EnhancementResult`、ADF deskew／auto-crop／blank-page drop、OCR settings/backend seam、ML Kit Text Recognition v2、五種預設語言、區域語言選擇、本地化降級訊息，以及 OCR 啟用時的自動 deskew／auto-crop、結構化文字座標／confidence 與版面／數字後處理。Release build、OpenCV 四 ABI、`zipalign -P 16` 與 API 36 emulator instrumentation 已驗證；16 KB、真實 scanner、ML Kit 模型下載／accuracy／PSS gate 尚未完成。透視校正仍不在本期範圍。
+目前 working tree 已完成 Phase 0–4C 的主要實作：官方 OpenCV AAR、file-first pipeline、原子寫回、`EnhancementResult`、ADF deskew／auto-crop／blank-page drop、OCR settings/backend seam、ML Kit Text Recognition v2、預設 English／繁中／簡中、區域語言選擇、本地化錯誤，以及 OCR 啟用時的自動 deskew／auto-crop、bounded sampled bitmap、結構化文字座標／confidence 與版面／數字後處理。一般 Release 只保留兩個 ARM ABI；debug 保留 emulator ABI，`zipalign -P 16` 與 API 36 emulator instrumentation 已驗證。16 KB、真實 scanner、ML Kit 模型下載／accuracy／ARM PSS gate 尚未完成。透視校正仍不在本期範圍。
 
 本文件只提供快速接手路線。技術決策、phase gate、測試矩陣與完成條件以 `docs/opencv-integration-plan.md` 為準；若兩份文件不一致，以主計畫為準。
 
@@ -33,15 +33,15 @@
 | 檔案格式 | JPEG／PNG 嘗試處理；scanner-returned PDF 跳過 |
 | 單元測試 | 以當次 Gradle 輸出為準，不在文件固定數量 |
 | 實機驗證 | 尚未完成，不可宣稱品牌相容 |
-| eSCL image stream | HTTP response 直接落地 sibling file；不建立影像 ByteArray／full Bitmap |
+| eSCL image stream | HTTP response 直接落地 sibling file；不建立影像 ByteArray；OCR Bitmap 受 12 MP／4096 px 限制 |
 | ADF／平台 processing | deskew、auto-crop、blank-page drop 已接線並有 instrumentation contract |
 | OCR option | ML Kit Text Recognition v2 option、settings、capability safety、script model request、language catalog、結構化 bounds／confidence 與版面／數字 formatter；模型由 Google Play services 管理 |
-| memory | `largeHeap=true`；A4 300 dpi 10 頁 gate hard peak 256 MB、retained 64 MB |
+| memory | `largeHeap=true`；A4 300 dpi 10 頁 absolute peak PSS 256 MB、retained delta 64 MB；PDFBox 32 MiB 後使用 cache scratch file |
 
 仍需注意的風險與未完成 gate：
 
-- A4 300 dpi 與 ADF 10 頁 PSS 已在目前 emulator 通過 256 MB／64 MB gate；ARM64 實機尚未量測。
-- 16 KB page-size emulator／ARM 實機、ML Kit model download／accuracy／PSS、Google Play services 缺失 fallback 尚未完成；目前 release artifact、OpenCV 四 ABI 與 zipalign 已驗證。
+- A4 300 dpi 與 ADF 10 頁 PSS 已在目前 emulator 通過 absolute 256 MB／retained 64 MB gate；ARM64 實機尚未量測。
+- 16 KB page-size emulator／ARM 實機、ML Kit model download／accuracy／PSS、Google Play services 缺失 fallback 尚未完成；一般 release artifact 只保留兩個 ARM ABI，debug 保留 x86/x86_64。
 - 實際低磁碟、取消、replace 失敗與 OpenCV 初始化失敗的 instrumentation gate 尚待補齊。
 - 真實 scanner payload 與彩色文件 fixture 尚未完成實機驗證。
 
@@ -86,7 +86,7 @@
 
 2. **Phase 1 — Dependency spike（基礎已完成）**
    - 官方 OpenCV AAR、`OpenCvRuntime` 與 instrumentation Mat smoke test 已加入。
-   - Debug／Release build、APK、四 ABI、OpenCV license 與 `zipalign -P 16` 已通過；16 KB emulator／ELF runtime 尚待 gate。
+   - Debug／Release build、兩個 ARM release ABI、debug emulator ABI、OpenCV license 與 `zipalign -P 16` 已通過；16 KB emulator／ELF runtime 尚待 gate。
 
 3. **Phase 2 — 安全檔案層（主要實作已完成）**
    - `EnhancementResult`、suspend API、pixel limit、signature/bounds、temp encode、validation、atomic replace 已加入。
@@ -103,7 +103,7 @@
 6. **Phase 4A — eSCL image operations／OCR（目前已接線）**
    - `ScanImagePipeline` 執行 blank-page drop、deskew、auto-crop，並與 enhancement 共用 source-safe temp flow。
    - `OcrMode.MlKit` 只在 <=300 dpi／grayscale-safe capability 下保留；model/runtime 缺失回報 skipped。
-   - ML Kit Text Recognition v2 的 file URI、Latin／Chinese／Japanese／Korean clients 與 ModuleInstall request 已納入；模型下載、accuracy 與 PSS 仍待外部 gate。
+   - ML Kit Text Recognition v2 的 bounded sampled Bitmap、Latin／Chinese／Japanese／Korean clients 與 ModuleInstall request 已納入；模型下載、accuracy 與 ARM PSS 仍待外部 gate。
 
 7. **Phase 4B — OCR language selection（目前已接線）**
    - 預設 English、繁中、簡中；日文、韓文及其餘 catalog 由設定頁按 Global／East Asia／Europe and the Americas 分組供使用者按需選取。

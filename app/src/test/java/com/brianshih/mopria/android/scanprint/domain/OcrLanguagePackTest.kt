@@ -35,6 +35,8 @@ class OcrLanguagePackTest {
         )
         OcrDownloadableFontPack.entries.forEach { pack ->
             assertTrue(pack.downloadUrl.startsWith("https://raw.githubusercontent.com/notofonts/noto-cjk/"))
+            assertFalse(pack.downloadUrl.contains("/main/"))
+            assertTrue(pack.downloadUrl.contains(Regex("/noto-cjk/[0-9a-f]{40}/")))
             assertTrue(pack.byteLength in 1L..20L * 1024L * 1024L)
             assertTrue(pack.sha256.matches(Regex("[0-9A-F]{64}")))
             assertTrue(!pack.language.defaultSelected)

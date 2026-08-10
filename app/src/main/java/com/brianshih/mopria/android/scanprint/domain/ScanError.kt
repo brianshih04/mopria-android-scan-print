@@ -34,6 +34,9 @@ sealed class ScanError(message: String) : RuntimeException(message) {
     /** Scanner does not support the requested source/color/format/resolution combination. */
     object CapabilityNotSupported : ScanError("scanner does not support requested settings")
 
+    /** OCR was requested but the selected source/color profile cannot return a supported raster image. */
+    object OcrImageFormatUnsupported : ScanError("scanner cannot return a JPEG image required for OCR")
+
     /** Scan job completed but produced zero image pages. */
     object NoImages : ScanError("scan job returned no images")
 }

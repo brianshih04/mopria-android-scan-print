@@ -42,6 +42,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import com.brianshih.mopria.android.scanprint.R
+import com.brianshih.mopria.android.scanprint.domain.CropCoordinateMapper
 import com.brianshih.mopria.android.scanprint.domain.CropRect
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
@@ -56,6 +57,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlin.math.min
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -237,10 +239,13 @@ private fun CropDialog(
         // Show the uncropped source while the sliders define the crop fractions.
         DocumentPageBitmapLoader.load(context, page.copy(cropRect = null), 600, 800)
     }
-    var left by remember { mutableFloatStateOf(page.cropRect?.left ?: 0.05f) }
-    var top by remember { mutableFloatStateOf(page.cropRect?.top ?: 0.05f) }
-    var right by remember { mutableFloatStateOf(page.cropRect?.right ?: 0.95f) }
-    var bottom by remember { mutableFloatStateOf(page.cropRect?.bottom ?: 0.95f) }
+    val displayedCrop = remember(page.cropRect, page.rotationDegrees) {
+        page.cropRect?.let { CropCoordinateMapper.sourceToDisplay(it, page.rotationDegrees) }
+    }
+    var left by remember(displayedCrop) { mutableFloatStateOf(displayedCrop?.left ?: 0.05f) }
+    var top by remember(displayedCrop) { mutableFloatStateOf(displayedCrop?.top ?: 0.05f) }
+    var right by remember(displayedCrop) { mutableFloatStateOf(displayedCrop?.right ?: 0.95f) }
+    var bottom by remember(displayedCrop) { mutableFloatStateOf(displayedCrop?.bottom ?: 0.95f) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -260,17 +265,20 @@ private fun CropDialog(
                             contentScale = ContentScale.Fit,
                         )
                         Canvas(modifier = Modifier.fillMaxSize()) {
-                            val w = size.width
-                            val h = size.height
-                            val cLeft = left * w
-                            val cTop = top * h
-                            val cRight = right * w
-                            val cBottom = bottom * h
+                            val scale = min(size.width / bitmap.width, size.height / bitmap.height)
+                            val w = bitmap.width * scale
+                            val h = bitmap.height * scale
+                            val imageLeft = (size.width - w) / 2f
+                            val imageTop = (size.height - h) / 2f
+                            val cLeft = imageLeft + left * w
+                            val cTop = imageTop + top * h
+                            val cRight = imageLeft + right * w
+                            val cBottom = imageTop + bottom * h
                             val overlay = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f)
-                            drawRect(overlay, topLeft = Offset(0f, 0f), size = Size(w, cTop))
-                            drawRect(overlay, topLeft = Offset(0f, cBottom), size = Size(w, h - cBottom))
-                            drawRect(overlay, topLeft = Offset(0f, cTop), size = Size(cLeft, cBottom - cTop))
-                            drawRect(overlay, topLeft = Offset(cRight, cTop), size = Size(w - cRight, cBottom - cTop))
+                            drawRect(overlay, topLeft = Offset(imageLeft, imageTop), size = Size(w, cTop - imageTop))
+                            drawRect(overlay, topLeft = Offset(imageLeft, cBottom), size = Size(w, imageTop + h - cBottom))
+                            drawRect(overlay, topLeft = Offset(imageLeft, cTop), size = Size(cLeft - imageLeft, cBottom - cTop))
+                            drawRect(overlay, topLeft = Offset(cRight, cTop), size = Size(imageLeft + w - cRight, cBottom - cTop))
                             drawRect(
                                 color = androidx.compose.ui.graphics.Color.White,
                                 topLeft = Offset(cLeft, cTop),
@@ -290,7 +298,12 @@ private fun CropDialog(
         },
         confirmButton = {
             TextButton(onClick = {
-                onConfirm(CropRect(left, top, right, bottom))
+                onConfirm(
+                    CropCoordinateMapper.displayToSource(
+                        CropRect(left, top, right, bottom),
+                        page.rotationDegrees,
+                    ),
+                )
             }) { Text(stringResourceSafe(R.string.edit_confirm)) }
         },
         dismissButton = {

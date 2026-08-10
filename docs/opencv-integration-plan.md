@@ -16,7 +16,7 @@
 4. A4 300 dpi 文件在受控記憶體內完成處理，連續多頁不累積 native memory。
 5. 明確處理 JPEG、PNG、scanner-returned PDF、OpenCV 載入失敗與超大圖片。
 6. 背景淨化的狀態、進度、降級與錯誤訊息全部可本地化。
-7. eSCL image payload 直接落地至暫存檔，不建立 full-resolution Bitmap 或 image ByteArray。
+7. eSCL image payload 直接落地至暫存檔，不建立 image ByteArray；OCR 只建立受 12 MP／4096 px 限制的取樣 Bitmap。
 8. ADF 可選 deskew／blank-page drop，平台可選 auto-crop；每一步失敗都保留原檔。
 9. OCR option 完成 settings／capability／provider、ML Kit script clients、Google Play services model request、OCR 專用 deskew／auto-crop 與結構化結果後處理；通過模型下載、accuracy、PSS 與裝置相容性 gate 後才可宣稱可用。
 
@@ -73,7 +73,7 @@ dependencies {
 ### 2.4 ML Kit runtime 策略
 
 - 使用 Google ML Kit Text Recognition v2 unbundled clients：Latin、Chinese、Japanese 與 Korean script model 由 Google Play services 管理。
-- App 透過 `InputImage.fromFilePath()` 將 app-private scan file 交給 recognizer；不建立 full-resolution Bitmap、image ByteArray 或 JNI bridge。
+- App 先讀取 app-private scan file 的 bounds，以 power-of-two sample 解碼受 12 MP／4096 px 限制的 Bitmap，再透過 `InputImage.fromBitmap()` 交給 recognizer；不建立 image ByteArray 或 JNI bridge。
 - `ModuleInstallClient` 先檢查 script model，未安裝時發出明確 install request；模型未完成下載或 Google Play services 不可用時回傳 `Skipped`。
 - `AndroidManifest.xml` 只宣告預設的 `ocr`、`ocr_chinese`；Japanese／Korean 不隨安裝預取，由使用者在設定頁選取後發出 prepare request。
 - ML Kit 的 bundled／unbundled 選擇、模型下載、accuracy、PSS、無 GMS 裝置與 16 KB 實機仍屬 Phase 5 gate。
@@ -240,7 +240,7 @@ class MatScope : AutoCloseable {
 A4 300 dpi 驗收預算：
 
 - 記錄 Java heap、native heap 與 total PSS。
-- 單頁處理峰值相對 baseline 增量硬上限為 256 MB；`android:largeHeap` 只能提供較寬鬆的 process heap 空間，不能取代 PSS gate。
+- 單頁處理的 absolute peak PSS 硬上限為 256 MB；另保留相對 baseline 增量作診斷。`android:largeHeap` 只能提供較寬鬆的 process heap 空間，不能取代 absolute PSS gate。
 - 連續 10 頁後，處理完成且 GC/idle 後 retained PSS 增量不超過 64 MB；這是針對 OpenCV allocator warm cache 的 bounded gate，不把 native allocation 誤當作 Java heap。
 - 若無法達成，需改為 tile/strip pipeline；不能只提高 heap 或吞掉 `OutOfMemoryError`。
 
@@ -286,7 +286,8 @@ A4 300 dpi 驗收預算：
 
 - `OcrMode.MlKit` 啟用時由 capability reconciliation 優先選 <=300 dpi 與 Grayscale8。
 - 沒有 <=300 dpi capability 時停用 OCR 並通知使用者，不發送未協商的 eSCL 設定。
-- `MlKitOcrEngine` 以 file URI／Task boundary 呼叫 ML Kit；模型或 Google Play services 缺失時回報 `ModelsMissing`／`RuntimeUnavailable`。
+- `MlKitOcrEngine` 先讀影像 bounds，以 12 MP／4096 px 長邊限制取樣 ARGB bitmap，再透過 Task boundary 呼叫 ML Kit；模型或 Google Play services 缺失時回報 `ModelsMissing`／`RuntimeUnavailable`。
+- OCR 啟用時 eSCL 只協商 `image/jpeg`；選定 source／color profile 只有 PDF 時，在建立 ScanJob 前回報 `OcrImageFormatUnsupported`。
 - 不把模型下載 request 當成辨識成功，也不以 mock text 作 accuracy 證據。
 - OCR 啟用時 Real provider 自動要求 deskew／auto-crop；`OcrResult.Applied` 保留 block／line／element／symbol 的座標、角度、語言與 confidence。
 - `OcrTextFormatter` 對有座標的寬版表格按列輸出、對明顯雙欄保留欄順序，並以保守規則修正全形與混用千分位數字；這不等於語意化 cell extraction。Searchable PDF 另由獨立 opt-in 的 PDFBox export path 處理。
@@ -344,11 +345,11 @@ Gate：所有結果都不會靜默假裝增強成功，Mock 結果不被用作�
 - 加入 OCR settings persistence、300 dpi／grayscale capability safety、ML Kit Text Recognition v2 backend、script model clients 與 model-missing/runtime-unavailable result。
 - 補齊 OpenCV instrumentation fixtures、blank-page、crop、deskew、source-integrity 與 OCR contract tests。
 
-Gate：沒有 image ByteArray／full Bitmap 中轉；所有 processing/OCR skip/failure 都保留原檔並有本地化訊息；model missing/runtime unavailable 不會阻斷掃描；ML Kit 模型下載與 accuracy 仍需實機 gate。
+Gate：沒有 image ByteArray／無界 full-resolution Bitmap 中轉；所有 processing/OCR skip/failure 都保留原檔並有本地化訊息；model missing/runtime unavailable 不會阻斷掃描；ML Kit 模型下載與 accuracy 仍需實機 gate。
 
 ### Phase 4B：OCR language-pack selection
 
-- 加入五種預設語言、區域分組的語言 catalog、選取／active 語言 persistence 與設定 UI。
+- 預設只選取 English、繁中、簡中；日文、韓文與其他區域 catalog 語言由使用者按需選取，並保存 selected／active 狀態。
 - 透過 Google Play services `ModuleInstallClient` 發出 Latin／Chinese／Japanese／Korean script model request；不自行保存或驗證 `.nb` artifact。
 
 Gate：語言選取、active 語言與模型 request 狀態可恢復；模型尚未完成下載、Google Play services 不可用或 ML Kit 不支援的語言不能被描述為 OCR 已可用。
@@ -418,12 +419,12 @@ Gate：符合第 10 節完成條件後才能預設啟用。
 - [x] 專案標準 unit test、lint、assembleDebug 與 `git diff --check` 全部通過。
 - [x] Release artifact、APK/AAB 大小與 rollback 步驟已記錄；真實簽章仍待發布流程。
 - [x] README、HANDOFF、CHANGELOG 只描述已驗證能力，保留未實機驗證限制。
-- [x] eSCL image pipeline 已驗證不建立 full-resolution Bitmap／image ByteArray。
+- [x] eSCL image pipeline 已驗證不建立 image ByteArray；ML Kit Bitmap 有 12 MP／4096 px 硬上限。
 - [x] deskew、auto-crop、blank-page drop 的 instrumentation contract 通過且 failure 保留 source。
 - [x] OCR settings/capability/ML Kit seam、script model catalog 與 Gradle dependency build 通過；license/source 已記錄。
-- [x] 預設五語言、區域選擇、active language 與 Google Play services model request flow 已接線。
+- [x] 預設 English／繁中／簡中、區域選擇、active language 與 Google Play services model request flow 已接線；日文／韓文按需準備。
 - [x] OCR 啟用時自動執行 deskew／auto-crop，`Applied` 保留 ML Kit 階層座標與 confidence，並完成寬版表格／雙欄／數字格式化的 JVM 規則測試。
-- [x] Searchable PDF opt-in、PDFBox invisible text layer、嵌入 Noto 字型、page-scoped OCR layout 與 crop／rotation 座標轉換；三張中文樣本在 API 36 emulator 通過輸出／抽取 smoke。
+- [x] Searchable PDF opt-in、PDFBox mixed/temp invisible text layer、嵌入 Noto 字型、持久化 page-scoped OCR layout 與 crop／rotation 座標轉換；缺少 layout／字型時明確失敗；三張中文樣本在 API 36 emulator 通過輸出／抽取 smoke。
 - [ ] 語意化表格 cell extraction、欄位／數值驗證、日文／韓文字型 coverage 與真實 scanner payload 驗證。
 - [ ] ARM 真實 ML Kit model download、accuracy、cold/warm latency、PSS、取消與 16 KB gate。
 - [ ] 無 Google Play services 裝置的 fallback／bundled model 決策與實機驗證。

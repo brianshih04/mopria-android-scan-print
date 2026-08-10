@@ -194,6 +194,7 @@
     <string name="scan_error_timeout">O tempo da verificação expirou. Tente novamente.</string>
     <string name="scan_error_job_stopped">O trabalho de verificação foi interrompido ou cancelado.</string>
     <string name="scan_error_capability">O scanner não suporta as configurações selecionadas. Tente outras opções.</string>
+    <string name="scan_error_ocr_image_format">O scanner não pode fornecer uma imagem JPEG para OCR com a origem e o modo de cor selecionados. Altere as configurações ou desative o OCR.</string>
     <string name="scan_error_no_images">A verificação foi concluída, mas nenhuma imagem foi retornada.</string>
     <string name="scan_searching_devices">Procurando dispositivos</string>
     <string name="documents_delete">Excluir</string>
@@ -237,6 +238,9 @@
     <string name="scan_ocr">OCR</string>
     <string name="scan_searchable_pdf">PDF pesquisável</string>
     <string name="scan_searchable_pdf_requires_ocr">Ative o OCR para adicionar uma camada de texto pesquisável ao PDF.</string>
+    <string name="searchable_pdf_error_missing_ocr">Faltam dados de OCR. Digitalize novamente com o OCR ativado antes de exportar um PDF pesquisável.</string>
+    <string name="searchable_pdf_error_missing_font">Baixe o pacote de fontes OCR necessário antes de exportar um PDF pesquisável.</string>
+    <string name="searchable_pdf_error_empty_text_layer">Não foi possível criar a camada de texto pesquisável. Execute o OCR novamente ou desative o PDF pesquisável.</string>
     <string name="scan_deskew">Corrigir inclinação das páginas do ADF</string>
     <string name="scan_auto_crop">Recortar página automaticamente</string>
     <string name="scan_drop_blank_pages">Descartar páginas em branco do ADF</string>

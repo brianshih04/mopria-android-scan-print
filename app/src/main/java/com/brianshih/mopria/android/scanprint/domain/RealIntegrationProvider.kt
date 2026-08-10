@@ -308,7 +308,12 @@ class RealIntegrationProvider(
             val ocrResults = if (settings.ocrMode != OcrMode.Disabled) {
                 onProgress(ScanProgress(ScanProgressStage.Ocr, 0, payloads.size))
                 payloads.mapIndexed { index, payload ->
-                    val result = if (activeOcrEngine is LanguageAwareOcrEngine) {
+                    val mediaType = payload.contentType.substringBefore(';').trim().lowercase()
+                    val result = if (mediaType == "application/pdf") {
+                        // A non-conforming scanner may ignore the requested JPEG format. Never
+                        // pass a PDF to ML Kit's raster-only InputImage decoder.
+                        OcrResult.Skipped(OcrSkipReason.UnsupportedFormat)
+                    } else if (activeOcrEngine is LanguageAwareOcrEngine) {
                         activeOcrEngine.recognize(payload.file, settings.ocrLanguage)
                     } else {
                         activeOcrEngine.recognize(payload.file)
@@ -323,7 +328,8 @@ class RealIntegrationProvider(
 
             val pages = payloads.flatMapIndexed { payloadIndex, payload ->
                 val ocrResult = ocrResults.getOrNull(payloadIndex)
-                if (payload.contentType == "application/pdf") {
+                val mediaType = payload.contentType.substringBefore(';').trim()
+                if (mediaType.equals("application/pdf", ignoreCase = true)) {
                     val count = pdfPageCount(payload.file)
                     (0 until count).map { pdfPageIndex ->
                         DocumentPage(
@@ -361,8 +367,9 @@ class RealIntegrationProvider(
                 enhancementResults = enhancementResults,
                 imageProcessingResults = imageProcessingResults,
                 ocrResults = ocrResults,
-                searchablePdf = settings.searchablePdf && settings.ocrMode != OcrMode.Disabled &&
-                    pages.any { it.ocrResult.hasPositionedText() },
+                // Preserve the user's explicit request. Export validates that every page has an
+                // OCR result and reports an actionable error instead of silently writing a plain PDF.
+                searchablePdf = settings.searchablePdf && settings.ocrMode != OcrMode.Disabled,
             )
         } catch (error: EsclHttpException) {
             if (!jobFinished && location != null) {

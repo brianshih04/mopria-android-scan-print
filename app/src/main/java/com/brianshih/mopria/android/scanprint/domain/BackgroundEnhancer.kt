@@ -167,7 +167,9 @@ object BackgroundEnhancer {
     private const val DOWNSAMPLE_FACTOR = 4
     private const val MIN_BACKGROUND_LEVEL = 128
     private const val JPEG_QUALITY = 92
-    private const val STRIP_HEIGHT = 256
+    // Keep the seven reusable strip buffers below ~5 MiB for a 2,480 px-wide A4 page. A larger
+    // strip crossed the app's 256 MB absolute PSS gate after a ten-page allocator warm-up.
+    private const val STRIP_HEIGHT = 128
 
     private val productionDependencies = EnhancementDependencies(
         inspector = EnhancementInputInspector(::inspect),

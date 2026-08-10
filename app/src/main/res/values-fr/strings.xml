@@ -194,6 +194,7 @@
     <string name="scan_error_timeout">Le délai d\'attente de numérisation est dépassé. Veuillez réessayer.</string>
     <string name="scan_error_job_stopped">La tâche de numérisation a été arrêtée ou annulée.</string>
     <string name="scan_error_capability">Le scanner ne prend pas en charge les paramètres sélectionnés. Essayez d\'autres options.</string>
+    <string name="scan_error_ocr_image_format">Le scanner ne peut pas fournir d’image JPEG pour l’OCR avec la source et le mode couleur sélectionnés. Modifiez les paramètres ou désactivez l’OCR.</string>
     <string name="scan_error_no_images">La numérisation est terminée mais aucune image n\'a été renvoyée.</string>
     <string name="scan_searching_devices">Recherche d\'appareils</string>
     <string name="documents_delete">Supprimer</string>
@@ -237,6 +238,9 @@
     <string name="scan_ocr">OCR</string>
     <string name="scan_searchable_pdf">PDF interrogeable</string>
     <string name="scan_searchable_pdf_requires_ocr">Activez l’OCR pour ajouter une couche de texte interrogeable au PDF.</string>
+    <string name="searchable_pdf_error_missing_ocr">Les données OCR sont manquantes. Numérisez à nouveau avec l’OCR activé avant d’exporter un PDF interrogeable.</string>
+    <string name="searchable_pdf_error_missing_font">Téléchargez le pack de polices OCR requis avant d’exporter un PDF interrogeable.</string>
+    <string name="searchable_pdf_error_empty_text_layer">La couche de texte interrogeable n’a pas pu être créée. Relancez l’OCR ou désactivez le PDF interrogeable.</string>
     <string name="scan_deskew">Redresser les pages de l’ADF</string>
     <string name="scan_auto_crop">Recadrer automatiquement la page</string>
     <string name="scan_drop_blank_pages">Ignorer les pages blanches de l’ADF</string>

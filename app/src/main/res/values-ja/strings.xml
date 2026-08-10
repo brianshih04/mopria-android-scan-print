@@ -194,6 +194,7 @@
     <string name="scan_error_timeout">スキャンがタイムアウトしました。再試行してください。</string>
     <string name="scan_error_job_stopped">スキャンジョブが停止またはキャンセルされました。</string>
     <string name="scan_error_capability">スキャナーが選択した設定をサポートしていません。別のオプションをお試しください。</string>
+    <string name="scan_error_ocr_image_format">選択した給紙元とカラーモードでは、OCR 用の JPEG 画像を取得できません。設定を変更するか OCR をオフにしてください。</string>
     <string name="scan_error_no_images">スキャンは完了しましたが、画像が取得されませんでした。</string>
     <string name="scan_searching_devices">デバイスを検索中</string>
     <string name="documents_delete">削除</string>
@@ -237,6 +238,9 @@
     <string name="scan_ocr">OCR</string>
     <string name="scan_searchable_pdf">検索可能 PDF</string>
     <string name="scan_searchable_pdf_requires_ocr">PDF に検索可能なテキスト層を追加するには、先に OCR を有効にしてください。</string>
+    <string name="searchable_pdf_error_missing_ocr">OCR データがありません。検索可能 PDF を書き出す前に、OCR を有効にして再度スキャンしてください。</string>
+    <string name="searchable_pdf_error_missing_font">検索可能 PDF を書き出す前に、必要な OCR フォントパックをダウンロードしてください。</string>
+    <string name="searchable_pdf_error_empty_text_layer">検索可能なテキスト層を作成できませんでした。OCR を再実行するか、検索可能 PDF をオフにしてください。</string>
     <string name="scan_deskew">ADFページの傾き補正</string>
     <string name="scan_auto_crop">ページを自動トリミング</string>
     <string name="scan_drop_blank_pages">ADFの白紙ページを除外</string>

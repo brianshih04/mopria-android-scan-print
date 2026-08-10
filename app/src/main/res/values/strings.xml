@@ -206,6 +206,7 @@
     <string name="scan_error_timeout">The scan timed out. Please try again.</string>
     <string name="scan_error_job_stopped">The scan job was stopped or canceled.</string>
     <string name="scan_error_capability">The scanner does not support the selected settings. Try different options.</string>
+    <string name="scan_error_ocr_image_format">This scanner cannot return a JPEG image for OCR with the selected source and color mode. Choose different settings or turn off OCR.</string>
     <string name="scan_error_no_images">The scan completed but no images were returned.</string>
     <string name="scan_searching_devices">Searching for devices</string>
     <string name="documents_delete">Delete</string>
@@ -249,6 +250,9 @@
     <string name="scan_ocr">OCR</string>
     <string name="scan_searchable_pdf">Searchable PDF</string>
     <string name="scan_searchable_pdf_requires_ocr">Enable OCR to add a searchable text layer to the PDF.</string>
+    <string name="searchable_pdf_error_missing_ocr">OCR data is missing. Scan again with OCR enabled before exporting a searchable PDF.</string>
+    <string name="searchable_pdf_error_missing_font">Download the required OCR font pack before exporting a searchable PDF.</string>
+    <string name="searchable_pdf_error_empty_text_layer">The searchable text layer could not be created. Run OCR again or turn off Searchable PDF.</string>
     <string name="scan_deskew">Deskew ADF pages</string>
     <string name="scan_auto_crop">Auto-crop page</string>
     <string name="scan_drop_blank_pages">Drop blank ADF pages</string>

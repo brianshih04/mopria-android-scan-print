@@ -2,7 +2,7 @@
 
 本專案依 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 的概念記錄重要變更；GitHub Release `v0.1.0` 已建立，目前合併後續變更記錄在 Unreleased。
 
-## [Unreleased] - 2026-08-09
+## [Unreleased] - 2026-08-10
 
 ### Added — OpenCV Background Cleanup Foundation
 
@@ -21,15 +21,21 @@
 - 新增 `OcrMode.MlKit` 選項、設定持久化、capability safety（不超過 300 dpi，支援時使用灰階）及本地化 skip／failure 狀態。
 - 以 Google ML Kit Text Recognition v2 unbundled clients 實作 OCR；依 Latin、Chinese、Japanese、Korean script 建立 recognizer，模型準備交由 Google Play services 的 ModuleInstall 管理，不在 App 內放置 JNI、`.nb` 或自建模型下載器。
 - 新增 OCR 語言 catalog 與區域分組設定：預設 English、繁中、簡中；日文、韓文與其他地區語言由使用者選擇後再提出 ML Kit script model 準備要求。官方不支援的 catalog 語言會標示為不可選取。
-- OCR 啟用時自動套用 deskew／auto-crop；`OcrResult.Applied` 保留 ML Kit block／line／element／symbol 的座標、角度、語言與 confidence，並新增雙欄／寬版表格閱讀順序與保守數字格式化。OCR 與 Searchable PDF 都是預設關閉的獨立使用者選項；Searchable PDF 以 PDFBox、內建 Noto Sans TC 與按需下載的 JP／KR 地域字型、page-scoped OCR layout 及 crop／rotation 座標轉換產生不可見文字層，並以 NFKC 與明確 ToUnicode CMap 避免 CJK 相容部首破壞搜尋。沒有有效位置文字或缺少必要字型時回到普通 PDF。
+- OCR 啟用時自動套用 deskew／auto-crop；`OcrResult.Applied` 保留 ML Kit block／line／element／symbol 的座標、角度、語言與 confidence，並新增雙欄／寬版表格閱讀順序與保守數字格式化。OCR 與 Searchable PDF 都是預設關閉的獨立使用者選項；Searchable PDF 以 PDFBox、內建 Noto Sans TC 與按需下載的 JP／KR 地域字型、持久化 page-scoped OCR layout 及 crop／rotation 座標轉換產生不可見文字層，並以 NFKC 與明確 ToUnicode CMap 避免 CJK 相容部首破壞搜尋。缺少 OCR layout 或必要字型時明確回報，不再靜默輸出普通 PDF。
 - 新增三張中文樣本的正式輸出 instrumentation proof：三頁 PDF 可由 PDFBox 解析並抽取非空文字，render 後原始影像仍完整；此驗證不代表實機 OCR accuracy 或多語字型完整覆蓋。
-- AndroidManifest 開啟 `android:largeHeap="true"`；OpenCV pipeline 使用 `MatScope` 明確釋放 native matrices，並以 256 MB peak／64 MB retained-PSS gate 驗證十頁 A4 300 dpi soak。
+- AndroidManifest 開啟 `android:largeHeap="true"`；OpenCV pipeline 使用 `MatScope` 明確釋放 native matrices，並以 absolute peak PSS 256 MB／retained delta 64 MB gate 驗證十頁 A4 300 dpi soak。
 
 ### Changed
 
 - `ScanSettings.enhanceBackground` 型別從 `Boolean` 改為 `EnhancementStrength?`（null = 關閉）。
 - `BackgroundEnhancer.enhanceImageFile()` 改為 suspend API，回傳 `EnhancementResult`。
 - Document preset 預設 `EnhancementStrength.Normal`。
+- OCR 解碼加入 12 MP／4096 px 長邊限制與取樣 Bitmap；eSCL OCR 工作只協商 JPEG，PDF-only profile 在建立工作前回報。
+- PDFBox 改用 32 MiB mixed/temp storage；DocumentStore 以 gzip sidecar 原子保存 OCR layout，載入與合併寫入移至序列化的背景 I/O，避免多頁 OCR 阻塞 UI 或讓舊狀態覆蓋新狀態。
+- Release APK 移除 emulator-only x86 ABI，保留 arm64-v8a／armeabi-v7a；可用 `-PreleaseAbiSplits=true` 產生個別 ABI APK。
+- JP／KR Noto 字型 URL 固定至 immutable commit，安裝狀態改以 SHA-256 驗證。
+- 修正旋轉頁面的 crop display/source 座標映射，以及數字正規化跨欄位合併問題。
+- OpenCV 背景估計改用 128-row strip，降低 A4 多頁處理的同時 native buffer 峰值。
 
 ### Fixed — Code Review (commit f751698)
 
@@ -43,7 +49,7 @@
 ### Testing
 
 - 背景淨化測試補上 RGB channel／色相、強度差異、PDF／unsupported format 及原始檔不變驗證；測試總數以當次 Gradle 輸出為準。
-- 新增 deskew、auto-crop、blank-page、OCR native boundary、asset/package contract、設定持久化與 OpenCV memory soak instrumentation；最新 API 36 emulator instrumentation 22 tests 全部通過。
+- 新增 deskew、auto-crop、blank-page、OCR native boundary、asset/package contract、OCR sidecar、50 頁 Searchable PDF 與 OpenCV memory soak instrumentation；實際測試數量以當次 Gradle 輸出為準。
 - Debug lint／assemble、Release assemble 與 release APK `zipalign -P 16` 驗證通過；16 KB page-size emulator、ARM model load／accuracy／PSS 與真實 scanner 仍待外部驗證。
 
 

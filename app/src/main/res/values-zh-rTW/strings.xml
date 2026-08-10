@@ -205,6 +205,7 @@
     <string name="scan_error_timeout">掃描逾時，請再試一次。</string>
     <string name="scan_error_job_stopped">掃描工作已停止或取消。</string>
     <string name="scan_error_capability">掃描器不支援目前的設定，請嘗試其他選項。</string>
+    <string name="scan_error_ocr_image_format">掃描器無法使用目前的紙張來源與色彩模式回傳 OCR 所需的 JPEG 影像。請更改設定或關閉 OCR。</string>
     <string name="scan_error_no_images">掃描完成但未取得任何影像。</string>
     <string name="scan_searching_devices">正在搜尋裝置</string>
     <string name="documents_delete">刪除</string>
@@ -248,6 +249,9 @@
     <string name="scan_ocr">OCR</string>
     <string name="scan_searchable_pdf">可搜尋 PDF</string>
     <string name="scan_searchable_pdf_requires_ocr">請先開啟 OCR，才能在 PDF 中加入可搜尋文字層。</string>
+    <string name="searchable_pdf_error_missing_ocr">缺少 OCR 資料。請開啟 OCR 重新掃描後，再匯出可搜尋 PDF。</string>
+    <string name="searchable_pdf_error_missing_font">請先下載所需的 OCR 字型包，再匯出可搜尋 PDF。</string>
+    <string name="searchable_pdf_error_empty_text_layer">無法建立可搜尋文字層。請重新執行 OCR 或關閉可搜尋 PDF。</string>
     <string name="scan_deskew">校正 ADF 頁面傾斜</string>
     <string name="scan_auto_crop">自動裁切頁面</string>
     <string name="scan_drop_blank_pages">捨棄 ADF 空白頁</string>

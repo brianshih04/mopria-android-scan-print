@@ -2,6 +2,11 @@ package com.brianshih.mopria.android.scanprint.domain
 
 import android.content.Context
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.security.MessageDigest
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -13,12 +18,15 @@ import org.json.JSONObject
  * Uses `org.json` (built into Android) — no additional serialization dependencies required.
  */
 class DocumentStore(context: Context) {
-    private val storeFile = File(context.applicationContext.filesDir, STORE_FILENAME)
+    private val filesDir = context.applicationContext.filesDir
+    private val storeFile = File(filesDir, STORE_FILENAME)
+    private val ocrLayoutDirectory = File(filesDir, OCR_LAYOUT_DIRECTORY)
 
     /** Persist [documents] and [pendingFlatbedDocumentId] so they can be restored after process death. */
     fun save(documents: List<MopriaDocument>, pendingFlatbedDocumentId: String?) {
         val json = JSONObject()
         val docsArray = JSONArray()
+        val retainedOcrSidecars = mutableSetOf<String>()
         for (doc in documents) {
             val pagesArray = JSONArray()
             for (page in doc.pages) {
@@ -41,6 +49,12 @@ class DocumentStore(context: Context) {
                         },
                     )
                 }
+                (page.ocrResult as? OcrResult.Applied)?.let { result ->
+                    val fileName = ocrSidecarName(page.id)
+                    writeOcrSidecar(fileName, result)
+                    retainedOcrSidecars += fileName
+                    pageJson.put("ocrResultFile", fileName)
+                }
                 pagesArray.put(pageJson)
             }
             val docJson = JSONObject()
@@ -56,7 +70,8 @@ class DocumentStore(context: Context) {
         json.put("documents", docsArray)
         pendingFlatbedDocumentId?.let { json.put("pendingFlatbedDocumentId", it) }
 
-        storeFile.writeText(json.toString())
+        writeTextAtomically(storeFile, json.toString())
+        deleteUnreferencedOcrSidecars(retainedOcrSidecars)
     }
 
     /** Load persisted documents and Flatbed session, or null if no store exists or it is corrupt. */
@@ -88,6 +103,9 @@ class DocumentStore(context: Context) {
                                 )
                             }.getOrNull()
                         },
+                        ocrResult = p.optString("ocrResultFile")
+                            .takeIf(String::isNotBlank)
+                            ?.let(::readOcrSidecar),
                     )
                 }
                 MopriaDocument(
@@ -97,6 +115,7 @@ class DocumentStore(context: Context) {
                     sourceLabel = d.optString("sourceLabel", ""),
                     createdAt = d.optLong("createdAt", System.currentTimeMillis()),
                     exportedPath = d.optString("exportedPath").takeIf { it.isNotBlank() },
+                    ocrResults = pages.mapNotNull(DocumentPage::ocrResult),
                     searchablePdf = d.optBoolean("searchablePdf", false),
                 )
             }
@@ -119,10 +138,62 @@ class DocumentStore(context: Context) {
     /** Remove the persisted store (e.g. when all documents are cleared). */
     fun clear() {
         storeFile.delete()
+        ocrLayoutDirectory.deleteRecursively()
+    }
+
+    private fun writeOcrSidecar(fileName: String, result: OcrResult.Applied) {
+        ocrLayoutDirectory.mkdirs()
+        val target = File(ocrLayoutDirectory, fileName)
+        val temporary = File.createTempFile("ocr-layout-", ".tmp", ocrLayoutDirectory)
+        try {
+            GZIPOutputStream(FileOutputStream(temporary).buffered()).bufferedWriter(Charsets.UTF_8).use { writer ->
+                writer.write(OcrLayoutPersistence.encode(result).toString())
+            }
+            AtomicFileReplacer.replace(temporary, target)
+        } finally {
+            temporary.delete()
+        }
+    }
+
+    private fun readOcrSidecar(fileName: String): OcrResult.Applied? {
+        if (fileName != File(fileName).name || !fileName.endsWith(OCR_LAYOUT_SUFFIX)) return null
+        val file = File(ocrLayoutDirectory, fileName)
+        if (!file.isFile || file.length() !in 1L..MAX_OCR_SIDECAR_BYTES) return null
+        return runCatching {
+            val json = GZIPInputStream(FileInputStream(file).buffered()).bufferedReader(Charsets.UTF_8).use { reader ->
+                JSONObject(reader.readText())
+            }
+            OcrLayoutPersistence.decode(json)
+        }.getOrNull()
+    }
+
+    private fun writeTextAtomically(target: File, text: String) {
+        target.parentFile?.mkdirs()
+        val temporary = File.createTempFile("document-store-", ".tmp", target.parentFile)
+        try {
+            temporary.writeText(text, Charsets.UTF_8)
+            AtomicFileReplacer.replace(temporary, target)
+        } finally {
+            temporary.delete()
+        }
+    }
+
+    private fun deleteUnreferencedOcrSidecars(retained: Set<String>) {
+        ocrLayoutDirectory.listFiles()
+            ?.filter { file -> file.isFile && file.name.endsWith(OCR_LAYOUT_SUFFIX) && file.name !in retained }
+            ?.forEach(File::delete)
+    }
+
+    private fun ocrSidecarName(pageId: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(pageId.toByteArray(Charsets.UTF_8))
+        return digest.joinToString(separator = "") { byte -> "%02x".format(byte) } + OCR_LAYOUT_SUFFIX
     }
 
     companion object {
         private const val STORE_FILENAME = "document_store.json"
+        private const val OCR_LAYOUT_DIRECTORY = "ocr-layouts"
+        private const val OCR_LAYOUT_SUFFIX = ".ocr.json.gz"
+        private const val MAX_OCR_SIDECAR_BYTES = 32L * 1024L * 1024L
     }
 }
 

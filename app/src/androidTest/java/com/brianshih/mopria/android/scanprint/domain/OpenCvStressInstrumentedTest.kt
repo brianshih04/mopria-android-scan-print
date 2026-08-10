@@ -70,6 +70,7 @@ class OpenCvStressInstrumentedTest {
         val finalPssKb = Debug.getPss()
         val finalNativeHeapBytes = Debug.getNativeHeapAllocatedSize()
         val peakDeltaMb = (peakPssKb.get() - baselinePssKb) / 1024.0
+        val peakAbsoluteMb = peakPssKb.get() / 1024.0
         val retainedDeltaMb = (finalPssKb - baselinePssKb) / 1024.0
         val sorted = durations.sorted()
         val medianMs = sorted[sorted.size / 2]
@@ -82,6 +83,7 @@ class OpenCvStressInstrumentedTest {
             "pages=$pageMemory"
 
         source.delete()
+        assertTrue("absolute peak PSS exceeded ${MAX_ABSOLUTE_PSS_MB}MB; $metrics", peakAbsoluteMb <= MAX_ABSOLUTE_PSS_MB)
         assertTrue(metrics, peakDeltaMb <= MAX_PEAK_DELTA_MB)
         assertTrue("retained PSS delta was %.3f MB; $metrics", retainedDeltaMb <= MAX_RETAINED_DELTA_MB)
         assertTrue("median was ${medianMs}ms", medianMs <= 1_000)
@@ -200,6 +202,7 @@ class OpenCvStressInstrumentedTest {
 
     private companion object {
         const val MAX_PEAK_DELTA_MB = 256.0
+        const val MAX_ABSOLUTE_PSS_MB = 256.0
         const val MAX_RETAINED_DELTA_MB = 64.0
         const val A4_WIDTH_300_DPI = 2_480
         const val A4_HEIGHT_300_DPI = 3_508

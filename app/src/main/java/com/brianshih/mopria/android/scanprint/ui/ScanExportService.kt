@@ -34,10 +34,21 @@ import com.brianshih.mopria.android.scanprint.domain.hasPositionedText
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
+import java.io.IOException
 import java.io.OutputStream
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+internal enum class SearchablePdfExportFailure {
+    MissingOcrLayout,
+    MissingFont,
+    EmptyTextLayer,
+}
+
+internal class SearchablePdfExportException(
+    val failure: SearchablePdfExportFailure,
+) : IOException("Searchable PDF prerequisite failed: $failure")
 
 class ScanExportService(private val context: Context) {
     suspend fun save(document: MopriaDocument, format: ScanOutputFormat): List<SavedScanFile> =
@@ -56,7 +67,12 @@ class ScanExportService(private val context: Context) {
             ?.filter { it.isFile && System.currentTimeMillis() - it.lastModified() > SHARE_MAX_AGE_MS }
             ?.forEach { it.delete() }
         val file = File(directory, safeName(document.name) + ".pdf")
-        FileOutputStream(file).use { output -> writePdf(document, output) }
+        try {
+            FileOutputStream(file).use { output -> writePdf(document, output) }
+        } catch (error: Exception) {
+            file.delete()
+            throw error
+        }
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     }
 
@@ -188,15 +204,23 @@ class ScanExportService(private val context: Context) {
     }
 
     private fun writePdf(document: MopriaDocument, output: OutputStream) {
-        if (document.searchablePdf && document.pages.any { it.ocrResult.hasPositionedText() }) {
+        if (document.searchablePdf) {
+            if (document.pages.any { it.ocrResult !is OcrResult.Applied }) {
+                throw SearchablePdfExportException(SearchablePdfExportFailure.MissingOcrLayout)
+            }
             val requiredFonts = requiredOptionalFonts(document)
             val optionalFonts = requiredFonts.mapNotNull { pack ->
                 pack.availableFile(context)?.let { fontFile -> pack to fontFile }
             }
-            if (optionalFonts.size == requiredFonts.size) {
-                writeSearchablePdf(document, optionalFonts, output)
-                return
+            if (optionalFonts.size != requiredFonts.size) {
+                throw SearchablePdfExportException(SearchablePdfExportFailure.MissingFont)
             }
+            val expectedPositionedText = document.pages.any { it.ocrResult.hasPositionedText() }
+            val stats = writeSearchablePdf(document, optionalFonts, output)
+            if (expectedPositionedText && stats.textLineCount == 0) {
+                throw SearchablePdfExportException(SearchablePdfExportFailure.EmptyTextLayer)
+            }
+            return
         }
         writeStandardPdf(document, output)
     }
@@ -211,9 +235,9 @@ class ScanExportService(private val context: Context) {
         document: MopriaDocument,
         optionalFonts: List<Pair<OcrDownloadableFontPack, File>>,
         output: OutputStream,
-    ) {
+    ): com.brianshih.mopria.android.scanprint.domain.PdfBoxSearchablePdfStats {
         val staging = File(context.cacheDir, "searchable-pdf-${System.nanoTime()}").apply { mkdirs() }
-        try {
+        return try {
             val defaultFont = File(staging, SEARCHABLE_FONT_ASSET.fileName).also { destination ->
                 context.assets.open(SEARCHABLE_FONT_ASSET.assetPath).use { input ->
                         FileOutputStream(destination).use { fileOutput -> input.copyTo(fileOutput) }
@@ -266,7 +290,13 @@ class ScanExportService(private val context: Context) {
 
     private fun requiredOptionalFonts(document: MopriaDocument): Set<OcrDownloadableFontPack> =
         document.pages.asSequence()
-            .mapNotNull { page -> (page.ocrResult as? OcrResult.Applied)?.layout }
+            .mapNotNull { page ->
+                (page.ocrResult as? OcrResult.Applied)?.layout?.let { layout ->
+                    // Filtering through the same crop transform avoids requiring an optional font
+                    // solely for text that the user cropped completely out of the exported page.
+                    OcrLayoutTransforms.forPage(layout, page, 1_000, 1_000)
+                }
+            }
             .flatMap { layout -> layout.blocks.asSequence() }
             .flatMap { block -> block.lines.asSequence() }
             .filter { line ->
@@ -340,7 +370,12 @@ class ScanExportService(private val context: Context) {
             PUBLIC_FOLDER,
         ).apply { mkdirs() }
         val file = File(directory, displayName)
-        FileOutputStream(file).use(write)
+        try {
+            FileOutputStream(file).use(write)
+        } catch (error: Exception) {
+            file.delete()
+            throw error
+        }
         return SavedScanFile(
             format = if (mimeType == "application/pdf") ScanOutputFormat.Pdf else ScanOutputFormat.Jpeg,
             displayName = displayName,
