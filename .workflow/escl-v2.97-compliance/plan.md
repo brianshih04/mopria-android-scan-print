@@ -1,5 +1,7 @@
 # eSCL v2.97 pull-scan compliance
 
+> Archived snapshot（2026-08-02）：本計畫的 scope boundary 只描述該次 eSCL change。OCR、OpenCV file-first processing 與 opt-in Searchable PDF 已在後續工作合併到 `main`；目前產品範圍與未完成 gate 以 `README.md`、`HANDOFF.md`、`dev_plan.md` 為準。
+
 ## Goal
 
 Bring the Android app's supported eSCL pull-scan workflow into alignment with the Mopria Alliance eSCL Technical Specification v2.97, verify it, then commit and push the result to `main`.

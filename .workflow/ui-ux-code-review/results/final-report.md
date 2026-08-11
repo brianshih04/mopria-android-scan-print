@@ -1,5 +1,7 @@
 # UI/UX and Code Review Report
 
+> Archived snapshot（2026-08-02）：此報告保留當時 review 結果與驗證證據，不代表 2026-08-11 的完整 App scope。後續 Direct IPP、OpenCV、Google ML Kit OCR、Searchable PDF 與目前 CI 狀態請見 `README.md`、`HANDOFF.md`、`dev_plan.md`。
+
 Date: 2026-08-02  
 Historical implementation branch: `agent/real-integration-ui`; integrated result now lives on `main`.
 

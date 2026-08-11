@@ -1,5 +1,7 @@
 # UI/UX Redesign and Code Review
 
+> Archived snapshot（2026-08-02）：本文件記錄當時已完成的 UI／UX redesign，後續功能不回寫到原始 work packets。現行功能、驗證與風險請見 `README.md`、`HANDOFF.md`、`dev_plan.md`。
+
 Status: completed and integrated into `main`. Follow-up eSCL v2.97 work on 2026-08-02 preserved this UI architecture and added configurable ADF page limits plus Flatbed／ADF multi-page PDF controls.
 
 Goal: redesign the Android app so scan and print flows feel modern, clear, and easy to operate, then complete a repository-wide code review and fix material findings.

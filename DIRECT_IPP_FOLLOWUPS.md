@@ -1,5 +1,9 @@
 # Direct IPP 後續修改清單
 
+更新日期：2026-08-11
+
+> 本文件只追蹤 Direct IPP。`main` 目前也包含 OpenCV 影像處理、Google ML Kit OCR 與 opt-in Searchable PDF；完整現況請搭配 `README.md`、`HANDOFF.md` 與 `dev_plan.md` 閱讀。
+
 ## 文件目的
 
 本文件供接手開發者追蹤 Direct IPP 已完成的 code review fixes 與剩餘風險。PR #5 已將 Direct IPP、PWG-Raster／PCLm、格式 payload 一致性、job polling、fixed-length streaming、OOM sampling、錯誤本地化、no-printer error 與 instrumentation tests 合併到 `main`；Direct IPP 仍應維持 experimental opt-in，直到實體設備與高 DPI 多頁 soak 驗證完成。
@@ -11,7 +15,8 @@
 - Merge commit：`b00fa09`
 - 變更內容：Direct IPP base、PWG-Raster／PCLm、capability options、reliability 與 review fixes
 - Android Studio bundled JDK：25.0.2
-- 已驗證：unit tests 126/126、lint、debug assemble、5 個 emulator instrumentation tests 均成功
+- 2026-08-11 本機驗證：163 JVM tests、28 個 API 36 emulator instrumentation tests、lint、debug／release APK、AAB 與 zipalign 均成功
+- CI 現況：`main` 的 GitHub Actions 在 Gradle 啟動前因 Linux runner 無法執行 `./gradlew`（exit 127）失敗；不能沿用舊版 CI 綠燈敘述
 - 尚未完成：實體 IPP/IPPS 印表機跨品牌驗證，以及高 DPI 多頁 PWG-Raster／PCLm streaming／OOM soak
 
 ## 目前接手重點
@@ -27,7 +32,7 @@
 - [x] Direct IPP 錯誤訊息支援 string resources。
 - [x] 恢復 instrumentation test dependencies 與基本 UI smoke tests。
 - [ ] 實體設備驗證 IPP、IPPS、PWG-Raster、PCLm、job lifecycle 與憑證行為。
-- [ ] 進一步改善 `IppRasterizer` 多頁高 DPI 的 bitmap streaming，避免同時保留所有頁面。
+- [x] `IppRasterizer` 已改為逐頁 bitmap streaming，不再同時保留所有頁面；swath streaming 與實體高 DPI soak 仍是後續 gate。
 
 ## P1：實機 rollout 或擴大測試前必須處理
 
@@ -117,13 +122,13 @@ capability-driven print options 已完成：從 `Get-Printer-Attributes` 解析 
 
 ### 10. 補 Android／emulator integration coverage
 
-目前已恢復 `androidTest` dependencies，emulator 已通過 5 個 instrumentation tests，包含 MainActivity smoke、print method persistence、PDF→PWG-Raster/PCLm Android rasterizer path 與 bounded image decode；Direct IPP 真實網路與 no-printer UI 仍以實體／mock discovery test 擴充為後續工作。
+目前已恢復 `androidTest` dependencies；2026-08-11 的完整 API 36 suite 為 28 個 instrumentation tests，包含 MainActivity smoke、print method persistence、PDF→PWG-Raster/PCLm Android rasterizer path、bounded image decode，以及後續加入的 OpenCV／OCR／Searchable PDF coverage。Direct IPP 真實網路與 no-printer UI 仍以實體／mock discovery test 擴充為後續工作。
 
 ## 文件與 release 同步
 
 以下內容已在 PR #5 合併時同步；後續功能或驗證變更仍需一起維護：
 
-- README、HANDOFF、CHANGELOG 的測試數量：目前實際為 62 JVM unit tests，另有 5 個 emulator instrumentation tests。
+- README、HANDOFF、CHANGELOG 的驗證快照：2026-08-11 本機實際為 163 JVM tests、28 個 emulator instrumentation tests；後續仍應以當次 Gradle 輸出為準。
 - README 的環境需求：JDK 25 daemon、compileSdk 37、Android SDK 版本要一致。
 - CHANGELOG 可記載 Get-Job-Attributes／Cancel-Job lifecycle 已接線並有 JVM tests；實體 printer job lifecycle 仍待驗證。
 - 明確記載 Direct IPP 是否仍為 opt-in，以及找不到設備時是否允許 fallback。
@@ -133,7 +138,7 @@ capability-driven print options 已完成：從 `Get-Printer-Attributes` 解析 
 ## 建議接手順序
 
 1. 使用真實 IPP／IPPS 印表機測試 discovery、TLS、格式、選項與 job lifecycle。
-2. 針對 PCLm／PWG-Raster 高 DPI 多頁工作，將目前全頁 bitmap 改為 swath／逐頁 streaming。
+2. 針對 PCLm／PWG-Raster 高 DPI 多頁工作，在既有逐頁 bitmap streaming 上量測實體峰值，再評估是否需要 swath streaming。
 3. 補充 Direct IPP no-printer、TLS error、選項與文件列印流程的 emulator／mock coverage。
 4. 所有實體驗證通過後，再評估是否改變 Direct IPP 的 experimental opt-in 策略。
 
@@ -142,10 +147,10 @@ capability-driven print options 已完成：從 `Get-Printer-Attributes` 解析 
 - [x] PDF／JPEG／PNG／PWG-Raster／PCLm 的宣告格式與實際 bytes 一致。
 - [x] 列印完成狀態來自 IPP job state，而不是只看 Send-Document response。
 - [x] IPP job failure、cancel、timeout 都能轉成 domain/UI error。
-- [x] CI 在乾淨環境可取得正確 Android SDK 並通過 test、lint、debug assemble。
+- [ ] CI 在乾淨環境可取得正確 Android SDK 並通過 test、lint、debug assemble；Android 37 package id 已修正，但 2026-08-11 Linux runner 仍因 `./gradlew` 無法執行而在 Gradle 前失敗。
 - [ ] 至少一台 plain IPP 與一台 IPPS 實體設備完成驗證。
 - [x] Direct IPP 錯誤支援 English、繁中、簡中。
 - [x] JPEG／PNG 多頁不會對 single-document printer 傳送第二個 document payload。
 - [x] 一般圖片不會在 Direct IPP render 前被固定降為約 72 dpi。
-- [x] 高解析度多頁 PCLm／PWG-Raster 文件不會因 bitmap allocation 造成 OOM（已改為逐頁串流）。
+- [ ] 高解析度多頁 PCLm／PWG-Raster 已改為逐頁串流，但仍需實體印表機 soak 後才能完成產品級 OOM gate。
 - [x] 相關 MD files、CHANGELOG、HANDOFF 已同步實際行為與驗證結果。

@@ -2,7 +2,7 @@
 
 本專案依 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 的概念記錄重要變更；GitHub Release `v0.1.0` 已建立，目前合併後續變更記錄在 Unreleased。
 
-## [Unreleased] - 2026-08-10
+## [Unreleased] - 2026-08-11
 
 ### Added — OpenCV Background Cleanup Foundation
 
@@ -36,6 +36,8 @@
 - JP／KR Noto 字型 URL 固定至 immutable commit，安裝狀態改以 SHA-256 驗證。
 - 修正旋轉頁面的 crop display/source 座標映射，以及數字正規化跨欄位合併問題。
 - OpenCV 背景估計改用 128-row strip，降低 A4 多頁處理的同時 native buffer 峰值。
+- `codex/ocr-searchable-pdf-review` 已 fast-forward 合併至 `main`；合併前的 `main` 另保留於 `main-backup`。
+- 全部現行 Markdown 已同步至 ML Kit OCR、Searchable PDF、ARM-only release 與最新驗證／CI 狀態；`.workflow/` 保留為有 archived 標示的歷史紀錄。
 
 ### Fixed — Code Review (commit f751698)
 
@@ -51,6 +53,7 @@
 - 背景淨化測試補上 RGB channel／色相、強度差異、PDF／unsupported format 及原始檔不變驗證；測試總數以當次 Gradle 輸出為準。
 - 新增 deskew、auto-crop、blank-page、OCR native boundary、asset/package contract、OCR sidecar、50 頁 Searchable PDF 與 OpenCV memory soak instrumentation；實際測試數量以當次 Gradle 輸出為準。
 - Debug lint／assemble、Release assemble 與 release APK `zipalign -P 16` 驗證通過；16 KB page-size emulator、ARM model load／accuracy／PSS 與真實 scanner 仍待外部驗證。
+- 2026-08-11 `main` 本機快照：163 JVM tests、28 個 API 36 instrumentation tests、lint、debug／release APK、AAB 與 zipalign 全數通過；GitHub Actions 同一 commit 在 Gradle 啟動前因 Linux runner 無法執行 `./gradlew`（exit 127）失敗，CI 尚未恢復綠燈。
 
 
 

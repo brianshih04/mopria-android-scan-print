@@ -1,5 +1,7 @@
 # eSCL v2.97 Compliance Workflow Report
 
+> Archived snapshot（2026-08-02）：本文件記錄當時的 eSCL compliance pass，不是目前功能清單或最新測試報告。2026-08-11 的 `main` 已另外包含 Direct IPP、OpenCV 影像管線、Google ML Kit OCR 與 opt-in Searchable PDF；現況以 repository root 的 `README.md`、`HANDOFF.md` 與 `dev_plan.md` 為準。
+
 Date: 2026-08-02
 Target branch: `main`
 

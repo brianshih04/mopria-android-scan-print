@@ -2,6 +2,8 @@
 
 本文件記錄目前 OpenCV 與 OCR 整合使用的第三方元件；版本與驗證狀態以 `app/build.gradle.kts`、OpenCV 整合計畫及 ML Kit 官方文件為準。
 
+更新日期：2026-08-11
+
 ## OpenCV Android AAR 4.14.0
 
 - Maven coordinate：`org.opencv:opencv:4.14.0`
@@ -18,7 +20,7 @@
 - Project source：[PdfBox-Android](https://github.com/TomRoush/PdfBox-Android)
 - Upstream basis：[Apache PDFBox 2.0.27](https://pdfbox.apache.org/)
 
-使用者明確選取 Searchable PDF 且有套用 OCR 結果時，將 bounded page image 與 ML Kit OCR 的 Unicode／座標結果寫成 PDFBox 的不可見文字層；沒有選取或沒有 OCR 結果時仍使用既有 Android PDF renderer。
+使用者明確選取 Searchable PDF 且每頁都有 OCR 結果時，將 bounded page image 與 ML Kit OCR 的 Unicode／座標結果寫成 PDFBox 的不可見文字層；未選取時使用既有 Android PDF renderer，已選取但缺 OCR layout／必要字型時則明確失敗，不會靜默降級。
 
 ## Noto Sans CJK variable fonts
 

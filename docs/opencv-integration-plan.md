@@ -1,6 +1,6 @@
 # OpenCV 背景淨化整合開發計畫
 
-更新日期：2026-08-09
+更新日期：2026-08-11
 狀態：Phase 0–4C 已實作；Phase 5 實機／模型驗證 gate 進行中（取代 `3855f1c` 版本）
 適用基準：`8fe10e0` 之後的純 Kotlin `BackgroundEnhancer` 版本
 
@@ -53,7 +53,7 @@ dependencies {
 
 ### 2.2 ABI 策略
 
-第一階段不使用 `abiFilters` 排除 x86/x86_64，以免破壞現有開發與 emulator 驗證。Release 大小優化優先使用 App Bundle／ABI splits；只有在確認支援裝置矩陣、CI 與測試設備後才縮減 ABI。
+目前 debug 不設 `abiFilters`，保留 x86／x86_64 emulator 驗證；一般 release 以 `abiFilters` 只保留 `arm64-v8a`／`armeabi-v7a`。`-PreleaseAbiSplits=true` 會改產生兩個 ARM per-ABI APK，Play 路徑使用 AAB。2026-08-11 的一般 release APK 與 AAB 均已確認只含兩個 ARM ABI。
 
 ### 2.3 Fallback 策略
 
@@ -413,8 +413,9 @@ Gate：符合第 10 節完成條件後才能預設啟用。
 - [x] 每個 Mat／kernel／channel 在成功、例外、取消路徑都釋放。
 - [x] A4 300 dpi 單頁峰值與 10 頁 emulator soak 符合第 6.2 節記憶體 gate。
 - [ ] 效能在指定 baseline device 實測：目標 median ≤ 1 秒、p95 ≤ 1.5 秒；未量測前不寫成已達成。
-- [ ] Light／Normal／Strong 在固定 fixture 上有嚴格差異。
-- [ ] 藍色簽名、紅色印章、淡色筆跡不被壓成黑色或白色。
+- [x] Light／Normal／Strong 在 JVM／instrumentation 固定 fixture 上有嚴格差異。
+- [x] 藍色簽名與紅色印章 fixture 保留主色且不變白。
+- [ ] 淡色鉛筆與真實紙張畫質仍待實機 fixture。
 - [x] 初始 preset、scanner capabilities、UI summary 與實際 settings 一致。
 - [x] 專案標準 unit test、lint、assembleDebug 與 `git diff --check` 全部通過。
 - [x] Release artifact、APK/AAB 大小與 rollback 步驟已記錄；真實簽章仍待發布流程。
@@ -436,18 +437,21 @@ PowerShell on Windows；專案既定旗標不可省略：
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest --max-workers=1 --no-daemon
 .\gradlew.bat :app:lintDebug :app:assembleDebug --max-workers=1 --no-daemon
+.\gradlew.bat :app:connectedDebugAndroidTest --max-workers=1 --no-daemon
 git diff --check
 ```
 
 Dependency spike 與發布 gate 另加：
 
 ```powershell
-.\gradlew.bat :app:assembleRelease --max-workers=1 --no-daemon
+.\gradlew.bat :app:assembleRelease :app:bundleRelease --max-workers=1 --no-daemon
 # 使用本機已安裝的 build-tools 版本；以下以 36.1.0 為例
 & "$env:ANDROID_SDK_ROOT\build-tools\36.1.0\zipalign.exe" -c -P 16 -v 4 app\build\outputs\apk\release\app-release-unsigned.apk
 ```
 
 若 `ANDROID_SDK_ROOT` 未設定，使用 `local.properties` 中實際 SDK 路徑；不可把個人絕對路徑提交進 repository。
+
+2026-08-11 本機 `main` 快照：163 JVM tests、28 個 API 36 instrumentation tests、lint、debug／release APK、AAB、兩 ARM ABI 與 zipalign 通過。GitHub Actions 同一版在 Gradle 前因 Linux runner 無法執行 `./gradlew`（exit 127）失敗；修復 CI 前不可將 phase gate 描述為全綠。
 
 ## 12. 後續里程碑：透視校正
 
@@ -463,7 +467,7 @@ Dependency spike 與發布 gate 另加：
 
 ## 13. 參考來源
 
-- [OpenCV Android development documentation](https://docs.opencv.org/4.13.0/d5/df8/tutorial_dev_with_OCV_on_Android.html)
+- [OpenCV Android development documentation](https://docs.opencv.org/4.14.0/d5/df8/tutorial_dev_with_OCV_on_Android.html)
 - [OpenCV official releases](https://github.com/opencv/opencv/releases)
 - [Android 16 KB page-size support](https://developer.android.com/guide/practices/page-sizes)
 - [Android zipalign](https://developer.android.com/tools/zipalign)

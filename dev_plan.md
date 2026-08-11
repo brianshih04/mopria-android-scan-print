@@ -1,6 +1,6 @@
 # Development Plan
 
-更新日期：2026-08-08
+更新日期：2026-08-11
 
 ## 1. 產品目標
 
@@ -19,11 +19,13 @@
 | 範圍 | 決策 |
 |---|---|
 | Android UI | Kotlin、Jetpack Compose、Material 3、single activity |
-| App state | `MopriaViewModel` + `StateFlow`；目前為記憶體狀態與 SharedPreferences 設定 |
+| App state | `MopriaViewModel` + `StateFlow`；SharedPreferences 保存設定，內部 JSON 保存文件／Flatbed session，gzip sidecar 保存 page-scoped OCR layout；active job 仍為記憶體狀態 |
 | 掃描探索 | Android `NsdManager`，服務 `_uscan._tcp`／`_uscans._tcp` |
 | 掃描傳輸 | 自建 bounded eSCL HTTP client；系統 trust store；不使用 trust-all |
 | 列印 | Real 模式可切換：系統列印（Mopria，預設）或直接 IPP（`IppPrintClient`，opt-in，找不到印表機時顯示明確錯誤，不 silent fallback）；尚未實機驗證 |
-| 文件輸出 | Android `PdfDocument`、MediaStore、FileProvider、Sharesheet |
+| 掃描後處理 | OpenCV 4.14 file-first pipeline；deskew、auto-crop、blank-page drop、背景淨化；失敗保留 source |
+| OCR | Google ML Kit Text Recognition v2 unbundled clients；模型由 Google Play services 管理；OCR 與 Searchable PDF 都是 opt-in |
+| 文件輸出 | 一般 PDF 使用 Android `PdfDocument`；Searchable PDF 使用 PDFBox mixed/temp invisible text layer；MediaStore、FileProvider、Sharesheet |
 | Mock／Real | 共用 domain model 與 UI，以 provider 切換實作 |
 | 多國語言 | Android string resources；系統語系自動選擇、English fallback、設定頁手動覆寫 |
 
@@ -66,6 +68,16 @@
 - 取消、錯誤與超過非 `SelectSinglePage` ADF 上限時執行 `DELETE` 清理。
 - TLS 1.3 capability 檢查與 Android trust store；無 trust-all fallback。
 
+### 影像處理、OCR 與 Searchable PDF
+
+- eSCL response 直接 stream-to-file，不把完整 image response 放入 Kotlin `ByteArray`。
+- OpenCV 4.14 執行 ADF deskew、平台 auto-crop、blank-page drop 與 Light／Normal／Strong 背景淨化；暫存輸出通過驗證後才 atomic replace。
+- ML Kit OCR 只解碼受 12 MP／4096 px 長邊限制的取樣 Bitmap；OCR 掃描只協商 JPEG，PDF-only profile 在建立 ScanJob 前明確失敗。
+- OCR 語言預設 English／繁中／簡中；日文、韓文及其他 catalog 由使用者按需選取。ML Kit script model 由 Google Play services 管理，JP／KR PDF 字型則從固定 Noto CJK commit 下載並驗證 SHA-256。
+- `OcrResult.Applied` 保存 block／line／element／symbol、座標、角度、語言與 confidence；formatter 支援保守的雙欄／寬表格排序與數字正規化，但不是語意化 table extraction。
+- Searchable PDF 由使用者另外選取；PDFBox 以 bounded page image、32 MiB mixed/temp storage、Noto 字型與明確 ToUnicode CMap 建立不可見文字層。缺 OCR layout／必要字型時明確失敗，不會降級成普通 PDF。
+- OCR layout 以 versioned gzip sidecar 保存並在 process death 後恢復；crop 永遠存 source-space，旋轉 UI 與 PDF 文字層共用座標轉換。
+
 ### 列印
 
 - 從手機資料夾選擇 PDF／JPEG／PNG。
@@ -77,11 +89,13 @@
 
 ## 4. 目前不在完成宣稱內
 
-- Push Scan、Stored Job Request、ScanBufferInfo、OCR、可搜尋／加密 PDF request。
-- ADF duplex UI、掃描範圍／裁切／旋轉／排序／透視校正。
+- Push Scan、Stored Job Request、ScanBufferInfo、加密 PDF request。
+- ADF duplex UI、掃描範圍與透視校正；裁切／旋轉／排序已完成。
+- ML Kit 在真實 ARM 裝置上的模型下載、accuracy、cold/warm latency、PSS 與無 Google Play services fallback。
+- 語意化表格 cell extraction、欄位／數值驗證，以及日文／韓文／混合 script Searchable PDF 的完整字型 coverage。
 - 使用者認證、PIN、OAuth、client certificate UI。
 - 手動 IP／URL、QR／NFC 加入設備。
-- 工作持久化、程序死亡恢復、前景服務、背景續傳。
+- active job／網路工作持久化、前景服務與背景續傳；文件／Flatbed session／OCR layout 已可恢復。
 - Direct IPP 的產品級實機相容性宣稱；程式與自動測試已接線，但 IPP／IPPS 憑證、各格式接受度、job lifecycle 與高 DPI 多頁記憶體仍待實體／soak 驗證。
 - Mopria Certified 或任何廠商品牌相容性宣稱。
 
@@ -91,12 +105,13 @@
 |---|---|---|
 | M0 App shell／Mock／Print Framework | 完成 | 可建置、Mock scan、文件輸出、系統列印預覽 |
 | M1 現代化 UI／UX | 完成 | 清楚導覽、scan/documents 分離、返回行為、縮圖與分享 |
-| M2 eSCL v2.97 pull-scan client | 程式與 fixture 完成 | 126 unit tests、lint、build；尚缺實機 |
+| M2 eSCL v2.97 pull-scan client | 程式與 fixture 完成 | protocol/security tests、lint、build；尚缺實機 |
 | M3 Flatbed／ADF 多頁 PDF | Mock／UI 完成 | Flatbed 2 頁、ADF 6 頁 emulator smoke |
 | M3.1 多國語言 | 完成 | 10 種 resource locale、系統偵測、English fallback、手動選擇與 JVM tests |
 | M3.2 Direct IPP | 程式與自動測試完成 | opt-in 路徑、格式／capability／job lifecycle；尚缺跨品牌實機與高 DPI soak |
+| M3.3 OpenCV／OCR／Searchable PDF | 程式與 emulator gate 完成 | 12 MP OCR bound、256 MB PSS gate、50 頁 PDF；尚缺 ARM 模型／accuracy／16 KB／多語實機 |
 | M4 實體跨品牌驗收 | 待辦 | 至少兩個 scanner 品牌與兩個 printer 品牌 |
-| M5 文件編輯／持久工作 | 部分完成（狀態持久化 + 暫存檔清理 + 旋轉/排序/裁切已完成；透視校正不需要） | 裁切、旋轉、排序、背景恢復、大型文件 |
+| M5 文件編輯／持久工作 | 部分完成（文件／Flatbed／OCR sidecar、暫存清理、旋轉／排序／裁切完成；active job 尚未持久化） | process death、raw retention、背景工作、大型文件 |
 | M6 Beta 品質 | 部分完成（Dark Mode + 平板適配 + 無障礙已完成；TalkBack/Play 測試待辦） | TalkBack、平板、效能、隱私、Play 測試 |
 
 ## 6. 實體設備驗收計畫
@@ -136,13 +151,17 @@
 - Mock Flatbed／ADF 頁數及文件 merge／split 規則。
 - 語系 tag、繁／簡中文 script／region 判斷與未知語系 fallback。
 - Direct IPP format negotiation、fixed-length transport、job lifecycle、multi-document capability／batching 與 print-resolution sizing。
+- OpenCV 參數、source integrity、OCR sizing／語言 catalog／版面排序／數字正規化、crop 座標與 Searchable PDF layout transform。
+
+2026-08-11 本機快照另有 28 個 API 36 instrumentation tests，覆蓋 OpenCV runtime／A4 十頁 memory soak、deskew／auto-crop／blank-page、ML Kit boundary、文件與 OCR sidecar 恢復、Searchable PDF 抽取與 50 頁 256 MB PSS gate。JVM tests 為 163；後續仍以當次 Gradle 輸出為準。
 
 後續需補：
 
 - Compose navigation／dialog／large text instrumentation tests。
 - Real provider 的 fake NSD 與完整 job state integration tests。
-- 10、50 頁 PDF soak、超大圖片、低記憶體與暫存清理。
-- 程序死亡、工作持久化、重複啟動、取消 race。
+- 真實高解析多頁 Direct IPP、低磁碟、raw scan retention 與低記憶體實機。
+- active job process death、重複啟動與取消 race；文件／OCR sidecar 的 process-death restore 已有 instrumentation coverage。
+- 真實 ARM ML Kit model download／accuracy／PSS、16 KB page-size 與 JP／KR 字型下載／抽取。
 - 真實 TLS、自簽憑證決策與認證挑戰 fixture。
 
 標準驗證指令：
@@ -150,6 +169,7 @@
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest --max-workers=1 --no-daemon
 .\gradlew.bat :app:lintDebug :app:assembleDebug --max-workers=1 --no-daemon
+.\gradlew.bat :app:connectedDebugAndroidTest --max-workers=1 --no-daemon
 git diff --check
 ```
 
@@ -173,12 +193,13 @@ git diff --check
 - 文件、CHANGELOG 與 HANDOFF 同步更新。
 - 沒有未處理的 blocker／critical finding，且敏感文件／規格未提交 Git。
 
-目前程式碼完成的是「實作與模擬器 DoD」；M4 的實體 scanner/printer DoD 尚未完成。
+目前程式碼完成的是「實作與本機／模擬器 DoD」；M4 的實體 scanner／printer 與 ML Kit ARM／16 KB DoD 尚未完成。2026-08-11 GitHub Actions 另有 `./gradlew` exit 127 blocker，CI 綠燈也必須恢復。
 
 ## 10. 建議下一步
 
 1. 在同一 Wi-Fi 接上第一台 eSCL MFP，保存匿名化的 capability/status fixture 並執行 Flatbed、ADF 與取消測試。
-2. 依真實 capability 將掃描設定 UI 改為動態選項，而非固定 150／300／600 dpi。
-3. 驗證 `_uscans` 憑證與 401 challenge，設計使用者確認／認證流程。
-4. 建立 Room／WorkManager 或等價持久化設計，解決程序死亡與暫存檔生命週期。
-5. 執行第二品牌 scanner 與 printer matrix，再決定 Beta 發布條件。
+2. 修正 Linux GitHub Actions 無法執行 `./gradlew` 的 wrapper／line-ending 問題並恢復 `main` CI 綠燈。
+3. 在 ARM 實機驗證 ML Kit Latin／Chinese／Japanese／Korean model request、accuracy、latency、PSS 與 JP／KR 字型下載／Searchable PDF 抽取。
+4. 驗證 `_uscans` 憑證與 401 challenge，設計使用者確認／認證流程。
+5. 設計 active job persistence、raw scan retention 與背景工作；文件／Flatbed／OCR layout 已有基礎持久化，不需要為了形式先導入 Room／WorkManager。
+6. 執行第二品牌 scanner 與 printer matrix，再決定 Beta 發布條件。

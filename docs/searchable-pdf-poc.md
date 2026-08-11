@@ -1,5 +1,9 @@
 # Searchable PDF
 
+更新日期：2026-08-11
+
+狀態：proof-of-concept 已接入正式 opt-in export path 並合併至 `main`；產品級 ARM OCR／多語字型與真實 scanner gate 尚未完成。
+
 本功能使用 PDFBox Android 將掃描影像與 ML Kit Text Recognition v2 的 OCR 結果合成 searchable PDF：
 
 1. PDF page 先放入原始 JPEG。
@@ -21,3 +25,5 @@ Noto CJK 的部分 glyph 同時對應一般漢字與 Kangxi radical／CJK compat
 - `pdftoppm` render 三頁後人工確認影像仍完整、文字層不改變可見畫面。
 
 OCR layout 會以 versioned、gzip 壓縮的 per-page sidecar 原子寫入 App 私有目錄，`DocumentStore` 在 process death 後可恢復文字與完整 block／line／element／symbol 座標。舊文件或損毀 sidecar 沒有 layout 時，Searchable PDF 匯出會要求重新 OCR。API 36 instrumentation 另以 50 頁文件檢查 PDF page count 與 absolute peak PSS 256 MB gate。仍需以含 Google Play services 的 ARM 實機測量模型下載、OCR cold/warm latency、PSS 與輸出時間，並補充真實日文、韓文與混合 script 文件的下載、抽取及完整字型覆蓋率驗證。
+
+2026-08-11 本機驗證為 163 JVM tests、28 個 API 36 instrumentation tests；release APK／AAB 只含 `arm64-v8a`、`armeabi-v7a` 且 zipalign 通過。GitHub Actions 目前另受 `./gradlew` exit 127 阻擋，不能視為 CI 已通過。

@@ -1,12 +1,12 @@
 # OpenCV 背景淨化整合接手指南
 
-更新日期：2026-08-10
+更新日期：2026-08-11
 狀態：Phase 0–4C 實作完成；Phase 5 實機／模型 gate 待完成
 主計畫：`docs/opencv-integration-plan.md`
 
 ## 1. 接手者先知道的事
 
-目前 working tree 已完成 Phase 0–4C 的主要實作：官方 OpenCV AAR、file-first pipeline、原子寫回、`EnhancementResult`、ADF deskew／auto-crop／blank-page drop、OCR settings/backend seam、ML Kit Text Recognition v2、預設 English／繁中／簡中、區域語言選擇、本地化錯誤，以及 OCR 啟用時的自動 deskew／auto-crop、bounded sampled bitmap、結構化文字座標／confidence 與版面／數字後處理。一般 Release 只保留兩個 ARM ABI；debug 保留 emulator ABI，`zipalign -P 16` 與 API 36 emulator instrumentation 已驗證。16 KB、真實 scanner、ML Kit 模型下載／accuracy／ARM PSS gate 尚未完成。透視校正仍不在本期範圍。
+目前 `main` 已完成 Phase 0–4C 的主要實作：官方 OpenCV AAR、file-first pipeline、原子寫回、`EnhancementResult`、ADF deskew／auto-crop／blank-page drop、OCR settings/backend seam、ML Kit Text Recognition v2、預設 English／繁中／簡中、區域語言選擇、本地化錯誤，以及 OCR 啟用時的自動 deskew／auto-crop、bounded sampled bitmap、結構化文字座標／confidence 與版面／數字後處理。一般 Release 只保留兩個 ARM ABI；debug 保留 emulator ABI，`zipalign -P 16` 與 API 36 emulator instrumentation 已驗證。16 KB、真實 scanner、ML Kit 模型下載／accuracy／ARM PSS gate 尚未完成。透視校正仍不在本期範圍。
 
 本文件只提供快速接手路線。技術決策、phase gate、測試矩陣與完成條件以 `docs/opencv-integration-plan.md` 為準；若兩份文件不一致，以主計畫為準。
 
@@ -32,6 +32,8 @@
 | 強度 | Light / Normal / Strong |
 | 檔案格式 | JPEG／PNG 嘗試處理；scanner-returned PDF 跳過 |
 | 單元測試 | 以當次 Gradle 輸出為準，不在文件固定數量 |
+| 2026-08-11 本機快照 | 163 JVM tests、28 個 API 36 instrumentation tests、lint、debug／release／AAB、zipalign 通過 |
+| GitHub Actions | 同一 `main` 版本因 Linux runner 無法執行 `./gradlew`（exit 127）而在 Gradle 前失敗 |
 | 實機驗證 | 尚未完成，不可宣稱品牌相容 |
 | eSCL image stream | HTTP response 直接落地 sibling file；不建立影像 ByteArray；OCR Bitmap 受 12 MP／4096 px 限制 |
 | ADF／平台 processing | deskew、auto-crop、blank-page drop 已接線並有 instrumentation contract |
@@ -51,7 +53,7 @@
 
 - 使用官方 Maven Central AAR：`org.opencv:opencv:4.14.0`；license 記錄於 `docs/third-party-licenses.md`。
 - 不使用 `com.quickbirdstudios:opencv:4.5.3.0`。
-- 第一階段不先排除 x86/x86_64；ABI 瘦身等實測與裝置矩陣完成後再做。
+- Debug 保留 x86／x86_64 emulator ABI；一般 release 已只保留 arm64-v8a／armeabi-v7a，亦可用 `-PreleaseAbiSplits=true` 產生個別 ARM APK。
 - Release 前必須驗證 16 KB page-size alignment 與 16 KB emulator；目前 APK alignment 已通過，16 KB emulator 尚未取得。
 
 ### API
@@ -140,13 +142,14 @@ PowerShell：
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest --max-workers=1 --no-daemon
 .\gradlew.bat :app:lintDebug :app:assembleDebug --max-workers=1 --no-daemon
+.\gradlew.bat :app:connectedDebugAndroidTest --max-workers=1 --no-daemon
 git diff --check
 ```
 
 Dependency／Release gate：
 
 ```powershell
-.\gradlew.bat :app:assembleRelease --max-workers=1 --no-daemon
+.\gradlew.bat :app:assembleRelease :app:bundleRelease --max-workers=1 --no-daemon
 # 使用本機已安裝的 build-tools 版本；以下以 36.1.0 為例
 & "$env:ANDROID_SDK_ROOT\build-tools\36.1.0\zipalign.exe" -c -P 16 -v 4 app\build\outputs\apk\release\app-release-unsigned.apk
 ```

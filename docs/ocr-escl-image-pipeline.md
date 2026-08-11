@@ -1,5 +1,9 @@
 # OCR 與 eSCL 影像管線
 
+更新日期：2026-08-11
+
+狀態：已合併至 `main`；本機 unit／API 36 instrumentation／release gate 通過，ARM 模型／accuracy、16 KB 與真實 scanner 仍待外部驗證。
+
 ## 目前已落地的流程
 
 eSCL `NextDocument` 的 HTTP response 由 `EsclHttpClient` 以 bounded `InputStream.copyTo` 直接寫入 `filesDir/scans` 的暫存檔，再以同目錄檔案 rename 成頁面檔。掃描影像不會先進入 `ByteArray`；OpenCV 不建立 Android Bitmap，ML Kit OCR 只建立受 12 MP／4096 px 長邊限制的取樣 Bitmap。
@@ -50,6 +54,8 @@ ML Kit 模型由 Google Play services 下載與更新，不由 App 直接保存�
 2. Google Play services 缺失、模型下載中、JP／KR 字型下載或 checksum 失敗與低磁碟空間的完整 UI／instrumentation 覆蓋。
 3. 以真實 eSCL scanner payload 驗證 deskew／auto-crop 與不同紙張品質；目前 `Brian.jpg`、`b1.jpg`、`b2.jpg` 只在 API 36 emulator 做過 ML Kit sample smoke test，不是產品準確率證據。
 4. 語意化表格 cell extraction、欄位驗證，以及日文／韓文等多語字型 coverage 與真實 scanner payload 的 Searchable PDF 驗收；目前 Searchable PDF 已是獨立 opt-in，OCR layout 除了 page-scoped `DocumentPage.ocrResult`，也會以 gzip sidecar 原子保存。process death 或 sidecar 損毀後缺少 layout 時會要求重新 OCR，不會靜默輸出普通 PDF。
+
+2026-08-11 的本機 `main` 快照為 163 JVM tests、28 個 API 36 instrumentation tests，包含 50 頁 Searchable PDF 與 256 MB absolute PSS gate；GitHub Actions 同一版本因 Linux runner 無法執行 `./gradlew`（exit 127）而在 Gradle 前失敗，CI 尚未完成驗收。
 
 官方參考：
 

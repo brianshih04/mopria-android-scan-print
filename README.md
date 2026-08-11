@@ -2,7 +2,7 @@
 
 Kotlin／Jetpack Compose Android App，透過 eSCL（AirScan）掃描文件，並可透過 Android Print Framework 或實驗性的 Direct IPP 列印手機檔案與掃描結果。專案目前版本為 `0.1.0`，`minSdk 28`、`targetSdk 36`。
 
-> 目前狀態（2026-08-09）：Mock 模式、eSCL pull-scan client、Flatbed／ADF 多頁工作流、file-first 影像處理（deskew／auto-crop／blank-page drop／背景淨化）、PDF／JPEG 文件庫、Android 系統列印入口、Direct IPP（PDF／JPEG／PNG／PWG-Raster／PCLm）、10 種語言 UI、Dark Mode、狀態持久化與暫存檔清理均已完成建置／自動測試驗證。OCR option 已切換為 Google ML Kit Text Recognition v2 unbundled clients、設定／capability safety、Google Play services 模型準備與區域語言選擇流程；實機模型下載、辨識準確率、PSS、16 KB 與真實 scanner 驗收仍待外部 gate。Direct IPP 仍是 opt-in 實驗功能；真實掃描器與印表機的跨品牌驗收尚待實體硬體。
+> 目前狀態（2026-08-11）：`main` 已包含 Mock／Real、eSCL pull scan、Flatbed／ADF、多頁文件、OpenCV file-first 影像處理（deskew／auto-crop／blank-page drop／背景淨化）、Google ML Kit Text Recognition v2、opt-in Searchable PDF、PDF／JPEG 文件庫、Android 系統列印、opt-in Direct IPP、10 種語言 UI、Dark Mode、文件／Flatbed／OCR layout 持久化與暫存檔清理。163 個 JVM tests、28 個 API 36 instrumentation tests、lint、debug／release APK、AAB 與 zipalign 已在本機通過；GitHub Actions 同一版因 Linux runner 無法執行 `./gradlew`（exit 127）而尚未恢復綠燈。真實 scanner／printer、ARM ML Kit accuracy／PSS、16 KB 與多語字型 coverage 仍是外部 gate。
 
 ## Android／Mopria 技術邊界
 
@@ -159,7 +159,7 @@ MopriaAndroidScanPrint/
 | `PrintScreen.kt`、`PrintOptionsSheet.kt` | 手機文件列印入口、系統／Direct IPP 路徑及 capability-constrained 列印選項。 |
 | `SupportScreens.kt` | 工作紀錄與設定頁面。 |
 | `DocumentPageBitmapLoader.kt`、`DocumentPreviewLoader.kt`、`BitmapLoader.kt` | JPEG／PNG／PDF 頁面載入、縮圖與預覽。 |
-| `ScanExportService.kt` | PDF／JPEG 寫入 Download 資料夾及分享 URI。 |
+| `ScanExportService.kt`、`PdfBoxSearchablePdfWriter.kt` | PDF／JPEG 寫入 Download、分享 URI，以及 bounded PDFBox invisible-text Searchable PDF。 |
 | `SystemPrintAdapter.kt`、`UriPrintAdapter.kt` | 將掃描文件或手機 URI 接到 Android `PrintManager`。 |
 | `theme/Theme.kt` | Material 3 色彩、排版與 Compose theme。 |
 
@@ -180,6 +180,7 @@ MopriaAndroidScanPrint/
 # 於專案根目錄執行（以下為 Windows PowerShell；macOS／Linux 改用 ./gradlew）
 .\gradlew.bat :app:testDebugUnitTest --max-workers=1 --no-daemon
 .\gradlew.bat :app:lintDebug :app:assembleDebug --max-workers=1 --no-daemon
+.\gradlew.bat :app:connectedDebugAndroidTest --max-workers=1 --no-daemon
 # GitHub 發布時可另外產生 arm64-v8a／armeabi-v7a 個別 APK
 .\gradlew.bat :app:assembleRelease -PreleaseAbiSplits=true --max-workers=1 --no-daemon
 adb install -r .\app\build\outputs\apk\debug\app-debug.apk
@@ -204,19 +205,19 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 
 ## 最新驗證紀錄
 
-2026-08-10 的建置／品質驗證：
+2026-08-11 的 `main` 本機建置／品質驗證：
 
 - 工具鏈：AGP 9.3.1、Gradle 9.5.0、JDK 25 daemon、`compileSdk 37`。
 - Release 啟用 R8 minify + resource shrinking；一般 unsigned APK 約 60.4 MB，只包含 arm64-v8a／armeabi-v7a。加上 `-PreleaseAbiSplits=true` 可產生個別 ABI APK；Play 發布使用 AAB。
 - Android lint：0 errors；Kotlin compiler 僅有既有 rotate icon deprecation warnings。
-- `:app:testDebugUnitTest`、`:app:assembleDebug`、`:app:assembleRelease`：passed。
-- API 36 emulator instrumentation 已通過，包含設定持久化、OpenCV pipeline、deskew／crop／blank-page、ML Kit OCR 邊界、OCR sidecar、50 頁 Searchable PDF 與 memory soak；實際測試數量以當次 Gradle 輸出為準。
+- `:app:testDebugUnitTest`：163 passed；`:app:assembleDebug`、`:app:assembleRelease`、`:app:bundleRelease`：passed。
+- API 36 emulator instrumentation：28 passed，包含設定持久化、OpenCV pipeline、deskew／crop／blank-page、ML Kit OCR 邊界、OCR sidecar、50 頁 Searchable PDF 與 memory soak。
 - OpenCV A4 300 dpi 十頁 soak：absolute peak PSS ≤256 MB，GC/idle 後 retained PSS 增量 ≤64 MB。
 - Release APK `zipalign -c -P 16 -v 4`：passed；目前 API 36 AVD 為 4 KB，16 KB page-size 尚未驗證。
-- GitHub Actions CI：PR #5 與合併後 `main` push 均通過 test + lint + assemble（Linux + JDK 25）。
+- GitHub Actions CI：2026-08-11 的 `main@f5dca33` run 失敗；Linux runner 在 Gradle 前執行 `./gradlew` 時回傳 exit 127。這是目前 release blocker，不能以舊 PR #5 的成功結果代表現在 CI。
 - 測試 APK 改由 [GitHub Release v0.1.0](https://github.com/brianshih04/mopria-android-scan-print/releases/tag/v0.1.0) 發布，不再進 repo。
 
-2026-08-02 的最終本機驗證：
+歷史 baseline（2026-08-02；僅供演進追溯，不代表目前 `main`）：
 
 - Unit tests：34 passed，0 failed（2026-08-02 的舊版 baseline）。
 - Android lint：0 errors，34 warnings（dependency update、Kotlin annotation／extension 與 pluralization 建議；無 blocker）。

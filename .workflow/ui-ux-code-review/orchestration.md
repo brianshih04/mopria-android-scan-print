@@ -1,5 +1,7 @@
 # Orchestration
 
+> Archived snapshot（2026-08-02）：以下保留 UI／UX pass 的原始執行順序。2026-08-11 的 `main` 已在此 UI 架構上加入 Direct IPP、OpenCV、Google ML Kit OCR 與 Searchable PDF；最新狀態請見 `README.md`、`HANDOFF.md`、`dev_plan.md`。
+
 Status: completed. This file is retained as the historical execution record for the UI/UX pass.
 
 1. Capture the current UI and inspect all production and test sources.

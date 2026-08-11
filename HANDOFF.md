@@ -1,6 +1,6 @@
 # Development Handoff
 
-更新日期：2026-08-10
+更新日期：2026-08-11
 
 Repository：`brianshih04/mopria-android-scan-print`
 
@@ -8,7 +8,7 @@ Repository：`brianshih04/mopria-android-scan-print`
 
 ## 1. 接手摘要
 
-目前版本已完成可執行的 Android Compose App、Mock／Real 模式、eSCL v2.97 pull-scan client、Flatbed／ADF 多頁文件工作流、PDF／JPEG 文件庫、Android Print Framework 預設列印入口、opt-in Direct IPP，以及 10 種語言與系統語系 fallback。
+目前 `main` 已完成可執行的 Android Compose App、Mock／Real 模式、eSCL v2.97 pull-scan client、Flatbed／ADF 多頁文件工作流、OpenCV file-first 影像處理、opt-in ML Kit OCR／Searchable PDF、PDF／JPEG 文件庫、Android Print Framework 預設列印入口、opt-in Direct IPP，以及 10 種語言與系統語系 fallback。OCR feature branch 已 fast-forward 合併；合併前的 `main` 保留於 `main-backup`。
 
 既有 JVM／instrumentation 驗證可由下方固定指令重跑；目前仍未完成真實 eSCL scanner 與 Mopria printer 的跨品牌驗收，以及 Direct IPP 高 DPI 多頁 PWG-Raster／PCLm 的 streaming／OOM soak。請勿把 Mock／fixture 結果描述成 Mopria Certified 或廠牌相容證據。
 
@@ -20,6 +20,7 @@ OpenCV 與 eSCL file-first 影像管線已接入：使用官方 `org.opencv:open
 # 於專案根目錄執行（以下為 Windows PowerShell；macOS／Linux 改用 ./gradlew）
 .\gradlew.bat :app:testDebugUnitTest --max-workers=1 --no-daemon
 .\gradlew.bat :app:lintDebug :app:assembleDebug --max-workers=1 --no-daemon
+.\gradlew.bat :app:connectedDebugAndroidTest --max-workers=1 --no-daemon
 adb install -r .\app\build\outputs\apk\debug\app-debug.apk
 adb shell am start -n com.brianshih.mopria.android.scanprint/.MainActivity
 ```
@@ -45,16 +46,16 @@ adb shell am start -n com.brianshih.mopria.android.scanprint/.MainActivity
 | `domain/ScanDocumentOrganizer.kt` | Flatbed append 與 ADF split 純邏輯 |
 | `domain/IppDiscovery.kt` | `_ipp/_ipps` NSD 探索、URI 與 secure candidate 選擇 |
 | `domain/IppPrintClient.kt`、`IppTransport.kt` | Direct IPP capability、job lifecycle、fixed-length 傳輸與 cancel cleanup |
-| `domain/IppRasterizer.kt`、`PrintRenderSizing.kt` | PWG-Raster／PCLm 產生與 bounded render 尺寸；多頁高 DPI streaming 仍待改善 |
+| `domain/IppRasterizer.kt`、`PrintRenderSizing.kt` | PWG-Raster／PCLm 產生、bounded render 尺寸與逐頁 bitmap streaming；swath／實體高 DPI soak 仍待驗證 |
 | `ui/MopriaViewModel.kt` | discovery／scan／export／print 協調及 Flatbed session state |
 | `ui/LanguageManager.kt` | 系統語系偵測、手動覆寫、中文 script／region 判斷與 English fallback |
 | `ui/ScanScreen.kt` | ADF max pages、Flatbed／ADF PDF 合併設定及下一頁 dialog |
 | `ui/DocumentsScreen.kt` | 掃描文件頁面、列印／分享／輸出操作 |
 | `ui/DocumentPageBitmapLoader.kt` | JPEG／PNG／PDF-backed 頁面取樣／render |
-| `ui/ScanExportService.kt` | MediaStore PDF／JPEG 與分享 PDF |
+| `ui/ScanExportService.kt`、`domain/PdfBoxSearchablePdfWriter.kt` | MediaStore PDF／JPEG、分享 PDF，以及 opt-in invisible-text Searchable PDF |
 | `ui/SystemPrintAdapter.kt` | 掃描文件交給 Android Print Framework |
 
-| `domain/ScanError.kt` | 結構化掃描錯誤（8 子類型），ViewModel 映射至 string resources |
+| `domain/ScanError.kt` | 結構化掃描錯誤，ViewModel 映射至 string resources；包含 OCR raster-format negotiation error |
 | `domain/PdfPageRenderer.kt` | 共用 PDF 頁面渲染（writePdf + drawFitted） |
 | `domain/DocumentStore.kt` | JSON 持久化文件列表與 Flatbed session；OCR layout 使用壓縮 sidecar |
 | `domain/SettingsStore.kt` | SharedPreferences 讀寫，從 ViewModel 提取 |
@@ -111,15 +112,15 @@ Flatbed multi-page 是多個獨立 eSCL Platen job 的 App-level session，不�
 
 | 驗證 | 結果 |
 |---|---|
-| `:app:testDebugUnitTest` | passed，0 failed |
+| `:app:testDebugUnitTest` | 2026-08-11 本機 163 passed，0 failed |
 | `:app:lintDebug` | 0 errors |
 | `:app:assembleDebug` | passed；APK 位於 `app/build/outputs/apk/debug/app-debug.apk` |
 | `:app:assembleRelease` | passed；R8 minify 開啟，兩個 ARM ABI 的 unsigned release APK 約 60.4 MB |
-| `:app:connectedDebugAndroidTest` | API 36 emulator suite passed；實際測試數量以當次 Gradle 輸出為準 |
+| `:app:connectedDebugAndroidTest` | 2026-08-11 API 36 emulator 28 passed，0 failed |
 | OpenCV A4 300 dpi ten-page soak | absolute peak PSS ≤256 MB、GC/idle 後 retained PSS 增量 ≤64 MB |
 | Release native ABI | `arm64-v8a`、`armeabi-v7a`；加上 `-PreleaseAbiSplits=true` 可產生個別 APK；`zipalign -c -P 16 -v 4` passed |
 | 16 KB page-size device | 尚未驗證；目前 AVD 為 4 KB page size |
-| GitHub Actions CI | PR #5 與合併後 `main` push 均通過 `testDebugUnitTest` + `lintDebug` + `assembleDebug`（Linux + JDK 25） |
+| GitHub Actions CI | `main@f5dca33` 在 2026-08-11 失敗：Linux runner 執行 `./gradlew` 時 exit 127，尚未進入 Gradle；本機 gate 通過但 CI 不可標示為綠燈 |
 | `LanguageManagerTest` | 覆蓋 10 種可選語系、未知 tag、繁／簡中文 script 與 region 判斷 |
 | `git diff --check` | passed |
 | `DIRECT_IPP_FOLLOWUPS.md` | Direct IPP review findings、接手順序與驗收條件 |
@@ -139,14 +140,14 @@ Lint 目前無 error；Kotlin compiler 仍有既有 `EditScreen` rotate icon dep
 - 尚未以實體 scanner 驗證廠商 capability 差異、TLS 憑證、ADF 空紙／卡紙與 job retention。
 - 尚未實作 401 credential UI；目前會顯示 challenge 資訊並失敗。
 - `426` 可切換同 host HTTPS，但沒有 RFC 2817 同一 TCP connection raw Upgrade。
-- 掃描設定 UI 仍固定 150／300／600 dpi；provider 會協商最接近能力，下一步應改為 capability-driven UI。
+- 掃描設定 UI 顯示 150／300／600 dpi 的產品選項，Real provider 會依 scanner capability 過濾／協商；仍需真實設備驗證非標準 resolution profile 的 UX。
 - 文件 metadata、Flatbed session 與 OCR layout 可由內部 JSON／gzip sidecar 在 process death 後恢復，且讀寫在序列化的背景 I/O 執行；工作紀錄與進行中的網路工作仍只存在記憶體，raw scan 仍需產品化的保留期限策略。
 - ML Kit Text Recognition v2 使用 unbundled script clients，由 Google Play services 管理模型準備；目前尚未以含 Google Play services 的 ARM 實機驗證模型下載、accuracy、cold/warm latency 或 PSS，因此不宣稱 OCR 已達產品準確率或 Mopria certification。Searchable PDF 已可由使用者明確選取，輸出路徑與三張 sample smoke 已在 API 36 emulator 驗證，但不代表產品 accuracy 或跨語言字型 coverage。
 - OCR 目前只做版面排序與字串數字格式化；尚未做語意化表格 cell extraction、欄位／數值驗證。`Brian.jpg`、`b1.jpg`、`b2.jpg` 的 sample smoke 僅在 API 36 emulator 執行，不是產品 accuracy 證據。
 - 尚未以 16 KB page-size emulator 或 ARM 實機執行 OpenCV／ML Kit soak；目前 instrumentation 只驗證 OCR invalid-source 邊界與不觸發模型的安全降級。
-- 文件輸出使用 Android `PdfDocument` 重繪頁面，不保留原始 PDF 的文字／向量語意。
+- 一般 PDF 輸出使用 Android `PdfDocument` 重繪頁面，不保留原始 PDF 的文字／向量語意；只有使用者同時啟用 OCR 與 Searchable PDF 時改走 PDFBox invisible text layer。
 - 50 頁是 App 安全上限；大型高 dpi 掃描仍需實機 soak 與儲存空間檢查。
-- Direct IPP 的 `IppRasterizer` 仍可能同時保留多個高 DPI page bitmap；在完成逐頁／swath streaming 與 soak 前，不應宣稱大型多頁工作已具產品級穩定性。
+- Direct IPP 的 `IppRasterizer` 已逐頁持有 bitmap，但在完成實體高 DPI 多頁 soak（必要時再做 swath streaming）前，不應宣稱大型多頁工作已具產品級穩定性。
 
 ## 8. Android 平台注意事項
 
@@ -160,7 +161,7 @@ Lint 目前無 error；Kotlin compiler 仍有既有 `EditScreen` rotate icon dep
 1. 先在 `main` 重新跑三個驗證指令並確認工作樹乾淨。
 2. 接第一台真實 eSCL MFP；優先保存去識別的 TXT、Capabilities、Status 與 HTTP status sequence fixture。
 3. 驗證 Flatbed JPEG、ADF PDF、`SelectSinglePage` true／false、取消與 503。
-4. 將真實 capability 注入 ViewModel，讓 UI 動態限制來源／解析度／色彩。
+4. 以真實 capability 驗證 ViewModel 對來源／解析度／色彩的動態限制與 fallback UX。
 5. 設計持久化 job model 與 raw scan retention，再處理進行中工作在 background／process death 後的恢復策略。
 6. 以至少兩個印表機品牌同時驗證 Android Print Service 與 Direct IPP（IPP/IPPS、格式、capability、job lifecycle、TLS 與高 DPI 多頁 soak），完成硬體 matrix 後才準備 Beta 宣稱。
 
