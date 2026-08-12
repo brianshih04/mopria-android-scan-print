@@ -11,6 +11,7 @@ import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.DeviceDiscovery
 import com.brianshih.mopria.android.scanprint.domain.DirectIppPrintPrompt
 import com.brianshih.mopria.android.scanprint.domain.DeviceKind
+import com.brianshih.mopria.android.scanprint.domain.DeviceHealthValidator
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
 import com.brianshih.mopria.android.scanprint.domain.CropRect
 import com.brianshih.mopria.android.scanprint.domain.DocumentEditor
@@ -84,6 +85,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         MopriaUiState(
             integrationMode = settingsStore.loadIntegrationMode(),
             printMethod = settingsStore.loadPrintMethod(),
+            manualDeviceAddress = settingsStore.loadManualDeviceAddress(),
             scanSettings = initialScanSettings,
             scanPreset = settingsStore.loadScanPreset(),
             ocrLanguagePacks = ocrLanguagePackManager.states(
@@ -178,6 +180,19 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         if (_uiState.value.printMethod == method) return
         settingsStore.savePrintMethod(method)
         _uiState.update { it.copy(printMethod = method) }
+    }
+
+    fun setManualDeviceAddress(address: String) {
+        if (_uiState.value.isBusy) return
+        val trimmed = address.trim()
+        settingsStore.saveManualDeviceAddress(trimmed)
+        _uiState.update {
+            it.copy(
+                manualDeviceAddress = trimmed,
+                devices = emptyList(),
+                scannerCapabilities = ScannerCapabilities.DEFAULT,
+            )
+        }
     }
 
     fun setOcrLanguagePackSelected(language: OcrLanguagePack, selected: Boolean) {
@@ -285,16 +300,18 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             _uiState.update { it.copy(isDiscovering = true) }
             try {
                 val providers = providersFor(mode)
-                val devices = providers.discovery.discover()
+                val discoveredDevices = providers.discovery.discover(_uiState.value.manualDeviceAddress)
                 // In Real mode, fetch scanner capabilities so the scan settings UI shows
-                // only options the scanner actually supports.
-                val caps = if (mode == IntegrationMode.Real) {
-                    devices.firstOrNull { it.kind == DeviceKind.Scanner }
-                        ?.let { scanner -> fetchScannerCapabilities(providers.scan, scanner) }
+                // only options the scanner actually supports. The same protocol request is
+                // also the health check that prevents an unresponsive manual IP from showing Ready.
+                val validation = if (mode == IntegrationMode.Real) {
+                    DeviceHealthValidator.validate(discoveredDevices, providers.scan, providers.print)
                 } else {
-                    ScannerCapabilities.DEFAULT
+                    null
                 }
-                val resolvedCaps = caps ?: ScannerCapabilities.DEFAULT
+                val devices = validation?.devices ?: discoveredDevices
+                val caps = validation?.scannerCapabilities ?: ScannerCapabilities.DEFAULT
+                val resolvedCaps = caps
                 val currentSettings = _uiState.value.scanSettings
                 val adjustedSettings = resolvedCaps.reconcile(currentSettings)
                 _uiState.update {
@@ -374,7 +391,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 val devices = if (cachedDevices.any { it.kind == DeviceKind.Scanner }) {
                     cachedDevices
                 } else {
-                    providers.discovery.discover()
+                    providers.discovery.discover(_uiState.value.manualDeviceAddress)
                 }
                 val scanner = devices.firstOrNull { it.kind == DeviceKind.Scanner }
                 if (scanner == null) {
@@ -670,7 +687,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 val devices = if (cachedDevices.any { it.kind == DeviceKind.Printer }) {
                     cachedDevices
                 } else {
-                    providers.discovery.discover()
+                    providers.discovery.discover(_uiState.value.manualDeviceAddress)
                 }
                 val printer = devices.firstOrNull { it.kind == DeviceKind.Printer }
                 if (printer == null) {
@@ -736,7 +753,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             val queuedJob = JobRecord(
                 id = currentJobId,
                 kind = JobKind.Print,
-                title = document.name,
+                title = document.displayName(localizedContext),
                 targetLabel = printer.name,
                 status = JobStatus.Queued,
                 progress = 0,
@@ -917,7 +934,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             try {
                 val uri = scanExportService.createSharePdf(document)
-                _shareRequests.emit(ShareRequest(uri.toString(), document.name))
+                _shareRequests.emit(ShareRequest(uri.toString(), document.displayName(localizedContext)))
             } catch (error: CancellationException) {
                 throw error
             } catch (error: SearchablePdfExportException) {
@@ -943,7 +960,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             val queuedJob = JobRecord(
                 id = jobId,
                 kind = JobKind.Export,
-                title = document.name,
+                title = document.displayName(localizedContext),
                 targetLabel = "Download/Mopria Scan & Print/Scans",
                 status = JobStatus.Running,
                 progress = 25,

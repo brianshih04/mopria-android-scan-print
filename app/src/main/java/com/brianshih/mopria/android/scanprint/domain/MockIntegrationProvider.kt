@@ -23,10 +23,12 @@ class MockIntegrationProvider : DeviceDiscovery, ScanAcquisitionProvider, PrintP
         ),
     )
 
-    override suspend fun discover(): List<IntegrationDevice> {
+    override suspend fun discover(manualDeviceAddress: String?): List<IntegrationDevice> {
         delay(650)
         return devices
     }
+
+    suspend fun discover(): List<IntegrationDevice> = discover(null)
 
     override suspend fun scan(
         scanner: IntegrationDevice,
@@ -47,9 +49,17 @@ class MockIntegrationProvider : DeviceDiscovery, ScanAcquisitionProvider, PrintP
                     "$timestamp-page-$page",
                     page,
                     if (page == 1) "Cover and summary" else if (page == 2) "Content page" else "Appendix",
+                    generatedTitle = when (page) {
+                        1 -> GeneratedPageTitle.Cover
+                        2 -> GeneratedPageTitle.Content
+                        else -> GeneratedPageTitle.Appendix
+                    },
                 )
             },
             createdAt = timestamp,
+            documentSize = settings.documentSize,
+            generatedName = GeneratedDocumentName.MockScan,
+            generatedNameSuffix = timestamp.toString().takeLast(4),
         )
     }
 

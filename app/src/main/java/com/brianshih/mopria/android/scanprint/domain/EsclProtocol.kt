@@ -98,6 +98,8 @@ data class EsclCapabilities(
     val resolutions: List<Int> = emptyList(),
     val inputSources: List<String> = emptyList(),
     val inputs: Map<String, EsclInputCapabilities> = emptyMap(),
+    val adfSimplexInput: EsclInputCapabilities? = null,
+    val adfDuplexInput: EsclInputCapabilities? = null,
 )
 
 data class EsclNegotiatedSettings(
@@ -108,6 +110,16 @@ data class EsclNegotiatedSettings(
     val colorMode: String,
     val yResolution: Int = resolution,
     val numberOfPages: Int? = null,
+    val intent: String = "Document",
+    val scanRegion: EsclScanRegion? = null,
+    val duplex: Boolean = false,
+)
+
+data class EsclScanRegion(
+    val xOffset: Int = 0,
+    val yOffset: Int = 0,
+    val width: Int,
+    val height: Int,
 )
 
 data class EsclJobInfo(
@@ -152,9 +164,12 @@ object EsclProtocol {
 
         val inputs = linkedMapOf<String, EsclInputCapabilities>()
         parseInput(root, "Platen", "PlatenInputCaps", sharedProfiles)?.let { inputs[it.inputSource] = it }
-        parseInput(root, "Feeder", "AdfSimplexInputCaps", sharedProfiles)?.let { inputs[it.inputSource] = it }
+        val adfSimplexInput = parseInput(root, "Feeder", "AdfSimplexInputCaps", sharedProfiles)
+        val adfDuplexInput = parseInput(root, "Feeder", "AdfDuplexInputCaps", sharedProfiles)
+        (adfSimplexInput ?: adfDuplexInput)?.let { inputs[it.inputSource] = it }
 
-        val profiles = inputs.values.flatMap { it.profiles }.ifEmpty { sharedProfiles.values.toList() }
+        val profiles = (inputs.values + listOfNotNull(adfDuplexInput)).flatMap { it.profiles }
+            .ifEmpty { sharedProfiles.values.toList() }
         val formats = profiles.flatMap { it.documentFormats }.distinctBy { it.lowercase(Locale.ROOT) }
         val modes = profiles.flatMap { it.colorModes }.distinctBy { it.lowercase(Locale.ROOT) }
         val resolutions = profiles.flatMap { profile ->
@@ -171,6 +186,8 @@ object EsclProtocol {
             resolutions = resolutions,
             inputSources = inputs.keys.toList(),
             inputs = inputs,
+            adfSimplexInput = adfSimplexInput,
+            adfDuplexInput = adfDuplexInput,
         )
     }
 
@@ -203,7 +220,16 @@ object EsclProtocol {
             }
         }
         val source = settings.inputSource.eSclValue
-        val input = capabilities.inputs.entries.firstOrNull { it.key.equals(source, true) }?.value
+        val input = when {
+            settings.inputSource == ScanInputSource.Adf && settings.adfMode == ScanAdfMode.Duplex -> {
+                capabilities.adfDuplexInput
+            }
+            settings.inputSource == ScanInputSource.Adf -> {
+                capabilities.adfSimplexInput
+                    ?: capabilities.inputs.entries.firstOrNull { it.key.equals(source, true) }?.value
+            }
+            else -> capabilities.inputs.entries.firstOrNull { it.key.equals(source, true) }?.value
+        }
             ?: throw ScanError.CapabilityNotSupported
         val ocrRequiresRasterImage = settings.ocrMode != OcrMode.Disabled
         val formatPreference = if (ocrRequiresRasterImage) {
@@ -247,6 +273,9 @@ object EsclProtocol {
             colorMode = selection.second,
             yResolution = resolution.yDpi,
             numberOfPages = settings.maxPages.takeIf { settings.inputSource == ScanInputSource.Adf && input.selectSinglePage },
+            intent = settings.documentSize.intent,
+            scanRegion = settings.documentSize.toEsclScanRegion(),
+            duplex = settings.inputSource == ScanInputSource.Adf && settings.adfMode == ScanAdfMode.Duplex,
         )
     }
 
@@ -257,16 +286,31 @@ object EsclProtocol {
             "<pwg:DocumentFormat>${escapeXml(settings.documentFormat)}</pwg:DocumentFormat>"
         }
         val numberOfPages = settings.numberOfPages?.let { "\n  <scan:NumberOfPages>$it</scan:NumberOfPages>" }.orEmpty()
+        val duplex = if (settings.duplex) "\n  <scan:Duplex>true</scan:Duplex>" else ""
+        val scanRegion = settings.scanRegion?.let { region ->
+            """
+              <pwg:ScanRegions>
+                <pwg:ScanRegion>
+                  <pwg:ContentRegionUnits>escl:ThreeHundredthsOfInches</pwg:ContentRegionUnits>
+                  <pwg:Height>${region.height}</pwg:Height>
+                  <pwg:Width>${region.width}</pwg:Width>
+                  <pwg:XOffset>${region.xOffset}</pwg:XOffset>
+                  <pwg:YOffset>${region.yOffset}</pwg:YOffset>
+                </pwg:ScanRegion>
+              </pwg:ScanRegions>
+            """.trimIndent()
+        }.orEmpty()
         return """
             <?xml version="1.0" encoding="UTF-8"?>
-            <scan:ScanSettings xmlns:scan="$XML_NAMESPACE" xmlns:pwg="$PWG_NAMESPACE">
+            <scan:ScanSettings xmlns:scan="$XML_NAMESPACE" xmlns:escl="$XML_NAMESPACE" xmlns:pwg="$PWG_NAMESPACE">
               <pwg:Version>${escapeXml(settings.version)}</pwg:Version>
-              <scan:Intent>Document</scan:Intent>
+              <scan:Intent>${escapeXml(settings.intent)}</scan:Intent>
+              $scanRegion
               $formatElement
               <pwg:InputSource>${escapeXml(settings.inputSource)}</pwg:InputSource>
               <scan:XResolution>${settings.resolution}</scan:XResolution>
               <scan:YResolution>${settings.yResolution}</scan:YResolution>
-              <scan:ColorMode>${escapeXml(settings.colorMode)}</scan:ColorMode>$numberOfPages
+              <scan:ColorMode>${escapeXml(settings.colorMode)}</scan:ColorMode>$duplex$numberOfPages
             </scan:ScanSettings>
         """.trimIndent()
     }
@@ -282,11 +326,28 @@ object EsclProtocol {
     )
 
     fun buildScanSettings(settings: ScanSettings): String = buildScanSettings(
-        inputSource = settings.inputSource.eSclValue,
-        documentFormat = if (settings.colorMode == ScanColorMode.BlackAndWhite) "application/pdf" else "image/jpeg",
-        resolution = settings.resolutionDpi,
-        colorMode = settings.colorMode.eSclValue,
+        EsclNegotiatedSettings(
+            version = CLIENT_VERSION,
+            inputSource = settings.inputSource.eSclValue,
+            documentFormat = if (settings.colorMode == ScanColorMode.BlackAndWhite) "application/pdf" else "image/jpeg",
+            resolution = settings.resolutionDpi,
+            colorMode = settings.colorMode.eSclValue,
+            intent = settings.documentSize.intent,
+            scanRegion = settings.documentSize.toEsclScanRegion(),
+            duplex = settings.inputSource == ScanInputSource.Adf && settings.adfMode == ScanAdfMode.Duplex,
+        ),
     )
+
+    private fun ScanDocumentSize.toEsclScanRegion(): EsclScanRegion? = if (
+        widthHundredthsOfInch != null && heightHundredthsOfInch != null
+    ) {
+        EsclScanRegion(
+            width = widthHundredthsOfInch,
+            height = heightHundredthsOfInch,
+        )
+    } else {
+        null
+    }
 
     fun scanJobUrl(baseUrl: String, location: String): String {
         val base = URI(baseUrl.trimEnd('/') + "/")

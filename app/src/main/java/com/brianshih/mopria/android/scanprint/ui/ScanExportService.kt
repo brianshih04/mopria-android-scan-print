@@ -29,8 +29,10 @@ import com.brianshih.mopria.android.scanprint.domain.PdfBoxSearchablePage
 import com.brianshih.mopria.android.scanprint.domain.PdfBoxSearchablePdfWriter
 import com.brianshih.mopria.android.scanprint.domain.SavedScanFile
 import com.brianshih.mopria.android.scanprint.domain.PdfPageRenderer
+import com.brianshih.mopria.android.scanprint.domain.PdfPageSize
 import com.brianshih.mopria.android.scanprint.domain.ScanOutputFormat
 import com.brianshih.mopria.android.scanprint.domain.hasPositionedText
+import com.brianshih.mopria.android.scanprint.domain.toPdfPageSize
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -66,7 +68,7 @@ class ScanExportService(private val context: Context) {
         directory.listFiles()
             ?.filter { it.isFile && System.currentTimeMillis() - it.lastModified() > SHARE_MAX_AGE_MS }
             ?.forEach { it.delete() }
-        val file = File(directory, safeName(document.name) + ".pdf")
+        val file = File(directory, safeName(document.displayName(context)) + ".pdf")
         try {
             FileOutputStream(file).use { output -> writePdf(document, output) }
         } catch (error: Exception) {
@@ -197,7 +199,7 @@ class ScanExportService(private val context: Context) {
     }
 
     private fun savePdf(document: MopriaDocument): SavedScanFile {
-        val name = safeName(document.name) + ".pdf"
+        val name = safeName(document.displayName(context)) + ".pdf"
         return writePublicFile(name, "application/pdf") { output ->
             writePdf(document, output)
         }
@@ -282,6 +284,8 @@ class ScanExportService(private val context: Context) {
                 pages = pages,
                 fontFiles = fontFiles,
                 output = output,
+                pageSize = document.documentSize?.toPdfPageSize()
+                    ?: PdfPageSize(PdfPageRenderer.PAGE_WIDTH, PdfPageRenderer.PAGE_HEIGHT),
             )
         } finally {
             staging.deleteRecursively()
@@ -308,24 +312,14 @@ class ScanExportService(private val context: Context) {
             .toSet()
 
     private fun saveJpeg(document: MopriaDocument, page: DocumentPage, index: Int): SavedScanFile {
-        val name = "${safeName(document.name)}-page-${index + 1}.jpg"
+        val name = "${safeName(document.displayName(context))}-page-${index + 1}.jpg"
         return writePublicFile(name, "image/jpeg") { output ->
-            if (copyOriginalJpeg(page.imagePath, output)) return@writePublicFile
-            val bitmap = loadPageBitmap(page)
+            if (copyOriginalJpeg(page, output)) return@writePublicFile
+            val bitmap = loadPageBitmap(page) ?: createMockPageBitmap(page)
             try {
-                if (bitmap != null) {
-                    check(bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "JPEG compression failed" }
-                } else {
-                    val fixture = createBitmap(612, 792)
-                    try {
-                        drawPage(Canvas(fixture), document, page)
-                        check(fixture.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "JPEG compression failed" }
-                    } finally {
-                        fixture.recycle()
-                    }
-                }
+                check(bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)) { "JPEG compression failed" }
             } finally {
-                bitmap?.recycle()
+                bitmap.recycle()
             }
         }
     }
@@ -397,25 +391,30 @@ class ScanExportService(private val context: Context) {
             color = Color.rgb(180, 195, 215)
             strokeWidth = 2f
         }
+        val width = canvas.width.toFloat()
+        val height = canvas.height.toFloat()
+        val margin = width * 0.088f
+        val localized = LanguageManager.wrap(context)
         canvas.drawColor(Color.WHITE)
-        canvas.drawText("Mopria Scan & Print", 54f, 76f, titlePaint)
-        canvas.drawText(document.name, 54f, 112f, bodyPaint)
-        canvas.drawLine(54f, 140f, 558f, 140f, linePaint)
-        val bitmap = loadPageBitmap(page)
-        if (bitmap != null) {
-            val margin = 54f
-            val top = 158f
-            val bottom = 640f
+        canvas.drawText(context.getString(R.string.app_name), margin, height * 0.096f, titlePaint)
+        canvas.drawText(document.displayName(context), margin, height * 0.141f, bodyPaint)
+        canvas.drawLine(margin, height * 0.177f, width - margin, height * 0.177f, linePaint)
+        val bitmap = loadPageBitmap(page) ?: createMockPageBitmap(page)
+        try {
+            val top = height * 0.20f
+            val bottom = height * 0.76f
             PdfPageRenderer.drawFittedInArea(canvas, bitmap, margin, top, bottom)
-            canvas.drawText("${page.pageNumber}. ${page.title}", margin, 684f, titlePaint)
+            canvas.drawText("${page.pageNumber}. ${page.displayTitle(context)}", margin, height * 0.82f, titlePaint)
+        } finally {
             bitmap.recycle()
-        } else {
-            canvas.drawText("${page.pageNumber}. ${page.title}", 54f, 190f, titlePaint)
-            canvas.drawText("Saved by Mock Integration Mode.", 54f, 236f, bodyPaint)
-            canvas.drawText("The real eSCL scan image will replace this fixture.", 54f, 264f, bodyPaint)
         }
-        canvas.drawText("Source: ${document.sourceLabel}", 54f, 690f, bodyPaint)
-        canvas.drawText("Page ${page.pageNumber} of ${document.pages.size}", 54f, 728f, bodyPaint)
+        canvas.drawText(localized.getString(R.string.pdf_source, document.displaySource(context)), margin, height * 0.89f, bodyPaint)
+        canvas.drawText(
+            localized.getString(R.string.pdf_page_of, page.pageNumber, document.pages.size),
+            margin,
+            height * 0.94f,
+            bodyPaint,
+        )
     }
 
     private fun safeName(value: String): String = value
@@ -423,14 +422,31 @@ class ScanExportService(private val context: Context) {
         .trim('-')
         .ifBlank { "mopria-scan" }
 
-    private fun loadBitmap(path: String?): Bitmap? {
-        return BitmapLoader.load(context, path, requestedWidth = 2048, requestedHeight = 2048)
-    }
-
     private fun loadPageBitmap(page: DocumentPage): Bitmap? =
         DocumentPageBitmapLoader.load(context, page, requestedWidth = 2048, requestedHeight = 2048)
 
-    private fun copyOriginalJpeg(path: String?, output: OutputStream): Boolean {
+    private fun createMockPageBitmap(page: DocumentPage): Bitmap {
+        val localized = LanguageManager.wrap(context)
+        val bitmap = createBitmap(1200, 1600)
+        val canvas = Canvas(bitmap)
+        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(35, 54, 78)
+            textSize = 48f
+            isFakeBoldText = true
+        }
+        val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.DKGRAY
+            textSize = 30f
+        }
+        canvas.drawColor(Color.WHITE)
+        canvas.drawText(localized.getString(R.string.pdf_mock_saved), 90f, 180f, titlePaint)
+        canvas.drawText(localized.getString(R.string.pdf_mock_fixture), 90f, 260f, bodyPaint)
+        return DocumentPageBitmapLoader.applyPageEdits(bitmap, page)
+    }
+
+    private fun copyOriginalJpeg(page: DocumentPage, output: OutputStream): Boolean {
+        if (page.cropRect != null || page.rotationDegrees % 360 != 0) return false
+        val path = page.imagePath
         if (path.isNullOrBlank()) return false
         val uri = path.takeIf { it.startsWith("content://") }?.let(Uri::parse)
         val isJpeg = if (uri != null) {

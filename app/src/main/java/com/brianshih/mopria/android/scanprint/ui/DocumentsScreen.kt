@@ -162,13 +162,13 @@ private fun DocumentCard(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        document.name,
+                        document.displayName(LocalContext.current),
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        stringResource(R.string.documents_page_source, document.pages.size, document.sourceLabel),
+                        stringResource(R.string.documents_page_source, document.pages.size, document.displaySource(LocalContext.current)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
@@ -294,7 +294,7 @@ private fun PageThumbnail(page: DocumentPage, onClick: () -> Unit) {
             PagePreview(page = page, requestedWidth = 420, requestedHeight = 568)
         }
         Text(
-            stringResource(R.string.documents_page_label, page.pageNumber, page.title),
+            stringResource(R.string.documents_page_label, page.pageNumber, page.displayTitle(LocalContext.current)),
             modifier = Modifier.padding(horizontal = 2.dp),
             style = MaterialTheme.typography.labelMedium,
             maxLines = 1,
@@ -358,7 +358,7 @@ private fun MockPagePreview(page: DocumentPage) {
             shape = MaterialTheme.shapes.extraSmall,
         ) {}
         Text(
-            page.title,
+            page.displayTitle(LocalContext.current),
             style = MaterialTheme.typography.labelLarge,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -396,7 +396,7 @@ private fun PagePreviewDialog(page: DocumentPage, onDismiss: () -> Unit) {
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        stringResource(R.string.documents_page_label, page.pageNumber, page.title),
+                        stringResource(R.string.documents_page_label, page.pageNumber, page.displayTitle(LocalContext.current)),
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,

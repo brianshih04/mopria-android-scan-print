@@ -42,7 +42,7 @@ class RealIntegrationProvider(
     )
 
     @Suppress("DEPRECATION")
-    override suspend fun discover(): List<IntegrationDevice> = withContext(Dispatchers.Main.immediate) {
+    override suspend fun discover(manualDeviceAddress: String?): List<IntegrationDevice> = withContext(Dispatchers.Main.immediate) {
         suspendCancellableCoroutine { continuation ->
             val devices = linkedMapOf<String, IntegrationDevice>()
             val startedListeners = mutableSetOf<NsdManager.DiscoveryListener>()
@@ -64,6 +64,14 @@ class RealIntegrationProvider(
                 finished = true
                 mainHandler.removeCallbacks(timeout)
                 stopDiscovery()
+                ManualDeviceAddress.candidates(manualDeviceAddress.orEmpty()).forEach { candidate ->
+                    val hasResolvedCandidate = devices.values.any { existing ->
+                        existing.kind == candidate.kind && existing.host.equals(candidate.host, ignoreCase = true)
+                    }
+                    if (!hasResolvedCandidate) {
+                        devices["manual:${candidate.kind}:${candidate.host}"] = candidate
+                    }
+                }
                 if (continuation.isActive) continuation.resume(devices.values.toList())
             }
 
@@ -175,6 +183,8 @@ class RealIntegrationProvider(
         }
     }
 
+    suspend fun discover(): List<IntegrationDevice> = discover(null)
+
     override suspend fun scan(
         scanner: IntegrationDevice,
         settings: ScanSettings,
@@ -197,14 +207,17 @@ class RealIntegrationProvider(
             location = jobLocation
             val jobUrl = EsclProtocol.scanJobUrl(baseUrl, jobLocation)
             awaitJobReady(baseUrl, jobUrl)
-            var reachedEnd = false
             val pageLimit = if (settings.inputSource == ScanInputSource.Flatbed) 1 else settings.maxPages.coerceIn(1, MAX_SCAN_PAGES)
             onProgress(ScanProgress(ScanProgressStage.Downloading, 0, pageLimit))
             pageLoop@
             for (index in 0 until pageLimit) {
                 currentCoroutineContext().ensureActive()
+                if (index > 0 && settings.inputSource == ScanInputSource.Adf) {
+                    delay(ADF_NEXT_DOCUMENT_DELAY_MS)
+                }
                 val temporaryFile = File(directory, "real-scan-$scanId-page-${index + 1}.part")
                 var interruptionRetries = 0
+                var notFoundRetries = 0
                 val payload: EsclDocumentPayload
                 while (true) {
                     val fetched = try {
@@ -215,7 +228,6 @@ class RealIntegrationProvider(
                     } catch (error: EsclNextDocumentTimeoutException) {
                         when (jobTransferState(baseUrl, jobUrl)) {
                             JobTransferState.Completed -> {
-                                reachedEnd = true
                                 break@pageLoop
                             }
                             JobTransferState.Active -> {
@@ -227,13 +239,22 @@ class RealIntegrationProvider(
                         }
                     } catch (error: EsclHttpException) {
                         if (error.statusCode == HTTP_GONE && jobTransferState(baseUrl, jobUrl) == JobTransferState.Completed) {
-                            reachedEnd = true
                             break@pageLoop
                         }
                         throw error
                     }
                     if (fetched == null) {
-                        reachedEnd = true
+                        val adfStillLoaded = settings.inputSource == ScanInputSource.Adf &&
+                            runCatching { httpClient.fetchScannerStatus(baseUrl).adfState }
+                                .getOrNull()
+                                ?.let { state ->
+                                    state.equals("ScannerAdfLoaded", true) || state.equals("ScannerAdfProcessing", true)
+                                } == true
+                        if (adfStillLoaded && notFoundRetries < NEXT_DOCUMENT_STATUS_RETRIES) {
+                            notFoundRetries += 1
+                            delay(ADF_NEXT_DOCUMENT_DELAY_MS)
+                            continue
+                        }
                         break@pageLoop
                     }
                     payload = fetched
@@ -253,11 +274,11 @@ class RealIntegrationProvider(
                 onProgress(ScanProgress(ScanProgressStage.Downloading, index + 1, pageLimit))
             }
 
-            if (reachedEnd || settings.inputSource == ScanInputSource.Flatbed || negotiated.numberOfPages != null) {
-                awaitJobCompletion(baseUrl, jobUrl)
-            } else {
-                httpClient.cancelScanJob(baseUrl, jobLocation)
-            }
+            // A number of MFPs, including the tested Brother firmware, keep the job in
+            // Processing after the final image has been transferred and only release it
+            // when the client deletes the job. Do not wait for a Completed state after
+            // all requested payloads are already local.
+            finishScanJob(baseUrl, jobUrl, jobLocation)
             jobFinished = true
 
             if (payloads.isEmpty()) throw ScanError.NoImages
@@ -356,7 +377,14 @@ class RealIntegrationProvider(
                 }
             }
                 .take(pageLimit)
-                .mapIndexed { index, page -> page.copy(pageNumber = index + 1, title = "Scanned page ${index + 1}") }
+                .mapIndexed { index, page ->
+                    page.copy(
+                        pageNumber = index + 1,
+                        title = "Scanned page ${index + 1}",
+                        generatedTitle = GeneratedPageTitle.Scanned,
+                        generatedTitleNumber = index + 1,
+                    )
+                }
 
             MopriaDocument(
                 id = "real-scan-$scanId",
@@ -370,6 +398,10 @@ class RealIntegrationProvider(
                 // Preserve the user's explicit request. Export validates that every page has an
                 // OCR result and reports an actionable error instead of silently writing a plain PDF.
                 searchablePdf = settings.searchablePdf && settings.ocrMode != OcrMode.Disabled,
+                documentSize = settings.documentSize,
+                actualScanSettingsReported = false,
+                generatedName = GeneratedDocumentName.Scanned,
+                generatedNameSuffix = scanId.toString().takeLast(4),
             )
         } catch (error: EsclHttpException) {
             if (!jobFinished && location != null) {
@@ -478,7 +510,7 @@ class RealIntegrationProvider(
             val pages = buildList {
                 try {
                     document.pages.forEachIndexed { index, page ->
-                        add(renderPageImage(document.id, index, page, format, extension, dpi))
+                        add(renderPageImage(document, index, page, format, extension, dpi))
                     }
                 } catch (error: Throwable) {
                     forEach(File::delete)
@@ -504,23 +536,24 @@ class RealIntegrationProvider(
     }
 
     private fun renderPageImage(
-        documentId: String,
+        document: MopriaDocument,
         index: Int,
         page: DocumentPage,
         format: String,
         extension: String,
         dpi: Int,
     ): File {
-        val renderSize = PrintRenderSizing.page(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT, PDF_MARGIN, dpi)
+        val pageSize = document.documentSize?.toPdfPageSize() ?: PdfPageSize(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT)
+        val renderSize = PrintRenderSizing.page(pageSize.widthPoints, pageSize.heightPoints, PDF_MARGIN, dpi)
         val source = decodePageBitmap(page, renderSize.contentWidthPixels, renderSize.contentHeightPixels)
             ?: throw PrintError.PageRenderFailed(index + 1, format)
         val output = createBitmap(renderSize.pageWidthPixels, renderSize.pageHeightPixels)
         try {
             val canvas = Canvas(output)
             canvas.drawColor(Color.WHITE)
-            PdfPageRenderer.drawFitted(canvas, source, renderSize.marginPixels.toFloat(), MAX_BITMAP_SCALE)
+            PdfPageRenderer.drawFitted(canvas, source, renderSize.marginPixels.toFloat())
             val compressFormat = if (format == IppDocumentFormat.JPEG) Bitmap.CompressFormat.JPEG else Bitmap.CompressFormat.PNG
-            val file = File(appContext.cacheDir, "ipp-print-$documentId-page-${index + 1}.$extension")
+            val file = File(appContext.cacheDir, "ipp-print-${document.id}-page-${index + 1}.$extension")
             try {
                 FileOutputStream(file).use { out ->
                     check(output.compress(compressFormat, IPP_IMAGE_QUALITY, out)) {
@@ -544,7 +577,8 @@ class RealIntegrationProvider(
      */
     private fun renderDocumentPdf(document: MopriaDocument, dpi: Int): File {
         val output = File(appContext.cacheDir, "ipp-print-${document.id}.pdf")
-        val renderSize = PrintRenderSizing.page(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT, PDF_MARGIN, dpi)
+        val pageSize = document.documentSize?.toPdfPageSize() ?: PdfPageSize(PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT)
+        val renderSize = PrintRenderSizing.page(pageSize.widthPoints, pageSize.heightPoints, PDF_MARGIN, dpi)
         try {
             FileOutputStream(output).use { out ->
                 PdfPageRenderer.writePdf(document, out) { canvas, _, page, pageNumber ->
@@ -563,7 +597,7 @@ class RealIntegrationProvider(
         val bitmap = decodePageBitmap(page, renderSize.contentWidthPixels, renderSize.contentHeightPixels)
             ?: throw PrintError.PageRenderFailed(pageNumber, IppDocumentFormat.PDF)
         try {
-            PdfPageRenderer.drawFitted(canvas, bitmap, PDF_MARGIN.toFloat(), MAX_BITMAP_SCALE)
+            PdfPageRenderer.drawFitted(canvas, bitmap, PDF_MARGIN.toFloat())
         } finally {
             bitmap.recycle()
         }
@@ -626,19 +660,11 @@ class RealIntegrationProvider(
         }
     }
 
-    private suspend fun awaitJobCompletion(baseUrl: String, jobUrl: String) {
-        repeat(JOB_STATUS_ATTEMPTS) {
-            val job = httpClient.fetchScannerStatus(baseUrl).jobFor(jobUrl)
-            when {
-                job == null -> return
-                job.state.equals("Completed", true) -> return
-                job.state.equals("Canceled", true) || job.state.equals("Aborted", true) -> {
-                    throw ScanError.JobAborted(job.state)
-                }
-            }
-            delay(JOB_STATUS_POLL_MS)
+    private fun finishScanJob(baseUrl: String, jobUrl: String, location: String) {
+        val state = runCatching { jobTransferState(baseUrl, jobUrl) }.getOrNull()
+        if (state == JobTransferState.Active) {
+            runCatching { httpClient.cancelScanJob(baseUrl, location) }
         }
-        throw ScanError.JobTimeout
     }
 
     private suspend fun awaitJobReady(baseUrl: String, jobUrl: String) {
@@ -694,11 +720,10 @@ class RealIntegrationProvider(
         const val PDF_PAGE_WIDTH = 612 // US Letter, points
         const val PDF_PAGE_HEIGHT = 792
         const val PDF_MARGIN = 36
-        const val MAX_BITMAP_SCALE = 1f
         const val IPP_IMAGE_QUALITY = 90
         const val JOB_READY_ATTEMPTS = 60
-        const val JOB_STATUS_ATTEMPTS = 120
         const val JOB_STATUS_POLL_MS = 500L
+        const val ADF_NEXT_DOCUMENT_DELAY_MS = 750L
         const val NEXT_DOCUMENT_STATUS_RETRIES = 3
         const val HTTP_GONE = 410
 

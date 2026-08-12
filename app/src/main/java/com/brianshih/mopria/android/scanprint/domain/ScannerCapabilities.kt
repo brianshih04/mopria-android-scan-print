@@ -10,6 +10,7 @@ package com.brianshih.mopria.android.scanprint.domain
 data class ScannerCapabilities(
     val supportedResolutions: Set<Int> = setOf(150, 300, 600),
     val supportedSources: Set<ScanInputSource> = ScanInputSource.entries.toSet(),
+    val supportedAdfModes: Set<ScanAdfMode> = ScanAdfMode.entries.toSet(),
     val supportedColorModes: Set<ScanColorMode> = ScanColorMode.entries.toSet(),
     val maxAdfPages: Int = 50,
 ) {
@@ -32,6 +33,10 @@ data class ScannerCapabilities(
             ?: ScanInputSource.Flatbed.takeIf(supportedSources::contains)
             ?: supportedSources.firstOrNull()
             ?: settings.inputSource
+        val adfMode = settings.adfMode.takeIf(supportedAdfModes::contains)
+            ?: ScanAdfMode.Simplex.takeIf(supportedAdfModes::contains)
+            ?: supportedAdfModes.firstOrNull()
+            ?: settings.adfMode
         val requestedOcr = settings.ocrMode != OcrMode.Disabled
         val ocrMode = if (requestedOcr && ocrResolutions.isNotEmpty()) settings.ocrMode else OcrMode.Disabled
         val colorMode = if (ocrMode != OcrMode.Disabled && ScanColorMode.Grayscale in supportedColorModes) {
@@ -42,6 +47,7 @@ data class ScannerCapabilities(
             ?: settings.colorMode
         return settings.copy(
             inputSource = source,
+            adfMode = adfMode,
             resolutionDpi = resolution,
             colorMode = colorMode,
             maxPages = settings.maxPages.coerceIn(1, maxAdfPages.coerceAtLeast(1)),
@@ -78,9 +84,17 @@ data class ScannerCapabilities(
                 }
                 if (isEmpty()) addAll(ScanColorMode.entries)
             }
+            val hasFeeder = escl.inputSources.any { it.equals("Feeder", true) }
+            val adfModes = buildSet {
+                if (hasFeeder && (escl.adfSimplexInput != null || escl.adfDuplexInput == null)) {
+                    add(ScanAdfMode.Simplex)
+                }
+                if (escl.adfDuplexInput != null) add(ScanAdfMode.Duplex)
+            }
             return ScannerCapabilities(
                 supportedResolutions = resolutions,
                 supportedSources = sources,
+                supportedAdfModes = adfModes,
                 supportedColorModes = colorModes,
             )
         }

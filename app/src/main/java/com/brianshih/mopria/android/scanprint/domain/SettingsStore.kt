@@ -28,6 +28,14 @@ class SettingsStore(context: Context) {
     fun savePrintMethod(method: PrintMethod) =
         preferences.edit { putString(KEY_PRINT_METHOD, method.name) }
 
+    fun loadManualDeviceAddress(): String = preferences
+        .getString(KEY_MANUAL_DEVICE_ADDRESS, "")
+        ?.trim()
+        .orEmpty()
+
+    fun saveManualDeviceAddress(address: String) =
+        preferences.edit { putString(KEY_MANUAL_DEVICE_ADDRESS, address.trim()) }
+
     fun loadScanPreset(): ScanPreset = preferences
         .getString(KEY_SCAN_PRESET, ScanPreset.Document.name)
         ?.let { value -> runCatching { ScanPreset.valueOf(value) }.getOrDefault(ScanPreset.Document) }
@@ -42,6 +50,12 @@ class SettingsStore(context: Context) {
         inputSource = preferences.getString(KEY_SCAN_INPUT_SOURCE, defaults.inputSource.name)
             ?.let { value -> runCatching { ScanInputSource.valueOf(value) }.getOrDefault(ScanInputSource.Flatbed) }
             ?: defaults.inputSource,
+        adfMode = preferences.getString(KEY_SCAN_ADF_MODE, defaults.adfMode.name)
+            ?.let { value -> runCatching { ScanAdfMode.valueOf(value) }.getOrDefault(ScanAdfMode.Simplex) }
+            ?: defaults.adfMode,
+        documentSize = preferences.getString(KEY_SCAN_DOCUMENT_SIZE, defaults.documentSize.name)
+            ?.let { value -> runCatching { ScanDocumentSize.valueOf(value) }.getOrDefault(defaults.documentSize) }
+            ?: defaults.documentSize,
         resolutionDpi = preferences.getInt(KEY_SCAN_RESOLUTION, defaults.resolutionDpi)
             .takeIf { it in MIN_SCAN_RESOLUTION..MAX_SCAN_RESOLUTION }
             ?: defaults.resolutionDpi,
@@ -67,6 +81,8 @@ class SettingsStore(context: Context) {
 
     fun saveScanSettings(settings: ScanSettings) = preferences.edit {
         putString(KEY_SCAN_INPUT_SOURCE, settings.inputSource.name)
+        putString(KEY_SCAN_ADF_MODE, settings.adfMode.name)
+        putString(KEY_SCAN_DOCUMENT_SIZE, settings.documentSize.name)
         putInt(KEY_SCAN_RESOLUTION, settings.resolutionDpi)
         putString(KEY_SCAN_COLOR_MODE, settings.colorMode.name)
         putInt(KEY_SCAN_MAX_PAGES, settings.maxPages.coerceIn(MIN_SCAN_PAGES, MAX_SCAN_PAGES))
@@ -111,7 +127,10 @@ class SettingsStore(context: Context) {
         const val PREFERENCES_NAME = "mopria_settings"
         const val KEY_INTEGRATION_MODE = "integration_mode"
         const val KEY_PRINT_METHOD = "print_method"
+        const val KEY_MANUAL_DEVICE_ADDRESS = "manual_device_address"
         const val KEY_SCAN_INPUT_SOURCE = "scan_input_source"
+        const val KEY_SCAN_ADF_MODE = "scan_adf_mode"
+        const val KEY_SCAN_DOCUMENT_SIZE = "scan_document_size"
         const val KEY_SCAN_RESOLUTION = "scan_resolution"
         const val KEY_SCAN_COLOR_MODE = "scan_color_mode"
         const val KEY_SCAN_MAX_PAGES = "scan_max_pages"

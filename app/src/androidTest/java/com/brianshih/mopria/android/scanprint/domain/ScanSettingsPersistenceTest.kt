@@ -52,6 +52,34 @@ class ScanSettingsPersistenceTest {
     }
 
     @Test
+    fun originalSizePersists() {
+        val store = SettingsStore(context)
+        store.saveScanSettings(ScanSettings(documentSize = ScanDocumentSize.Photo5x7))
+
+        assertEquals(ScanDocumentSize.Photo5x7, store.loadScanSettings().documentSize)
+    }
+
+    @Test
+    fun adfDuplexModePersists() {
+        val store = SettingsStore(context)
+        store.saveScanSettings(
+            ScanSettings(inputSource = ScanInputSource.Adf, adfMode = ScanAdfMode.Duplex),
+        )
+
+        val loaded = store.loadScanSettings()
+        assertEquals(ScanInputSource.Adf, loaded.inputSource)
+        assertEquals(ScanAdfMode.Duplex, loaded.adfMode)
+    }
+
+    @Test
+    fun manualDeviceAddressPersists() {
+        val store = SettingsStore(context)
+        store.saveManualDeviceAddress(" 10.1.121.175 ")
+
+        assertEquals("10.1.121.175", store.loadManualDeviceAddress())
+    }
+
+    @Test
     fun imagePipelineAndOcrOptionsPersist() {
         val store = SettingsStore(context)
         val selectedLanguages = setOf(OcrLanguagePack.English, OcrLanguagePack.Japanese)

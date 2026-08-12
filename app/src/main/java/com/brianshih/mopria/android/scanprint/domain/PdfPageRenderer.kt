@@ -28,9 +28,14 @@ object PdfPageRenderer {
      */
     fun writePdf(document: MopriaDocument, output: OutputStream, decoratePage: PageDecorator) {
         val pdf = PdfDocument()
+        val pageSize = document.documentSize?.toPdfPageSize() ?: PdfPageSize(PAGE_WIDTH, PAGE_HEIGHT)
         try {
             document.pages.forEachIndexed { index, page ->
-                val info = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, index + 1).create()
+                val info = PdfDocument.PageInfo.Builder(
+                    pageSize.widthPoints,
+                    pageSize.heightPoints,
+                    index + 1,
+                ).create()
                 val pdfPage = pdf.startPage(info)
                 decoratePage.decorate(pdfPage.canvas, document, page, index + 1)
                 pdf.finishPage(pdfPage)

@@ -61,7 +61,7 @@ internal object DocumentPageBitmapLoader {
         else -> ParcelFileDescriptor.open(File(path), ParcelFileDescriptor.MODE_READ_ONLY)
     }
 
-    private fun applyPageEdits(bitmap: Bitmap, page: DocumentPage): Bitmap {
+    internal fun applyPageEdits(bitmap: Bitmap, page: DocumentPage): Bitmap {
         var edited = bitmap
         page.cropRect?.let { crop ->
             val left = (crop.left * edited.width).roundToInt().coerceIn(0, edited.width - 1)

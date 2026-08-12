@@ -1,6 +1,7 @@
 package com.brianshih.mopria.android.scanprint.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -55,6 +57,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.brianshih.mopria.android.scanprint.R
@@ -63,6 +66,7 @@ import com.brianshih.mopria.android.scanprint.domain.PrintMethod
 import com.brianshih.mopria.android.scanprint.domain.JobKind
 import com.brianshih.mopria.android.scanprint.domain.JobRecord
 import com.brianshih.mopria.android.scanprint.domain.JobStatus
+import com.brianshih.mopria.android.scanprint.domain.ManualDeviceAddress
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
 import com.brianshih.mopria.android.scanprint.domain.OcrLanguagePack
 import com.brianshih.mopria.android.scanprint.domain.OcrLanguageModel
@@ -125,7 +129,7 @@ private fun JobHistoryCard(job: JobRecord) {
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(job.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(stringResource(job.kind.labelRes), style = MaterialTheme.typography.titleMedium, maxLines = 1)
                     Text(
                         "${stringResource(job.kind.labelRes)} · ${formatTime(job.createdAt)}",
                         style = MaterialTheme.typography.bodySmall,
@@ -135,7 +139,11 @@ private fun JobHistoryCard(job: JobRecord) {
                 JobStatusPill(job.status)
             }
             Text(
-                job.detail ?: job.targetLabel,
+                if (job.status == JobStatus.Running || job.status == JobStatus.Queued) {
+                    job.detail ?: job.targetLabel
+                } else {
+                    stringResource(job.status.labelRes)
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -181,6 +189,7 @@ internal fun SettingsScreen(
     uiState: MopriaUiState,
     onModeChanged: (IntegrationMode) -> Unit,
     onPrintMethodChanged: (PrintMethod) -> Unit,
+    onManualDeviceAddressChanged: (String) -> Unit,
     onFindDevices: () -> Unit,
     selectedLanguage: AppLanguage,
     onLanguageChanged: (AppLanguage) -> Unit,
@@ -221,6 +230,42 @@ internal fun SettingsScreen(
             }
         }
         if (!uiState.mockMode) {
+            item {
+                val manualAddressInvalid = uiState.manualDeviceAddress.isNotBlank() &&
+                    ManualDeviceAddress.normalize(uiState.manualDeviceAddress) == null
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        stringResource(R.string.settings_manual_device_title),
+                        style = MaterialTheme.typography.headlineSmall,
+                    )
+                    Text(
+                        stringResource(R.string.settings_manual_device_description),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    OutlinedTextField(
+                        value = uiState.manualDeviceAddress,
+                        onValueChange = onManualDeviceAddressChanged,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !uiState.isBusy,
+                        singleLine = true,
+                        isError = manualAddressInvalid,
+                        label = { Text(stringResource(R.string.settings_manual_device_address)) },
+                        placeholder = { Text(stringResource(R.string.settings_manual_device_placeholder)) },
+                        supportingText = {
+                            Text(
+                                stringResource(
+                                    if (manualAddressInvalid) {
+                                        R.string.settings_manual_device_invalid
+                                    } else {
+                                        R.string.settings_manual_device_hint
+                                    },
+                                ),
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    )
+                }
+            }
             item {
                 Text(stringResource(R.string.print_method_title), style = MaterialTheme.typography.headlineSmall)
             }

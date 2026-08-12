@@ -19,7 +19,7 @@ class EsclHttpClientTest {
         val sleeps = mutableListOf<Long>()
         var receivedSettings = ""
         var receivedContentType = ""
-        var receivedTe = ""
+        var receivedConnection = ""
         var nextDocumentRequests = 0
         var cancelRequests = 0
         val imageBytes = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xD9.toByte())
@@ -33,7 +33,7 @@ class EsclHttpClientTest {
         }
         server.createContext("/custom/ScanJobs/test-job/NextDocument") { exchange ->
             nextDocumentRequests += 1
-            receivedTe = exchange.requestHeaders.getFirst("TE").orEmpty()
+            receivedConnection = exchange.requestHeaders.getFirst("Connection").orEmpty()
             if (nextDocumentRequests == 1) {
                 exchange.responseHeaders.add("Retry-After", "2")
                 respond(exchange, 503, "text/plain", "busy")
@@ -70,7 +70,7 @@ class EsclHttpClientTest {
             val payload = client.fetchNextDocument(EsclProtocol.nextDocumentUrl(baseUrl, location), downloadedPage)
             assertArrayEquals(imageBytes, payload?.file?.readBytes())
             assertEquals("image/jpeg", payload?.contentType)
-            assertEquals("chunked", receivedTe)
+            assertTrue(receivedConnection.equals("close", ignoreCase = true))
             assertEquals(listOf(2_000L), sleeps)
             client.cancelScanJob(baseUrl, location)
             assertEquals(1, cancelRequests)

@@ -1,7 +1,7 @@
 package com.brianshih.mopria.android.scanprint.domain
 
 interface DeviceDiscovery {
-    suspend fun discover(): List<IntegrationDevice>
+    suspend fun discover(manualDeviceAddress: String? = null): List<IntegrationDevice>
 }
 
 interface ScanAcquisitionProvider {

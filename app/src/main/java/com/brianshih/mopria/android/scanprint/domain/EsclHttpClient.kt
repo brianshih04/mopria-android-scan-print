@@ -37,7 +37,7 @@ class EsclNextDocumentTimeoutException(
 /** Bounded eSCL HTTP transport with secure redirect and Retry-After policy. */
 class EsclHttpClient(
     private val connectTimeoutMs: Int = 8_000,
-    private val readTimeoutMs: Int = 30_000,
+    private val readTimeoutMs: Int = 120_000,
     private val maxRetries: Int = 4,
     private val sleeper: (Long) -> Unit = Thread::sleep,
 ) {
@@ -79,7 +79,10 @@ class EsclHttpClient(
         while (true) {
             val connection = openConnection(currentUrl, "GET").apply {
                 setRequestProperty("Accept", "image/jpeg, application/pdf, image/png, application/octet-stream")
-                setRequestProperty("TE", "chunked")
+                // Some MFP firmware misinterprets an explicit request-side TE header on
+                // NextDocument. The response may still be chunked; HttpURLConnection
+                // handles that framing without asking the device to use it for the request.
+                setRequestProperty("Connection", "close")
             }
             var retryDelay: Long? = null
             try {

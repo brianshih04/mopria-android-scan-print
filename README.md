@@ -2,7 +2,7 @@
 
 Kotlin／Jetpack Compose Android App，透過 eSCL（AirScan）掃描文件，並可透過 Android Print Framework 或實驗性的 Direct IPP 列印手機檔案與掃描結果。專案目前版本為 `0.1.0`，`minSdk 28`、`targetSdk 36`。
 
-> 目前狀態（2026-08-11）：`main` 已包含 Mock／Real、eSCL pull scan、Flatbed／ADF、多頁文件、OpenCV file-first 影像處理（deskew／auto-crop／blank-page drop／背景淨化）、Google ML Kit Text Recognition v2、opt-in Searchable PDF、PDF／JPEG 文件庫、Android 系統列印、opt-in Direct IPP、10 種語言 UI、Dark Mode、文件／Flatbed／OCR layout 持久化與暫存檔清理。163 個 JVM tests、28 個 API 36 instrumentation tests、lint、debug／release APK、AAB 與 zipalign 已在本機通過；GitHub Actions 同一版因 Linux runner 無法執行 `./gradlew`（exit 127）而尚未恢復綠燈。真實 scanner／printer、ARM ML Kit accuracy／PSS、16 KB 與多語字型 coverage 仍是外部 gate。
+> 目前狀態（2026-08-12）：`main` 已包含 Mock／Real、eSCL pull scan、Flatbed／ADF、多頁文件、OpenCV file-first 影像處理（deskew／auto-crop／blank-page drop／背景淨化）、Google ML Kit Text Recognition v2、opt-in Searchable PDF、PDF／JPEG 文件庫、Android 系統列印、opt-in Direct IPP、10 種語言 UI、Dark Mode、文件／Flatbed／OCR layout 持久化與暫存檔清理。最新產品測試修正已涵蓋 System Print Activity context、選定原稿尺寸對應輸出紙張、Direct IPP 額外縮小、options sheet inset、endpoint health check 與 Mock 編輯輸出；實際測試數量以當次 Gradle 輸出為準。GitHub Actions 仍須確認 Linux wrapper 修正後才可宣稱綠燈。Brother eSCL ADF 互通、跨品牌真實 scanner／printer、ARM ML Kit accuracy／PSS、16 KB 與多語字型 coverage 仍是外部 gate。
 
 ## Android／Mopria 技術邊界
 
@@ -28,9 +28,10 @@ Android 沒有一個同時提供 Mopria 掃描與列印的公開「Mopria API」
   - 最多累積 50 頁，完成後匯出為單一 multi-page PDF。
 - ADF：
   - 使用者可設定 1–50 頁上限，不再使用固定值。
+  - ADF 模式顯示單面／雙面選項；Real 模式依 `AdfSimplexInputCaps`／`AdfDuplexInputCaps` 啟用可用模式，不支援的雙面選項會停用並說明原因。
   - 開啟「合併為多頁 PDF」時建立一份多頁文件並匯出單一 PDF。
   - 關閉時將 ADF 頁面拆成個別單頁文件。
-- 掃描可設定 Flatbed／ADF、150／300／600 dpi、彩色／灰階／黑白；真實模式會依設備 capability 動態過濾可用選項並選擇最接近且有效的組合。
+- 掃描可設定 Flatbed／ADF、常用文件／相片原稿尺寸、150／300／600 dpi、彩色／灰階／黑白；真實模式會依設備 capability 動態過濾可用選項並選擇最接近且有效的組合。掃描器未回報實際輸出設定時，文件會明確將這些值標為 requested settings。
 - 文件庫顯示實際 JPEG、PNG 或 PDF-backed 頁面縮圖，可放大預覽。
 - 文件可輸出 PDF／JPEG、透過 Android Sharesheet 分享、直接送往系統列印預覽，或刪除（同時清除原始掃描暫存檔）。
 - 掃描文件與 Flatbed 多頁 session 會持久化至內部儲存，App 被系統殺掉後可恢復。
@@ -75,6 +76,7 @@ OCR 語言選項是獨立於 App UI 語系的設定。預設只選取 English、
 - 依 Platen／Feeder 各自的 `SettingProfile`、`ref`、色彩、格式、離散解析度與 X/Y range 協商設定。
 - eSCL 2.1+ 使用 `DocumentFormatExt`；2.0 相容設備才使用 legacy `DocumentFormat`。
 - ADF 使用規格值 `Feeder`；設備支援 `SelectSinglePage` 時送出使用者設定的 `NumberOfPages`。
+- 分別解析 `AdfSimplexInputCaps` 與 `AdfDuplexInputCaps`；雙面工作使用 duplex profile 協商並送出 `scan:Duplex=true`。目前只完成自動測試與 capability UI 驗證，尚未以支援雙面 ADF 的實體 MFP 驗收。
 - 探索 `_uscan._tcp` 與 `_uscans._tcp`，解析 TXT `rs`、`uuid`、`vers`、`ty`、`pdl`，驗證 resource root 並優先保留同一設備的安全服務。
 - 支援設備自訂 eSCL resource root、IPv4 與具 scope 的 IPv6 host。
 - 建立工作要求 `201 Created` 與 `Location`；工作 URL 只允許同一 host／root 與 HTTP→HTTPS 升級。
@@ -83,7 +85,7 @@ OCR 語言選項是獨立於 App UI 語系的設定。預設只選取 English、
 - 接受 JPEG、PDF、PNG，並比對 MIME type 與檔案 signature；PDF 以 `PdfRenderer` 對應實際頁數。
 - HTTPS 使用 Android 系統 trust store，不使用 trust-all；TLS provider 必須具備 TLS 1.3。
 
-刻意未宣稱的範圍：Push Scan、Stored Job Requests、ML Kit 實機模型下載／辨識準確率、多語字型完整覆蓋率、無 Google Play services 環境的替代 OCR、加密 PDF request、ScanBufferInfo、ADF duplex UI、使用者認證輸入、手動 IP／URL、Mopria 認證（直接 IPP 列印已接線為 Real 模式的 opt-in 選項，預設系統列印，尚未以實體印表機驗證，見 `IppPrintClient` 與「下一階段」）。`426` 可升級為同 host HTTPS；同一 TCP connection 內的 RFC 2817 raw Upgrade 不在目前支援範圍。
+刻意未宣稱的範圍：Push Scan、Stored Job Requests、ML Kit 實機模型下載／辨識準確率、多語字型完整覆蓋率、無 Google Play services 環境的替代 OCR、加密 PDF request、ScanBufferInfo、ADF duplex 實機相容性、使用者認證輸入、手動 IP／URL、Mopria 認證（直接 IPP 列印已接線為 Real 模式的 opt-in 選項，預設系統列印，尚未以實體印表機驗證，見 `IppPrintClient` 與「下一階段」）。`426` 可升級為同 host HTTPS；同一 TCP connection 內的 RFC 2817 raw Upgrade 不在目前支援範圍。
 
 Mopria 規格 PDF 是本機、受限制的研究來源，不會複製到此 repository。公開參考入口：[Mopria eSCL Specification](https://mopria.org/mopria-escl-specification)。
 
@@ -154,7 +156,7 @@ MopriaAndroidScanPrint/
 | `LanguageManager.kt` | 系統語系偵測、10 種語言手動覆寫與 English fallback。 |
 | `MopriaViewModel.kt` | 模式切換、discovery、scan、文件儲存、匯出、分享與列印狀態協調。 |
 | `HomeScreen.kt` | 首頁掃描、列印、裝置與最近工作卡片。 |
-| `ScanScreen.kt` | Flatbed／ADF、dpi、色彩、ADF 頁數上限與 PDF 合併設定。 |
+| `ScanScreen.kt` | Flatbed／ADF、ADF 單雙面、dpi、色彩、頁數上限與 PDF 合併設定。 |
 | `DocumentsScreen.kt` | 文件縮圖／預覽，以及列印、分享、PDF、JPEG 操作。 |
 | `PrintScreen.kt`、`PrintOptionsSheet.kt` | 手機文件列印入口、系統／Direct IPP 路徑及 capability-constrained 列印選項。 |
 | `SupportScreens.kt` | 工作紀錄與設定頁面。 |

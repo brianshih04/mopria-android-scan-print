@@ -48,7 +48,9 @@ import androidx.compose.ui.unit.dp
 import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
 import com.brianshih.mopria.android.scanprint.domain.OcrMode
+import com.brianshih.mopria.android.scanprint.domain.ScanAdfMode
 import com.brianshih.mopria.android.scanprint.domain.ScanColorMode
+import com.brianshih.mopria.android.scanprint.domain.ScanDocumentSize
 import com.brianshih.mopria.android.scanprint.domain.ScanPreset
 import com.brianshih.mopria.android.scanprint.domain.ScanInputSource
 import com.brianshih.mopria.android.scanprint.domain.ScanSettings
@@ -205,7 +207,17 @@ private fun ScanComposerCard(
         settings.resolutionDpi,
         stringResource(settings.colorMode.labelRes),
     )
+    summary = stringResource(
+        R.string.scan_summary_size,
+        summary,
+        stringResource(settings.documentSize.labelRes),
+    )
     if (settings.inputSource == ScanInputSource.Adf) {
+        summary = stringResource(
+            R.string.scan_summary_adf_mode,
+            summary,
+            stringResource(settings.adfMode.labelRes),
+        )
         summary = stringResource(R.string.scan_summary_adf_pages, summary, settings.maxPages)
     }
     if (settings.combineAsPdf) summary = stringResource(R.string.scan_summary_pdf, summary)
@@ -252,6 +264,72 @@ private fun ScanComposerCard(
                         maxPages = settings.maxPages,
                         onClick = { onChanged(settings.copy(inputSource = source)) },
                     )
+                }
+            }
+
+            if (settings.inputSource == ScanInputSource.Adf) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.scan_adf_sides), style = MaterialTheme.typography.labelLarge)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ScanAdfMode.entries.forEach { mode ->
+                            FilterChip(
+                                selected = settings.adfMode == mode,
+                                onClick = { onChanged(settings.copy(adfMode = mode)) },
+                                enabled = enabled && mode in caps.supportedAdfModes,
+                                label = { Text(stringResource(mode.labelRes)) },
+                            )
+                        }
+                    }
+                    if (ScanAdfMode.Duplex !in caps.supportedAdfModes) {
+                        Text(
+                            stringResource(R.string.scan_adf_duplex_unsupported),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.scan_size), style = MaterialTheme.typography.labelLarge)
+                Text(
+                    stringResource(R.string.scan_size_documents),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        ScanDocumentSize.Auto,
+                        ScanDocumentSize.A4,
+                        ScanDocumentSize.Letter,
+                        ScanDocumentSize.A5,
+                    ).forEach { size ->
+                        FilterChip(
+                            selected = settings.documentSize == size,
+                            onClick = { onChanged(settings.copy(documentSize = size)) },
+                            enabled = enabled,
+                            label = { Text(stringResource(size.labelRes)) },
+                        )
+                    }
+                }
+                Text(
+                    stringResource(R.string.scan_size_photos),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        ScanDocumentSize.Photo4x6,
+                        ScanDocumentSize.Photo5x7,
+                        ScanDocumentSize.Photo8x10,
+                    ).forEach { size ->
+                        FilterChip(
+                            selected = settings.documentSize == size,
+                            onClick = { onChanged(settings.copy(documentSize = size)) },
+                            enabled = enabled,
+                            label = { Text(stringResource(size.labelRes)) },
+                        )
+                    }
                 }
             }
 

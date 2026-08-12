@@ -38,6 +38,8 @@ class DocumentStore(context: Context) {
                 page.pdfPath?.let { pageJson.put("pdfPath", it) }
                 page.pdfPageIndex?.let { pageJson.put("pdfPageIndex", it) }
                 pageJson.put("rotationDegrees", page.rotationDegrees)
+                page.generatedTitle?.let { pageJson.put("generatedTitle", it.name) }
+                page.generatedTitleNumber?.let { pageJson.put("generatedTitleNumber", it) }
                 page.cropRect?.let { crop ->
                     pageJson.put(
                         "cropRect",
@@ -64,6 +66,10 @@ class DocumentStore(context: Context) {
             docJson.put("createdAt", doc.createdAt)
             docJson.put("pages", pagesArray)
             docJson.put("searchablePdf", doc.searchablePdf)
+            doc.documentSize?.let { docJson.put("documentSize", it.name) }
+            docJson.put("actualScanSettingsReported", doc.actualScanSettingsReported)
+            doc.generatedName?.let { docJson.put("generatedName", it.name) }
+            doc.generatedNameSuffix?.let { docJson.put("generatedNameSuffix", it) }
             doc.exportedPath?.let { docJson.put("exportedPath", it) }
             docsArray.put(docJson)
         }
@@ -106,6 +112,10 @@ class DocumentStore(context: Context) {
                         ocrResult = p.optString("ocrResultFile")
                             .takeIf(String::isNotBlank)
                             ?.let(::readOcrSidecar),
+                        generatedTitle = p.optString("generatedTitle")
+                            .takeIf(String::isNotBlank)
+                            ?.let { name -> GeneratedPageTitle.entries.firstOrNull { it.name == name } },
+                        generatedTitleNumber = p.optInt("generatedTitleNumber", -1).takeIf { it >= 0 },
                     )
                 }
                 MopriaDocument(
@@ -117,6 +127,14 @@ class DocumentStore(context: Context) {
                     exportedPath = d.optString("exportedPath").takeIf { it.isNotBlank() },
                     ocrResults = pages.mapNotNull(DocumentPage::ocrResult),
                     searchablePdf = d.optBoolean("searchablePdf", false),
+                    documentSize = d.optString("documentSize")
+                        .takeIf(String::isNotBlank)
+                        ?.let { name -> ScanDocumentSize.entries.firstOrNull { it.name == name } },
+                    actualScanSettingsReported = d.optBoolean("actualScanSettingsReported", true),
+                    generatedName = d.optString("generatedName")
+                        .takeIf(String::isNotBlank)
+                        ?.let { name -> GeneratedDocumentName.entries.firstOrNull { it.name == name } },
+                    generatedNameSuffix = d.optString("generatedNameSuffix").takeIf(String::isNotBlank),
                 )
             }
             // Filter out documents whose files no longer exist on disk (stale entries from a previous run).

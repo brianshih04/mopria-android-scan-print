@@ -13,6 +13,8 @@ class EsclProtocolTest {
         assertEquals("2.97", capabilities.version)
         assertEquals(listOf("Platen", "Feeder"), capabilities.inputSources)
         assertTrue(capabilities.inputs.getValue("Feeder").selectSinglePage)
+        assertTrue(capabilities.adfSimplexInput != null)
+        assertTrue(capabilities.adfDuplexInput != null)
 
         val platen = EsclProtocol.negotiate(
             capabilities,
@@ -29,6 +31,26 @@ class EsclProtocolTest {
         assertEquals("Feeder", adf.inputSource)
         assertEquals("application/pdf", adf.documentFormat)
         assertEquals(20, adf.numberOfPages)
+        assertEquals(false, adf.duplex)
+    }
+
+    @Test
+    fun negotiatesAdvertisedAdfDuplexProfile() {
+        val capabilities = EsclProtocol.parseCapabilities(CAPABILITIES_XML)
+
+        val negotiated = EsclProtocol.negotiate(
+            capabilities,
+            ScanSettings(
+                inputSource = ScanInputSource.Adf,
+                adfMode = ScanAdfMode.Duplex,
+                resolutionDpi = 300,
+                colorMode = ScanColorMode.Grayscale,
+            ),
+        )
+
+        assertEquals("Feeder", negotiated.inputSource)
+        assertEquals(true, negotiated.duplex)
+        assertEquals("application/pdf", negotiated.documentFormat)
     }
 
     @Test
@@ -152,7 +174,24 @@ class EsclProtocolTest {
         assertTrue(xml.contains("<pwg:InputSource>Feeder</pwg:InputSource>"))
         assertTrue(xml.contains("<scan:DocumentFormatExt>application/pdf</scan:DocumentFormatExt>"))
         assertTrue(xml.contains("<scan:NumberOfPages>20</scan:NumberOfPages>"))
+        assertTrue(!xml.contains("<scan:Duplex>"))
         assertTrue(!xml.contains("<scan:InputSource>"))
+    }
+
+    @Test
+    fun emitsDuplexOnlyWhenRequested() {
+        val xml = EsclProtocol.buildScanSettings(
+            EsclNegotiatedSettings(
+                version = "2.97",
+                inputSource = "Feeder",
+                documentFormat = "image/jpeg",
+                resolution = 300,
+                colorMode = "RGB24",
+                duplex = true,
+            ),
+        )
+
+        assertTrue(xml.contains("<scan:Duplex>true</scan:Duplex>"))
     }
 
     @Test
@@ -183,6 +222,19 @@ class EsclProtocolTest {
         )
         assertTrue(xml.contains("<scan:XResolution>300</scan:XResolution>"))
         assertTrue(xml.contains("<scan:YResolution>600</scan:YResolution>"))
+    }
+
+    @Test
+    fun emitsRequestedPhotoScanRegion() {
+        val xml = EsclProtocol.buildScanSettings(
+            ScanSettings(documentSize = ScanDocumentSize.Photo4x6),
+        )
+
+        assertTrue(xml.contains("<scan:Intent>Photo</scan:Intent>"))
+        assertTrue(xml.contains("<pwg:ScanRegions>"))
+        assertTrue(xml.contains("<pwg:Width>1200</pwg:Width>"))
+        assertTrue(xml.contains("<pwg:Height>1800</pwg:Height>"))
+        assertTrue(xml.contains("<pwg:ContentRegionUnits>escl:ThreeHundredthsOfInches</pwg:ContentRegionUnits>"))
     }
 
     @Test
@@ -293,6 +345,7 @@ class EsclProtocolTest {
                 </scan:ResolutionRange></scan:SupportedResolutions>
               </scan:SettingProfile></scan:SettingProfiles></scan:PlatenInputCaps></scan:Platen>
               <scan:Adf><scan:AdfSimplexInputCaps><scan:SettingProfiles><scan:SettingProfile ref="document-profile"/></scan:SettingProfiles></scan:AdfSimplexInputCaps>
+                <scan:AdfDuplexInputCaps><scan:SettingProfiles><scan:SettingProfile ref="document-profile"/></scan:SettingProfiles></scan:AdfDuplexInputCaps>
                 <scan:AdfOptions><scan:AdfOption>SelectSinglePage</scan:AdfOption></scan:AdfOptions>
               </scan:Adf>
             </scan:ScannerCapabilities>

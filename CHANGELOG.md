@@ -2,7 +2,25 @@
 
 本專案依 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 的概念記錄重要變更；GitHub Release `v0.1.0` 已建立，目前合併後續變更記錄在 Unreleased。
 
-## [Unreleased] - 2026-08-11
+## [Unreleased] - 2026-08-12
+
+### Fixed — Product Test Follow-up
+
+- System Print 現在以保留 Activity identity 的 locale override 啟動 `PrintManager`；API 36 實際回歸已可開啟 Android Print Spooler 預覽，不再出現 `Can print only from an activity`。
+- 掃描文件保存選定的原稿尺寸；一般 PDF、Searchable PDF、Direct IPP PDF／JPEG／PNG／PWG-Raster／PCLm 與 System Print 預設 media 改依 A4、Letter、A5 或常用相片尺寸輸出，舊文件與 Auto 維持 Letter fallback。
+- Direct IPP 點陣頁不再限制來源只能以 1:1 pixel scale 繪製，避免低於目標 print canvas 時產生額外縮小；實體 Brother 輸出尺寸仍需重測。
+- Direct IPP options sheet 的動作列固定在可捲動選項之外並避開 navigation bar，補上 instrumentation bounds regression。
+- Real mode discovery 會以 scanner capabilities／IPP attributes 做 endpoint health check，不再把只靠手動地址建立但無回應的候選顯示為 Ready。
+- 普通 PDF metadata 改用相對頁面座標分隔 title、source 與 page number；Mock fallback 頁也會套用 crop／rotation，編輯過的 JPEG 不再直接複製未編輯原檔。
+- Real 掃描器沒有回報實際輸出設定時，文件明確標示目前值是 requested settings；不再暗示 Brother 已採用要求的 region／dpi／color。
+- 產生的 Mock／Real／Flatbed 文件名稱與頁名改保存語意 key，顯示與匯出時依目前語系解析；完成後的 History 摘要也使用目前語系的 job kind／status。
+
+### Added — ADF Simplex / Duplex Selection
+
+- `ScanSettings` 新增可持久化的 ADF 單面／雙面模式，ScanScreen 與首頁摘要同步顯示，並補齊 10 種語言。
+- eSCL capability parser 分別保留 `AdfSimplexInputCaps` 與 `AdfDuplexInputCaps`；雙面模式使用 duplex profile 協商，ScanJob 只在雙面時送出 `<scan:Duplex>true</scan:Duplex>`。
+- `ScannerCapabilities` 會停用設備未廣告的雙面選項並將舊設定安全調整回單面；Brother MFC-L2715DW 的 simplex-only capability 已於 emulator UI 驗證。這不代表實體雙面 ADF 相容性已通過。
+- 新增 duplex capability parsing、協商、XML、reconciliation 與 SharedPreferences instrumentation 測試。
 
 ### Added — OpenCV Background Cleanup Foundation
 

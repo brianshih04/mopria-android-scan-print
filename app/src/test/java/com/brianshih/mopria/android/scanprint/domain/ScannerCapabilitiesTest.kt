@@ -11,6 +11,7 @@ class ScannerCapabilitiesTest {
         val caps = ScannerCapabilities.DEFAULT
         assertEquals(setOf(150, 300, 600), caps.supportedResolutions)
         assertEquals(ScanInputSource.entries.toSet(), caps.supportedSources)
+        assertEquals(ScanAdfMode.entries.toSet(), caps.supportedAdfModes)
         assertEquals(ScanColorMode.entries.toSet(), caps.supportedColorModes)
     }
 
@@ -36,6 +37,21 @@ class ScannerCapabilitiesTest {
             EsclCapabilities(inputSources = listOf("Platen", "Feeder"))
         )
         assertEquals(setOf(ScanInputSource.Flatbed, ScanInputSource.Adf), caps.supportedSources)
+        assertEquals(setOf(ScanAdfMode.Simplex), caps.supportedAdfModes)
+    }
+
+    @Test
+    fun fromEsclMapsAdvertisedAdfDuplexMode() {
+        val duplexInput = EsclInputCapabilities("Feeder", emptyList())
+        val caps = ScannerCapabilities.fromEscl(
+            EsclCapabilities(
+                inputSources = listOf("Feeder"),
+                adfSimplexInput = EsclInputCapabilities("Feeder", emptyList()),
+                adfDuplexInput = duplexInput,
+            ),
+        )
+
+        assertEquals(ScanAdfMode.entries.toSet(), caps.supportedAdfModes)
     }
 
     @Test
@@ -75,6 +91,7 @@ class ScannerCapabilitiesTest {
         val caps = ScannerCapabilities(
             supportedResolutions = setOf(200, 400),
             supportedSources = setOf(ScanInputSource.Flatbed),
+            supportedAdfModes = setOf(ScanAdfMode.Simplex),
             supportedColorModes = setOf(ScanColorMode.Grayscale),
             maxAdfPages = 8,
         )
@@ -82,6 +99,7 @@ class ScannerCapabilitiesTest {
         val reconciled = caps.reconcile(
             ScanSettings(
                 inputSource = ScanInputSource.Adf,
+                adfMode = ScanAdfMode.Duplex,
                 resolutionDpi = 600,
                 colorMode = ScanColorMode.Color,
                 maxPages = 20,
@@ -90,6 +108,7 @@ class ScannerCapabilitiesTest {
         )
 
         assertEquals(ScanInputSource.Flatbed, reconciled.inputSource)
+        assertEquals(ScanAdfMode.Simplex, reconciled.adfMode)
         assertEquals(400, reconciled.resolutionDpi)
         assertEquals(ScanColorMode.Grayscale, reconciled.colorMode)
         assertEquals(8, reconciled.maxPages)
@@ -116,9 +135,15 @@ class ScannerCapabilitiesTest {
     @Test
     fun photoPresetDisablesEnhancement() {
         val photo = ScanPreset.Photo.defaultSettings(ScanSettings())
+        assertEquals(ScanDocumentSize.Photo4x6, photo.documentSize)
         assertEquals(600, photo.resolutionDpi)
         assertEquals(false, photo.combineAsPdf)
         assertEquals(null, photo.enhanceBackground)
+    }
+
+    @Test
+    fun documentPresetUsesA4OriginalSize() {
+        assertEquals(ScanDocumentSize.A4, ScanPreset.Document.defaultSettings(ScanSettings()).documentSize)
     }
 
     @Test

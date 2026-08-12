@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -29,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.brianshih.mopria.android.scanprint.R
@@ -50,57 +54,77 @@ fun PrintOptionsSheet(
 ) {
     val capabilities = prompt.capabilities
     var options by remember { mutableStateOf(prompt.options) }
+    val maximumSheetHeight = LocalConfiguration.current.screenHeightDp.dp * 0.9f
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
-        Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp).verticalScroll(rememberScrollState())) {
-            Text(stringResource(R.string.print_options_title), style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.width(16.dp))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = maximumSheetHeight)
+                .navigationBarsPadding(),
+        ) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+            ) {
+                Text(stringResource(R.string.print_options_title), style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.width(16.dp))
 
-            if (capabilities.copies.last > capabilities.copies.first) {
-                val copies = options.copies ?: capabilities.copies.first
-                val range = capabilities.copies.first.toFloat()..capabilities.copies.last.toFloat()
-                Text("${stringResource(R.string.print_options_copies)}: $copies")
-                Slider(
-                    value = copies.toFloat(),
-                    onValueChange = { options = options.copy(copies = it.toInt()) },
-                    valueRange = range,
-                    steps = (capabilities.copies.last - capabilities.copies.first - 1).coerceAtLeast(0),
-                )
-                Spacer(Modifier.width(12.dp))
+                if (capabilities.copies.last > capabilities.copies.first) {
+                    val copies = options.copies ?: capabilities.copies.first
+                    val range = capabilities.copies.first.toFloat()..capabilities.copies.last.toFloat()
+                    Text("${stringResource(R.string.print_options_copies)}: $copies")
+                    Slider(
+                        value = copies.toFloat(),
+                        onValueChange = { options = options.copy(copies = it.toInt()) },
+                        valueRange = range,
+                        steps = (capabilities.copies.last - capabilities.copies.first - 1).coerceAtLeast(0),
+                    )
+                    Spacer(Modifier.width(12.dp))
+                }
+
+                if (capabilities.colorModes.isNotEmpty()) {
+                    OptionRow(R.string.print_options_color, capabilities.colorModes, options.colorMode) {
+                        options = options.copy(colorMode = it)
+                    }
+                }
+                if (capabilities.sides.isNotEmpty()) {
+                    OptionRow(R.string.print_options_sides, capabilities.sides, options.sides) {
+                        options = options.copy(sides = it)
+                    }
+                }
+                if (capabilities.qualities.isNotEmpty()) {
+                    OptionRow(R.string.print_options_quality, capabilities.qualities, options.quality) {
+                        options = options.copy(quality = it)
+                    }
+                }
+                if (capabilities.media.isNotEmpty()) {
+                    OptionRow(R.string.print_options_media, capabilities.media, options.media) {
+                        options = options.copy(media = it)
+                    }
+                }
+                if (capabilities.orientations.isNotEmpty()) {
+                    OptionRow(R.string.print_options_orientation, capabilities.orientations, options.orientation) {
+                        options = options.copy(orientation = it)
+                    }
+                }
             }
 
-            if (capabilities.colorModes.isNotEmpty()) {
-                OptionRow(R.string.print_options_color, capabilities.colorModes, options.colorMode) {
-                    options = options.copy(colorMode = it)
-                }
-            }
-            if (capabilities.sides.isNotEmpty()) {
-                OptionRow(R.string.print_options_sides, capabilities.sides, options.sides) {
-                    options = options.copy(sides = it)
-                }
-            }
-            if (capabilities.qualities.isNotEmpty()) {
-                OptionRow(R.string.print_options_quality, capabilities.qualities, options.quality) {
-                    options = options.copy(quality = it)
-                }
-            }
-            if (capabilities.media.isNotEmpty()) {
-                OptionRow(R.string.print_options_media, capabilities.media, options.media) {
-                    options = options.copy(media = it)
-                }
-            }
-            if (capabilities.orientations.isNotEmpty()) {
-                OptionRow(R.string.print_options_orientation, capabilities.orientations, options.orientation) {
-                    options = options.copy(orientation = it)
-                }
-            }
-
-            Spacer(Modifier.width(20.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.print_options_cancel)) }
                 Spacer(Modifier.width(8.dp))
                 Button(onClick = { onConfirm(options) }) { Text(stringResource(R.string.documents_print)) }
             }
+            // ModalBottomSheet consumes navigation insets before its content is measured on some
+            // Android/Compose combinations. Keep a physical touch-safe gutter for gesture and
+            // three-button navigation even when navigationBarsPadding() observes zero remaining inset.
+            Spacer(Modifier.height(56.dp))
         }
     }
 }

@@ -64,7 +64,6 @@ data class PdfBoxSearchableFont(
  * renderer remains the fallback when the user did not opt in or OCR did not produce a layout.
  */
 object PdfBoxSearchablePdfWriter {
-    private val pageSize = PDRectangle.LETTER
     private const val pageMargin = 36f
     private const val minimumFontSize = 4f
     private const val maximumFontSize = 48f
@@ -82,9 +81,10 @@ object PdfBoxSearchablePdfWriter {
         pages: List<PdfBoxSearchablePage>,
         fontFiles: List<PdfBoxSearchableFont>,
         output: File,
+        pageSize: PdfPageSize = PdfPageSize(PDRectangle.LETTER.width.toInt(), PDRectangle.LETTER.height.toInt()),
         debugOverlay: Boolean = false,
     ): PdfBoxSearchablePdfStats = FileOutputStream(output).use { stream ->
-        write(context, pages, fontFiles, stream, debugOverlay)
+        write(context, pages, fontFiles, stream, pageSize, debugOverlay)
     }
 
     /** Writes to a caller-owned stream without closing it. */
@@ -94,6 +94,7 @@ object PdfBoxSearchablePdfWriter {
         pages: List<PdfBoxSearchablePage>,
         fontFiles: List<PdfBoxSearchableFont>,
         output: OutputStream,
+        pageSize: PdfPageSize = PdfPageSize(PDRectangle.LETTER.width.toInt(), PDRectangle.LETTER.height.toInt()),
         debugOverlay: Boolean = false,
     ): PdfBoxSearchablePdfStats {
         require(pages.isNotEmpty()) { "At least one page is required" }
@@ -125,9 +126,10 @@ object PdfBoxSearchablePdfWriter {
                 }
 
                 val imageSize = readImageSize(sourcePage.imageFile)
-                val page = PDPage(pageSize)
+                val pdfPageSize = PDRectangle(pageSize.widthPoints.toFloat(), pageSize.heightPoints.toFloat())
+                val page = PDPage(pdfPageSize)
                 document.addPage(page)
-                val placement = fitImage(imageSize.first, imageSize.second)
+                val placement = fitImage(imageSize.first, imageSize.second, pdfPageSize)
                 val lines = sourcePage.ocrLayout.linesInReadingOrder()
 
                 PDPageContentStream(document, page).use { content ->
@@ -233,7 +235,7 @@ object PdfBoxSearchablePdfWriter {
         return options.outWidth to options.outHeight
     }
 
-    private fun fitImage(sourceWidth: Int, sourceHeight: Int): ImagePlacement {
+    private fun fitImage(sourceWidth: Int, sourceHeight: Int, pageSize: PDRectangle): ImagePlacement {
         val availableWidth = pageSize.width - pageMargin * 2
         val availableHeight = pageSize.height - pageMargin * 2
         val scale = min(

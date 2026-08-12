@@ -13,6 +13,7 @@ import android.print.PageRange
 import android.print.PrintAttributes
 import android.print.PrintDocumentAdapter
 import android.print.PrintDocumentInfo
+import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
 import kotlinx.coroutines.CancellationException
@@ -27,7 +28,7 @@ import kotlin.math.roundToInt
 
 class SystemPrintAdapter(
     private val document: MopriaDocument,
-    private val context: Context? = null,
+    private val context: Context,
 ) : PrintDocumentAdapter() {
     private val workerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -53,7 +54,7 @@ class SystemPrintAdapter(
             pageWidth = max(1, (mediaSize.widthMils / 1000f * POINTS_PER_INCH).roundToInt())
             pageHeight = max(1, (mediaSize.heightMils / 1000f * POINTS_PER_INCH).roundToInt())
         }
-        val info = PrintDocumentInfo.Builder(document.name)
+        val info = PrintDocumentInfo.Builder(document.displayName(context))
             .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
             .setPageCount(document.pages.size)
             .build()
@@ -93,7 +94,7 @@ class SystemPrintAdapter(
                 callback.onWriteCancelled()
             } catch (error: Exception) {
                 runCatching { destination.close() }
-                callback.onWriteFailed(error.message ?: "Could not create print document")
+                callback.onWriteFailed(error.message ?: context.getString(R.string.print_create_failed))
             } finally {
                 pdf.close()
             }
@@ -123,10 +124,11 @@ class SystemPrintAdapter(
         val height = canvas.height.toFloat()
         val margin = width * 0.088f
         canvas.drawColor(Color.WHITE)
-        canvas.drawText("Mopria Scan & Print", margin, height * 0.096f, titlePaint)
-        canvas.drawText(document.name, margin, height * 0.141f, bodyPaint)
+        val localized = LanguageManager.wrap(context)
+        canvas.drawText(context.getString(R.string.app_name), margin, height * 0.096f, titlePaint)
+        canvas.drawText(document.displayName(context), margin, height * 0.141f, bodyPaint)
         canvas.drawLine(margin, height * 0.177f, width - margin, height * 0.177f, linePaint)
-        val bitmap = context?.let { DocumentPageBitmapLoader.load(it, page, requestedWidth = 2048, requestedHeight = 2048) }
+        val bitmap = DocumentPageBitmapLoader.load(context, page, requestedWidth = 2048, requestedHeight = 2048)
         if (bitmap != null) {
             try {
                 val top = height * 0.20f
@@ -144,17 +146,22 @@ class SystemPrintAdapter(
                     RectF(left, top, left + renderedWidth, top + renderedHeight),
                     Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG),
                 )
-                canvas.drawText("${page.pageNumber}. ${page.title}", margin, height * 0.85f, titlePaint)
+                canvas.drawText("${page.pageNumber}. ${page.displayTitle(context)}", margin, height * 0.85f, titlePaint)
             } finally {
                 bitmap.recycle()
             }
         } else {
-            canvas.drawText("${page.pageNumber}. ${page.title}", margin, height * 0.24f, titlePaint)
-            canvas.drawText("System Print Framework preview fixture.", margin, height * 0.30f, bodyPaint)
-            canvas.drawText("The real eSCL scan result will replace this fixture.", margin, height * 0.34f, bodyPaint)
+            canvas.drawText("${page.pageNumber}. ${page.displayTitle(context)}", margin, height * 0.24f, titlePaint)
+            canvas.drawText(localized.getString(R.string.pdf_mock_saved), margin, height * 0.30f, bodyPaint)
+            canvas.drawText(localized.getString(R.string.pdf_mock_fixture), margin, height * 0.34f, bodyPaint)
         }
-        canvas.drawText("Source: ${document.sourceLabel}", margin, height * 0.89f, bodyPaint)
-        canvas.drawText("Page ${page.pageNumber} of ${document.pages.size}", margin, height * 0.94f, bodyPaint)
+        canvas.drawText(localized.getString(R.string.pdf_source, document.displaySource(context)), margin, height * 0.89f, bodyPaint)
+        canvas.drawText(
+            localized.getString(R.string.pdf_page_of, page.pageNumber, document.pages.size),
+            margin,
+            height * 0.94f,
+            bodyPaint,
+        )
     }
 
     private fun isPageRequested(pageIndex: Int, ranges: Array<out PageRange>): Boolean =

@@ -2,6 +2,7 @@ package com.brianshih.mopria.android.scanprint.domain
 
 import androidx.annotation.StringRes
 import com.brianshih.mopria.android.scanprint.R
+import kotlin.math.roundToInt
 
 enum class DeviceKind(@StringRes val labelRes: Int) {
     Scanner(R.string.device_scanner),
@@ -35,10 +36,44 @@ enum class ScanInputSource(
     Adf(R.string.source_adf, R.string.source_adf_short, R.string.source_adf_description, "Feeder"),
 }
 
+enum class ScanAdfMode(@StringRes val labelRes: Int) {
+    Simplex(R.string.scan_adf_simplex),
+    Duplex(R.string.scan_adf_duplex),
+}
+
 enum class ScanColorMode(@StringRes val labelRes: Int, val eSclValue: String) {
     Color(R.string.color_color, "RGB24"),
     Grayscale(R.string.color_grayscale, "Grayscale8"),
     BlackAndWhite(R.string.color_black_white, "BlackAndWhite1"),
+}
+
+/** Common original sizes expressed in eSCL's 1/300-inch scan-region units. */
+enum class ScanDocumentSize(
+    @StringRes val labelRes: Int,
+    val widthHundredthsOfInch: Int?,
+    val heightHundredthsOfInch: Int?,
+    val intent: String,
+) {
+    Auto(R.string.scan_size_auto, null, null, "Document"),
+    A4(R.string.scan_size_a4, 2480, 3508, "Document"),
+    Letter(R.string.scan_size_letter, 2550, 3300, "Document"),
+    A5(R.string.scan_size_a5, 1748, 2480, "Document"),
+    Photo4x6(R.string.scan_size_photo_4x6, 1200, 1800, "Photo"),
+    Photo5x7(R.string.scan_size_photo_5x7, 1500, 2100, "Photo"),
+    Photo8x10(R.string.scan_size_photo_8x10, 2400, 3000, "Photo"),
+}
+
+/** PDF page dimensions in points (1/72 inch). */
+data class PdfPageSize(val widthPoints: Int, val heightPoints: Int)
+
+/** Converts the eSCL 1/300-inch scan region to PDF points. */
+fun ScanDocumentSize.toPdfPageSize(): PdfPageSize {
+    val width = widthHundredthsOfInch ?: ScanDocumentSize.Letter.widthHundredthsOfInch!!
+    val height = heightHundredthsOfInch ?: ScanDocumentSize.Letter.heightHundredthsOfInch!!
+    return PdfPageSize(
+        widthPoints = (width * 72f / 300f).roundToInt(),
+        heightPoints = (height * 72f / 300f).roundToInt(),
+    )
 }
 
 
@@ -81,6 +116,7 @@ enum class ScanPreset(
      */
     fun defaultSettings(current: ScanSettings): ScanSettings = when (this) {
         Document -> current.copy(
+            documentSize = ScanDocumentSize.A4,
             resolutionDpi = 300,
             colorMode = ScanColorMode.Color,
             combineAsPdf = true,
@@ -92,6 +128,7 @@ enum class ScanPreset(
             dropBlankPages = false,
         )
         Photo -> current.copy(
+            documentSize = ScanDocumentSize.Photo4x6,
             resolutionDpi = 600,
             colorMode = ScanColorMode.Color,
             combineAsPdf = false,
@@ -107,6 +144,8 @@ enum class ScanPreset(
 
 data class ScanSettings(
     val inputSource: ScanInputSource = ScanInputSource.Flatbed,
+    val adfMode: ScanAdfMode = ScanAdfMode.Simplex,
+    val documentSize: ScanDocumentSize = ScanDocumentSize.A4,
     val resolutionDpi: Int = 300,
     val colorMode: ScanColorMode = ScanColorMode.Color,
     val maxPages: Int = 20,
@@ -187,6 +226,19 @@ data class CropRect(val left: Float, val top: Float, val right: Float, val botto
     val height: Float get() = bottom - top
 }
 
+enum class GeneratedDocumentName(@StringRes val labelRes: Int) {
+    MockScan(R.string.document_mock_scan_name),
+    Scanned(R.string.document_scanned_name),
+    FlatbedMultiPage(R.string.document_flatbed_name),
+}
+
+enum class GeneratedPageTitle(@StringRes val labelRes: Int) {
+    Cover(R.string.document_demo_cover),
+    Content(R.string.document_demo_content),
+    Appendix(R.string.document_mock_appendix),
+    Scanned(R.string.document_scanned_page),
+}
+
 data class DocumentPage(
     val id: String,
     val pageNumber: Int,
@@ -197,6 +249,8 @@ data class DocumentPage(
     val rotationDegrees: Int = 0,
     val cropRect: CropRect? = null,
     val ocrResult: OcrResult? = null,
+    val generatedTitle: GeneratedPageTitle? = null,
+    val generatedTitleNumber: Int? = null,
 )
 
 enum class ScanOutputFormat(@StringRes val labelRes: Int, val extension: String) {
@@ -223,6 +277,12 @@ data class MopriaDocument(
     val ocrResults: List<OcrResult> = emptyList(),
     /** Whether the user opted in to an OCR text layer when exporting this document as PDF. */
     val searchablePdf: Boolean = false,
+    /** Requested physical original size; null preserves Letter output for legacy documents. */
+    val documentSize: ScanDocumentSize? = null,
+    /** False when source metadata contains requested values because the scanner omitted actual values. */
+    val actualScanSettingsReported: Boolean = true,
+    val generatedName: GeneratedDocumentName? = null,
+    val generatedNameSuffix: String? = null,
 )
 
 enum class JobKind(@StringRes val labelRes: Int) {
@@ -260,6 +320,7 @@ data class MopriaUiState(
     val lastExportPath: String? = null,
     val integrationMode: IntegrationMode = IntegrationMode.Mock,
     val printMethod: PrintMethod = PrintMethod.System,
+    val manualDeviceAddress: String = "",
     val scanSettings: ScanSettings = ScanSettings(),
     val pendingFlatbedDocumentId: String? = null,
     val awaitingNextFlatbedPage: Boolean = false,

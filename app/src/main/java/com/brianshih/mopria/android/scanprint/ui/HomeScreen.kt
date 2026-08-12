@@ -145,6 +145,11 @@ private fun ScanHeroCard(uiState: MopriaUiState, onClick: () -> Unit) {
             stringResource(uiState.scanSettings.colorMode.labelRes),
         )
         if (uiState.scanSettings.inputSource == ScanInputSource.Adf) {
+            summary = stringResource(
+                R.string.scan_summary_adf_mode,
+                summary,
+                stringResource(uiState.scanSettings.adfMode.labelRes),
+            )
             summary = stringResource(R.string.scan_summary_adf_pages, summary, uiState.scanSettings.maxPages)
         }
         if (uiState.scanSettings.combineAsPdf) summary = stringResource(R.string.scan_summary_pdf, summary)
@@ -332,9 +337,13 @@ private fun HomeJobRow(job: JobRecord) {
         Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(job.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(job.kind.labelRes), style = MaterialTheme.typography.bodyLarge, maxLines = 1)
             Text(
-                job.detail ?: job.targetLabel,
+                if (job.status == JobStatus.Running || job.status == JobStatus.Queued) {
+                    job.detail ?: job.targetLabel
+                } else {
+                    stringResource(job.status.labelRes)
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

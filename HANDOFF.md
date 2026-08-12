@@ -1,6 +1,6 @@
 # Development Handoff
 
-更新日期：2026-08-11
+更新日期：2026-08-12
 
 Repository：`brianshih04/mopria-android-scan-print`
 
@@ -8,9 +8,11 @@ Repository：`brianshih04/mopria-android-scan-print`
 
 ## 1. 接手摘要
 
-目前 `main` 已完成可執行的 Android Compose App、Mock／Real 模式、eSCL v2.97 pull-scan client、Flatbed／ADF 多頁文件工作流、OpenCV file-first 影像處理、opt-in ML Kit OCR／Searchable PDF、PDF／JPEG 文件庫、Android Print Framework 預設列印入口、opt-in Direct IPP，以及 10 種語言與系統語系 fallback。OCR feature branch 已 fast-forward 合併；合併前的 `main` 保留於 `main-backup`。
+目前 `main` 已完成可執行的 Android Compose App、Mock／Real 模式、eSCL v2.97 pull-scan client、Flatbed／ADF 多頁文件工作流、capability-aware ADF 單面／雙面選擇、OpenCV file-first 影像處理、opt-in ML Kit OCR／Searchable PDF、PDF／JPEG 文件庫、Android Print Framework 預設列印入口、opt-in Direct IPP，以及 10 種語言與系統語系 fallback。ADF 雙面目前只有自動測試與 capability UI 驗證，尚未以廣告 `AdfDuplexInputCaps` 的實體 MFP 驗收。OCR feature branch 已 fast-forward 合併；合併前的 `main` 保留於 `main-backup`。
 
 既有 JVM／instrumentation 驗證可由下方固定指令重跑；目前仍未完成真實 eSCL scanner 與 Mopria printer 的跨品牌驗收，以及 Direct IPP 高 DPI 多頁 PWG-Raster／PCLm 的 streaming／OOM soak。請勿把 Mock／fixture 結果描述成 Mopria Certified 或廠牌相容證據。
+
+2026-08-12 產品測試後已修正 System Print Activity context、輸出紙張尺寸、Direct IPP bitmap 額外縮小、options sheet navigation inset、手動 endpoint 健康檢查、PDF metadata 重疊與 Mock crop／rotation。System Print 已在 API 36 實際開啟 Print Spooler；A4 MediaBox 與上述 UI 邊界有 instrumentation coverage。Brother Direct IPP 的實體 1:1 尺寸、不可達 endpoint UI、十語系完整流程與 Mock 編輯輸出仍需人工重測。Brother MFC-L2715DW 的 eSCL ADF 不取紙仍未解決，Copy 與 WIA ADF 正常的隔離結果不變。
 
 OpenCV 與 eSCL file-first 影像管線已接入：使用官方 `org.opencv:opencv:4.14.0` AAR、原子檔案替換、ADF deskew、平台 auto-crop、blank-page drop 與背景淨化；`android:largeHeap="true"` 已設定，A4 300 dpi 十頁 OpenCV soak 以 absolute 256 MB peak／64 MB retained-PSS gate 驗證。OCR option 使用 Google ML Kit Text Recognition v2，接入 settings、capability safety、四種 script recognizer、Google Play services unbundled model request、預設 English／繁中／簡中與區域語言選擇；影像以 12 MP／4096 px 上限取樣，OCR 掃描只協商 JPEG，PDF-only profile 會在建立工作前回報。日文／韓文模型及 Searchable PDF 地域字型均由使用者按需準備，JP／KR TTF 不進主 APK；字型 URL 固定至 Noto CJK commit 並驗證 SHA-256。Searchable PDF 透過獨立 opt-in 設定接入 PDFBox mixed/temp storage，以 page-scoped OCR layout、bounded bitmap 與 crop／rotation 座標轉換產生不可見文字層；layout 以壓縮 sidecar 原子保存，缺少 OCR／字型時明確失敗，不會靜默降級。API 36 emulator 的三張中文樣本輸出與文字抽取已通過。實機模型下載、辨識準確率／PSS、16 KB、真實 scanner 與多語字型覆蓋率仍待驗證，細節見 `docs/opencv-integration-plan.md`、`docs/ocr-escl-image-pipeline.md` 與 `docs/searchable-pdf-poc.md`。
 
@@ -37,7 +39,7 @@ adb shell am start -n com.brianshih.mopria.android.scanprint/.MainActivity
 
 | 檔案 | 責任 |
 |---|---|
-| `domain/IntegrationModels.kt` | 掃描設定、設備、文件頁與 UI state |
+| `domain/IntegrationModels.kt` | 掃描設定、設備、文件頁、輸出紙張尺寸與 UI state |
 | `domain/EsclDiscovery.kt` | TXT metadata、resource root 驗證、安全服務優先 |
 | `domain/EsclProtocol.kt` | XML parse、capability negotiation、ScanSettings、Job URL policy |
 | `domain/EsclHttpClient.kt` | HTTP status、Retry-After、redirect、TLS、bounded streaming |
@@ -49,18 +51,18 @@ adb shell am start -n com.brianshih.mopria.android.scanprint/.MainActivity
 | `domain/IppRasterizer.kt`、`PrintRenderSizing.kt` | PWG-Raster／PCLm 產生、bounded render 尺寸與逐頁 bitmap streaming；swath／實體高 DPI soak 仍待驗證 |
 | `ui/MopriaViewModel.kt` | discovery／scan／export／print 協調及 Flatbed session state |
 | `ui/LanguageManager.kt` | 系統語系偵測、手動覆寫、中文 script／region 判斷與 English fallback |
-| `ui/ScanScreen.kt` | ADF max pages、Flatbed／ADF PDF 合併設定及下一頁 dialog |
+| `ui/ScanScreen.kt` | ADF 單雙面／max pages、Flatbed／ADF PDF 合併設定及下一頁 dialog |
 | `ui/DocumentsScreen.kt` | 掃描文件頁面、列印／分享／輸出操作 |
 | `ui/DocumentPageBitmapLoader.kt` | JPEG／PNG／PDF-backed 頁面取樣／render |
 | `ui/ScanExportService.kt`、`domain/PdfBoxSearchablePdfWriter.kt` | MediaStore PDF／JPEG、分享 PDF，以及 opt-in invisible-text Searchable PDF |
-| `ui/SystemPrintAdapter.kt` | 掃描文件交給 Android Print Framework |
+| `ui/SystemPrintAdapter.kt` | 掃描文件交給 Android Print Framework；Activity locale override 必須保留 system-service identity |
 
 | `domain/ScanError.kt` | 結構化掃描錯誤，ViewModel 映射至 string resources；包含 OCR raster-format negotiation error |
 | `domain/PdfPageRenderer.kt` | 共用 PDF 頁面渲染（writePdf + drawFitted） |
 | `domain/DocumentStore.kt` | JSON 持久化文件列表與 Flatbed session；OCR layout 使用壓縮 sidecar |
 | `domain/SettingsStore.kt` | SharedPreferences 讀寫，從 ViewModel 提取 |
 | `domain/TempFileCleanup.kt` | 暫存檔三層清理（orphan scan + stale cache + delete） |
-| `domain/ScannerCapabilities.kt` | eSCL → UI 選項映射（解析度/來源/色彩） |
+| `domain/ScannerCapabilities.kt` | eSCL → UI 選項映射（解析度/來源/ADF 單雙面/色彩） |
 | `domain/BackgroundEnhancer.kt` | OpenCV file-first 光照正規化、結果狀態、pixel limit 與原子檔案替換 |
 | `domain/ScanImagePipeline.kt` | eSCL 檔案處理、ADF deskew、auto-crop、blank-page drop 與 source-safe replace |
 | `domain/Ocr.kt` | ML Kit OCR 結果模型、script recognizer 對應、Google Play services model request 與安全降級 |
@@ -88,14 +90,15 @@ Package root：`app/src/main/java/com/brianshih/mopria/android/scanprint/`。
 2. `EsclDiscovery` 解析 TXT，拒絕不安全 `rs`，以 UUID + root 去重並偏好 TLS。
 3. Scan 前 GET `ScannerStatus`，Scanner 必須 Idle；ADF 若有狀態則需 Loaded／Processing。
 4. GET `ScannerCapabilities`，依來源、SettingProfile、格式、色彩及 X/Y resolution 協商。
-5. POST `{root}/ScanJobs`，要求 `201` 和安全 `Location`。
-6. 依 JobInfo 狀態確認工作可傳輸，重複 GET `NextDocument`。
-7. `503` 遵守 bounded `Retry-After`；`404` 表示頁面結束；timeout／`410` 會回查狀態。
-8. 取消、失敗或無法讓設備只送指定頁數時，以 DELETE 清理工作。
-9. JPEG／PNG 形成 image page；PDF 以 `PdfRenderer` 建立每一頁的 reference。
-10. `NextDocument` response 直接串流至 app files 的暫存檔；影像處理以檔案作為輸入，OCR 僅建立受 12 MP／4096 px 限制的取樣 Bitmap，不建立影像 `ByteArray` 或無界全尺寸 Bitmap。
-11. OCR 開啟時格式協商只接受 JPEG；選定 source／color profile 只有 PDF 時，建立 ScanJob 前回報本地化錯誤。
-12. Real provider 可在下載後依設定執行 deskew、auto-crop、blank-page drop、背景淨化與 OCR；OCR 啟用時會自動要求 deskew／auto-crop，處理失敗會保留原檔，blank page 才會刪除。OCR 結果保留座標／confidence並做保守版面／數字後處理。
+5. ADF 分別解析 `AdfSimplexInputCaps`／`AdfDuplexInputCaps`；UI 只允許 capability 支援的模式，雙面 job 使用 duplex profile 並送出 `scan:Duplex=true`。
+6. POST `{root}/ScanJobs`，要求 `201` 和安全 `Location`。
+7. 依 JobInfo 狀態確認工作可傳輸，重複 GET `NextDocument`。
+8. `503` 遵守 bounded `Retry-After`；`404` 表示頁面結束；timeout／`410` 會回查狀態。
+9. 取消、失敗或無法讓設備只送指定頁數時，以 DELETE 清理工作。
+10. JPEG／PNG 形成 image page；PDF 以 `PdfRenderer` 建立每一頁的 reference。
+11. `NextDocument` response 直接串流至 app files 的暫存檔；影像處理以檔案作為輸入，OCR 僅建立受 12 MP／4096 px 限制的取樣 Bitmap，不建立影像 `ByteArray` 或無界全尺寸 Bitmap。
+12. OCR 開啟時格式協商只接受 JPEG；選定 source／color profile 只有 PDF 時，建立 ScanJob 前回報本地化錯誤。
+13. Real provider 可在下載後依設定執行 deskew、auto-crop、blank-page drop、背景淨化與 OCR；OCR 啟用時會自動要求 deskew／auto-crop，處理失敗會保留原檔，blank page 才會刪除。OCR 結果保留座標／confidence並做保守版面／數字後處理。
 
 ADF max pages 有兩層意義：設備支援 `SelectSinglePage` 時送出 `NumberOfPages`；不支援時 client 取到上限即停止並 DELETE job。UI 與協定層都限制 1–50。
 

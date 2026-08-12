@@ -4,11 +4,13 @@ import android.Manifest
 import android.app.Activity
 import android.content.ClipData
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.core.net.toUri
 import android.os.Build
 import android.print.PrintDocumentAdapter
+import android.print.PrintAttributes
 import android.print.PrintManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
@@ -60,6 +62,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.brianshih.mopria.android.scanprint.R
 import com.brianshih.mopria.android.scanprint.domain.IntegrationMode
+import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
+import com.brianshih.mopria.android.scanprint.domain.ScanDocumentSize
 
 internal enum class AppDestination(val labelRes: Int, val icon: ImageVector) {
     Home(R.string.nav_home, Icons.Filled.Home),
@@ -93,10 +97,11 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
         selectedDestinationName = AppDestination.Home.name
     }
 
-    fun openPrint(title: String, adapter: PrintDocumentAdapter) {
+    fun openPrint(title: String, adapter: PrintDocumentAdapter, attributes: PrintAttributes? = null) {
         runCatching {
-            val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
-            printManager.print(title, adapter, null)
+            val activity = checkNotNull(context.findActivity()) { resources.getString(R.string.common_retry) }
+            val printManager = activity.getSystemService(Context.PRINT_SERVICE) as PrintManager
+            printManager.print(title, adapter, attributes)
         }.onSuccess { printJob ->
             viewModel.monitorSystemPrint(printJob, title)
         }.onFailure { error ->
@@ -154,7 +159,11 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
     LaunchedEffect(viewModel, context) {
         viewModel.printRequests.collect { document ->
             selectedDestinationName = AppDestination.Home.name
-            openPrint(document.name, SystemPrintAdapter(document, context))
+            openPrint(
+                document.displayName(context),
+                SystemPrintAdapter(document, context),
+                document.defaultPrintAttributes(),
+            )
         }
     }
     LaunchedEffect(viewModel, context) {
@@ -279,7 +288,11 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                     onShare = viewModel::share,
                     onSystemPreview = { document ->
                         selectedDestinationName = AppDestination.Home.name
-                        openPrint(document.name, SystemPrintAdapter(document, context))
+                        openPrint(
+                            document.displayName(context),
+                            SystemPrintAdapter(document, context),
+                            document.defaultPrintAttributes(),
+                        )
                     },
                     onDeleteDocument = viewModel::deleteDocument,
                     onEditDocument = { editingDocumentId = it },
@@ -290,6 +303,7 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                     uiState = uiState,
                     onModeChanged = viewModel::setIntegrationMode,
                     onPrintMethodChanged = viewModel::setPrintMethod,
+                    onManualDeviceAddressChanged = viewModel::setManualDeviceAddress,
                     onFindDevices = viewModel::discoverDevices,
                     selectedLanguage = selectedLanguage,
                     onLanguageChanged = { language ->
@@ -327,4 +341,23 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
         )
     }
     }
+}
+
+internal tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+private fun MopriaDocument.defaultPrintAttributes(): PrintAttributes? {
+    val mediaSize = when (documentSize) {
+        ScanDocumentSize.A4 -> PrintAttributes.MediaSize.ISO_A4
+        ScanDocumentSize.Letter -> PrintAttributes.MediaSize.NA_LETTER
+        ScanDocumentSize.A5 -> PrintAttributes.MediaSize.ISO_A5
+        ScanDocumentSize.Photo4x6 -> PrintAttributes.MediaSize.NA_INDEX_4X6
+        ScanDocumentSize.Photo5x7 -> PrintAttributes.MediaSize("PHOTO_5X7", "5 × 7 in", 5_000, 7_000)
+        ScanDocumentSize.Photo8x10 -> PrintAttributes.MediaSize("PHOTO_8X10", "8 × 10 in", 8_000, 10_000)
+        ScanDocumentSize.Auto, null -> return null
+    }
+    return PrintAttributes.Builder().setMediaSize(mediaSize).build()
 }

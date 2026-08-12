@@ -71,6 +71,7 @@ class DocumentStoreInstrumentedTest {
             ),
             sourceLabel = "instrumented test",
             searchablePdf = true,
+            documentSize = ScanDocumentSize.A4,
         )
 
         try {
@@ -79,6 +80,7 @@ class DocumentStoreInstrumentedTest {
             val restored = store.load()?.documents?.single()
             assertNotNull(restored)
             assertTrue(requireNotNull(restored).searchablePdf)
+            assertEquals(ScanDocumentSize.A4, restored.documentSize)
             assertEquals(result, restored.pages.single().ocrResult)
             assertEquals(listOf(result), restored.ocrResults)
             assertEquals(1, File(context.filesDir, "ocr-layouts").listFiles()?.size)
