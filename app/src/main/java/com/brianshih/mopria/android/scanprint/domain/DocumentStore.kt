@@ -70,6 +70,7 @@ class DocumentStore(context: Context) {
             docJson.put("actualScanSettingsReported", doc.actualScanSettingsReported)
             doc.generatedName?.let { docJson.put("generatedName", it.name) }
             doc.generatedNameSuffix?.let { docJson.put("generatedNameSuffix", it) }
+            doc.generatedNamePageNumber?.let { docJson.put("generatedNamePageNumber", it) }
             doc.exportedPath?.let { docJson.put("exportedPath", it) }
             docsArray.put(docJson)
         }
@@ -135,6 +136,7 @@ class DocumentStore(context: Context) {
                         .takeIf(String::isNotBlank)
                         ?.let { name -> GeneratedDocumentName.entries.firstOrNull { it.name == name } },
                     generatedNameSuffix = d.optString("generatedNameSuffix").takeIf(String::isNotBlank),
+                    generatedNamePageNumber = d.optInt("generatedNamePageNumber", -1).takeIf { it >= 0 },
                 )
             }
             // Filter out documents whose files no longer exist on disk (stale entries from a previous run).

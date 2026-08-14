@@ -146,7 +146,7 @@
     <string name="event_discovery_mock">デモデバイスを%1$d台検出しました。テストを開始できます。</string>
     <string name="event_discovery_none">実機が見つかりません。Wi‑Fiとデバイスのサービスを確認してください。</string>
     <string name="event_discovery_real">ネットワークデバイスを%1$d台検出しました。</string>
-    <string name="event_discovery_failed">%1$sの検索に失敗しました：%2$s</string>
+    <string name="event_discovery_failed">%1$sの検索に失敗しました。もう一度お試しください</string>
     <string name="event_no_scanner">%1$sでスキャナーが見つかりません。デバイスとスマートフォンが同じネットワークにあることを確認してください。</string>
     <string name="event_scan_working">スキャンジョブを作成中</string>
     <string name="event_scan_downloading">%2$d ページ中 %1$d ページを受信中</string>
@@ -167,7 +167,7 @@
     <string name="event_print_cancelled">印刷をキャンセルしました</string>
     <string name="event_print_failed">%1$s印刷に失敗しました：%2$s</string>
     <string name="event_share_missing">共有するドキュメントが見つかりません</string>
-    <string name="event_share_failed">共有の準備に失敗しました：%1$s</string>
+    <string name="event_share_failed">共有の準備に失敗しました。もう一度お試しください</string>
     <string name="event_export_done">%1$d個の%2$sファイルを保存しました</string>
     <string name="event_export_location">%1$sをDownload/Mopria Scan &amp; Print/Scansに保存しました</string>
     <string name="event_export_cancelled">%1$sの書き出しをキャンセルしました</string>
@@ -178,9 +178,9 @@
     <string name="event_system_print_blocked">印刷サービスが一時停止しています。再開を待っています</string>
     <string name="event_system_print_started">印刷サービスが処理中です</string>
     <string name="event_system_print_waiting">印刷サービスの確認を待っています</string>
-    <string name="event_open_print_failed">システム印刷を開けません：%1$s</string>
+    <string name="event_open_print_failed">システム印刷を開けません。もう一度お試しください</string>
     <string name="event_android9_storage_permission">Android 9ではDownloadフォルダーへの保存にストレージ権限が必要です</string>
-    <string name="event_share_open_failed">共有を開けません：%1$s</string>
+    <string name="event_share_open_failed">共有を開けません。もう一度お試しください</string>
     <string name="print_phone_document">スマートフォンのドキュメント</string>
     <string name="print_phone_documents">スマートフォンのドキュメント（%1$d件）</string>
     <string name="format_pdf">PDF</string>
@@ -231,6 +231,10 @@
     <string name="edit_cancel">キャンセル</string>
     <string name="edit_confirm">確認</string>
     <string name="edit_no_pages">編集するページがありません</string>
+    <string name="edit_crop_left">左</string>
+    <string name="edit_crop_top">上</string>
+    <string name="edit_crop_right">右</string>
+    <string name="edit_crop_bottom">下</string>
     <string name="preset_document">ドキュメント</string>
     <string name="preset_document_description">300 dpi · カラー · PDF · 背景クリーンアップ</string>
     <string name="preset_photo">写真</string>
@@ -326,6 +330,9 @@
     <string name="document_mock_scan_name">モックスキャン文書 %1$s</string>
     <string name="document_scanned_name">スキャン文書 %1$s</string>
     <string name="document_flatbed_name">フラットベッド複数ページ文書 %1$s</string>
+    <string name="document_name_page_suffix"> · %1$d ページ</string>
+    <string name="document_multi_page_pdf">複数ページ PDF</string>
+    <string name="document_source_mock_escl">モック eSCL</string>
     <string name="document_mock_appendix">付録</string>
     <string name="document_scanned_page">スキャンページ %1$d</string>
 </resources>

@@ -156,7 +156,7 @@
 
     <string name="event_saved_documents_unavailable">Some saved documents could not be loaded</string>
     <string name="event_mode_changed">Switched to %1$s: %2$s</string>
-    <string name="event_discovery_failed">%1$s discovery failed: %2$s</string>
+    <string name="event_discovery_failed">%1$s discovery failed. Please try again.</string>
     <string name="event_discovery_mock">Found %1$d mock devices. Ready to test.</string>
     <string name="event_discovery_none">No physical devices found. Check Wi‑Fi and device services.</string>
     <string name="event_discovery_real">Found %1$d network devices.</string>
@@ -180,7 +180,7 @@
     <string name="event_print_cancelled">Print cancelled</string>
     <string name="event_print_failed">%1$s print failed: %2$s</string>
     <string name="event_share_missing">The document to share was not found</string>
-    <string name="event_share_failed">Could not prepare the document for sharing: %1$s</string>
+    <string name="event_share_failed">Could not prepare the document for sharing. Please try again.</string>
     <string name="event_export_done">Saved %1$d %2$s file(s)</string>
     <string name="event_export_location">%1$s saved to Download/Mopria Scan &amp; Print/Scans</string>
     <string name="event_export_cancelled">%1$s export cancelled</string>
@@ -191,9 +191,9 @@
     <string name="event_system_print_blocked">Print service paused; waiting to resume</string>
     <string name="event_system_print_started">Print service is processing</string>
     <string name="event_system_print_waiting">Waiting for print service confirmation</string>
-    <string name="event_open_print_failed">Could not open system printing: %1$s</string>
+    <string name="event_open_print_failed">Could not open system printing. Please try again.</string>
     <string name="event_android9_storage_permission">Android 9 needs storage permission to write to the Download folder</string>
-    <string name="event_share_open_failed">Could not open sharing: %1$s</string>
+    <string name="event_share_open_failed">Could not open sharing. Please try again.</string>
     <string name="print_phone_document">Phone document</string>
     <string name="print_phone_documents">Phone documents (%1$d)</string>
 
@@ -243,6 +243,10 @@
     <string name="edit_cancel">Cancel</string>
     <string name="edit_confirm">Confirm</string>
     <string name="edit_no_pages">No pages to edit</string>
+    <string name="edit_crop_left">L</string>
+    <string name="edit_crop_top">T</string>
+    <string name="edit_crop_right">R</string>
+    <string name="edit_crop_bottom">B</string>
     <string name="preset_document">Document</string>
     <string name="preset_document_description">300 dpi · Color · PDF · Background cleanup</string>
     <string name="preset_photo">Photo</string>
@@ -338,6 +342,9 @@
     <string name="document_mock_scan_name">Mock scan document %1$s</string>
     <string name="document_scanned_name">Scanned document %1$s</string>
     <string name="document_flatbed_name">Flatbed multi-page document %1$s</string>
+    <string name="document_name_page_suffix"> · page %1$d</string>
+    <string name="document_multi_page_pdf">Multi-page PDF</string>
+    <string name="document_source_mock_escl">Mock eSCL</string>
     <string name="document_mock_appendix">Appendix</string>
     <string name="document_scanned_page">Scanned page %1$d</string>
 </resources>

@@ -146,7 +146,7 @@
     <string name="event_discovery_mock">%1$d dispositivos de teste encontrados.</string>
     <string name="event_discovery_none">Nenhum dispositivo físico encontrado. Verifique o Wi‑Fi e os serviços.</string>
     <string name="event_discovery_real">%1$d dispositivos de rede encontrados.</string>
-    <string name="event_discovery_failed">Falha ao pesquisar %1$s: %2$s</string>
+    <string name="event_discovery_failed">Falha ao pesquisar %1$s. Tente novamente.</string>
     <string name="event_no_scanner">Nenhum scanner encontrado em %1$s. Verifique se estão na mesma rede.</string>
     <string name="event_scan_working">Criando trabalho de digitalização</string>
     <string name="event_scan_downloading">Recebendo página %1$d de %2$d</string>
@@ -167,7 +167,7 @@
     <string name="event_print_cancelled">Impressão cancelada</string>
     <string name="event_print_failed">Falha na impressão %1$s: %2$s</string>
     <string name="event_share_missing">Documento para compartilhar não encontrado</string>
-    <string name="event_share_failed">Não foi possível preparar o documento: %1$s</string>
+    <string name="event_share_failed">Não foi possível preparar o documento. Tente novamente.</string>
     <string name="event_export_done">%1$d arquivo(s) %2$s salvos</string>
     <string name="event_export_location">%1$s salvo em Download/Mopria Scan &amp; Print/Scans</string>
     <string name="event_export_cancelled">Exportação %1$s cancelada</string>
@@ -178,9 +178,9 @@
     <string name="event_system_print_blocked">Serviço de impressão pausado; aguardando retomada</string>
     <string name="event_system_print_started">Serviço de impressão processando</string>
     <string name="event_system_print_waiting">Aguardando confirmação do serviço de impressão</string>
-    <string name="event_open_print_failed">Não foi possível abrir a impressão do sistema: %1$s</string>
+    <string name="event_open_print_failed">Não foi possível abrir a impressão do sistema. Tente novamente.</string>
     <string name="event_android9_storage_permission">O Android 9 precisa de permissão de armazenamento para escrever em Download</string>
-    <string name="event_share_open_failed">Não foi possível abrir o compartilhamento: %1$s</string>
+    <string name="event_share_open_failed">Não foi possível abrir o compartilhamento. Tente novamente.</string>
     <string name="print_phone_document">Documento do telefone</string>
     <string name="print_phone_documents">Documentos do telefone (%1$d)</string>
     <string name="format_pdf">PDF</string>
@@ -231,6 +231,10 @@
     <string name="edit_cancel">Cancelar</string>
     <string name="edit_confirm">Confirmar</string>
     <string name="edit_no_pages">Não há páginas para editar</string>
+    <string name="edit_crop_left">E</string>
+    <string name="edit_crop_top">S</string>
+    <string name="edit_crop_right">D</string>
+    <string name="edit_crop_bottom">I</string>
     <string name="preset_document">Documento</string>
     <string name="preset_document_description">300 dpi · Color · PDF · Limpar fundo</string>
     <string name="preset_photo">Foto</string>
@@ -326,6 +330,9 @@
     <string name="document_mock_scan_name">Documento digitalizado simulado %1$s</string>
     <string name="document_scanned_name">Documento digitalizado %1$s</string>
     <string name="document_flatbed_name">Documento multipágina de mesa %1$s</string>
+    <string name="document_name_page_suffix"> · página %1$d</string>
+    <string name="document_multi_page_pdf">PDF de várias páginas</string>
+    <string name="document_source_mock_escl">eSCL simulado</string>
     <string name="document_mock_appendix">Apêndice</string>
     <string name="document_scanned_page">Página digitalizada %1$d</string>
 </resources>

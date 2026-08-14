@@ -31,9 +31,11 @@ enum class ScanInputSource(
     @StringRes val shortLabelRes: Int,
     @StringRes val descriptionRes: Int,
     val eSclValue: String,
+    /** Marker embedded in the persisted sourceLabel; the UI maps it to a localized label. */
+    val displayToken: String,
 ) {
-    Flatbed(R.string.source_flatbed, R.string.source_flatbed_short, R.string.source_flatbed_description, "Platen"),
-    Adf(R.string.source_adf, R.string.source_adf_short, R.string.source_adf_description, "Feeder"),
+    Flatbed(R.string.source_flatbed, R.string.source_flatbed_short, R.string.source_flatbed_description, "Platen", "%flatbed"),
+    Adf(R.string.source_adf, R.string.source_adf_short, R.string.source_adf_description, "Feeder", "%adf"),
 }
 
 enum class ScanAdfMode(@StringRes val labelRes: Int) {
@@ -41,10 +43,10 @@ enum class ScanAdfMode(@StringRes val labelRes: Int) {
     Duplex(R.string.scan_adf_duplex),
 }
 
-enum class ScanColorMode(@StringRes val labelRes: Int, val eSclValue: String) {
-    Color(R.string.color_color, "RGB24"),
-    Grayscale(R.string.color_grayscale, "Grayscale8"),
-    BlackAndWhite(R.string.color_black_white, "BlackAndWhite1"),
+enum class ScanColorMode(@StringRes val labelRes: Int, val eSclValue: String, val displayToken: String) {
+    Color(R.string.color_color, "RGB24", "%color"),
+    Grayscale(R.string.color_grayscale, "Grayscale8", "%grayscale"),
+    BlackAndWhite(R.string.color_black_white, "BlackAndWhite1", "%blackwhite"),
 }
 
 /** Common original sizes expressed in eSCL's 1/300-inch scan-region units. */
@@ -283,6 +285,8 @@ data class MopriaDocument(
     val actualScanSettingsReported: Boolean = true,
     val generatedName: GeneratedDocumentName? = null,
     val generatedNameSuffix: String? = null,
+    /** 1-based page number this document was split from; distinct localized display name for split documents. */
+    val generatedNamePageNumber: Int? = null,
 )
 
 enum class JobKind(@StringRes val labelRes: Int) {

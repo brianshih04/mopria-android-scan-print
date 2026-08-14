@@ -146,7 +146,7 @@
     <string name="event_discovery_mock">Найдено тестовых устройств: %1$d.</string>
     <string name="event_discovery_none">Физические устройства не найдены. Проверьте Wi‑Fi и службы устройств.</string>
     <string name="event_discovery_real">Найдено сетевых устройств: %1$d.</string>
-    <string name="event_discovery_failed">Не удалось найти %1$s: %2$s</string>
+    <string name="event_discovery_failed">Не удалось найти %1$s. Повторите попытку.</string>
     <string name="event_no_scanner">Сканер не найден в режиме %1$s. Проверьте одну сеть.</string>
     <string name="event_scan_working">Создание задания сканирования</string>
     <string name="event_scan_downloading">Получение страницы %1$d из %2$d</string>
@@ -167,7 +167,7 @@
     <string name="event_print_cancelled">Печать отменена</string>
     <string name="event_print_failed">Ошибка печати %1$s: %2$s</string>
     <string name="event_share_missing">Документ для отправки не найден</string>
-    <string name="event_share_failed">Не удалось подготовить документ: %1$s</string>
+    <string name="event_share_failed">Не удалось подготовить документ. Повторите попытку.</string>
     <string name="event_export_done">Сохранено файлов %2$s: %1$d</string>
     <string name="event_export_location">%1$s сохранен в Download/Mopria Scan &amp; Print/Scans</string>
     <string name="event_export_cancelled">Экспорт %1$s отменен</string>
@@ -178,9 +178,9 @@
     <string name="event_system_print_blocked">Служба печати приостановлена; ожидание возобновления</string>
     <string name="event_system_print_started">Служба печати обрабатывает задание</string>
     <string name="event_system_print_waiting">Ожидание подтверждения службы печати</string>
-    <string name="event_open_print_failed">Не удалось открыть системную печать: %1$s</string>
+    <string name="event_open_print_failed">Не удалось открыть системную печать. Повторите попытку.</string>
     <string name="event_android9_storage_permission">Android 9 требует разрешение хранилища для записи в Download</string>
-    <string name="event_share_open_failed">Не удалось открыть отправку: %1$s</string>
+    <string name="event_share_open_failed">Не удалось открыть отправку. Повторите попытку.</string>
     <string name="print_phone_document">Документ с телефона</string>
     <string name="print_phone_documents">Документы с телефона (%1$d)</string>
     <string name="format_pdf">PDF</string>
@@ -231,6 +231,10 @@
     <string name="edit_cancel">Отмена</string>
     <string name="edit_confirm">Подтвердить</string>
     <string name="edit_no_pages">Нет страниц для редактирования</string>
+    <string name="edit_crop_left">Л</string>
+    <string name="edit_crop_top">В</string>
+    <string name="edit_crop_right">П</string>
+    <string name="edit_crop_bottom">Н</string>
     <string name="preset_document">Документ</string>
     <string name="preset_document_description">300 dpi · Цвет · PDF · Очистка фона</string>
     <string name="preset_photo">Фото</string>
@@ -326,6 +330,9 @@
     <string name="document_mock_scan_name">Имитация сканирования %1$s</string>
     <string name="document_scanned_name">Отсканированный документ %1$s</string>
     <string name="document_flatbed_name">Многостраничный планшетный документ %1$s</string>
+    <string name="document_name_page_suffix"> · стр. %1$d</string>
+    <string name="document_multi_page_pdf">Многостраничный PDF</string>
+    <string name="document_source_mock_escl">Тестовый eSCL</string>
     <string name="document_mock_appendix">Приложение</string>
     <string name="document_scanned_page">Отсканированная страница %1$d</string>
 </resources>

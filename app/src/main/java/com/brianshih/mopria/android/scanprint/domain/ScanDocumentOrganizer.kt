@@ -18,7 +18,7 @@ object ScanDocumentOrganizer {
             )
         }
         return base.copy(
-            sourceLabel = "${scanned.sourceLabel.substringBeforeLast(" · Multi-page PDF")} · Multi-page PDF",
+            sourceLabel = "${scanned.sourceLabel.substringBeforeLast(" · %multipage")} · %multipage",
             pages = combinedPages,
             searchablePdf = base.searchablePdf || scanned.searchablePdf,
         )
@@ -30,6 +30,7 @@ object ScanDocumentOrganizer {
             document.copy(
                 id = "${document.id}-page-${index + 1}",
                 name = "${document.name} - page ${index + 1}",
+                generatedNamePageNumber = index + 1,
                 pages = listOf(
                     page.copy(
                         pageNumber = 1,

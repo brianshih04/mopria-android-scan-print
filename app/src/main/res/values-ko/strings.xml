@@ -146,7 +146,7 @@
     <string name="event_discovery_mock">테스트 장치 %1$d개를 찾았습니다.</string>
     <string name="event_discovery_none">실제 장치를 찾지 못했습니다. Wi‑Fi와 장치 서비스를 확인하세요.</string>
     <string name="event_discovery_real">네트워크 장치 %1$d개를 찾았습니다.</string>
-    <string name="event_discovery_failed">%1$s 검색 실패: %2$s</string>
+    <string name="event_discovery_failed">%1$s 검색 실패. 다시 시도하세요</string>
     <string name="event_no_scanner">%1$s에서 스캐너를 찾지 못했습니다. 장치와 휴대전화가 같은 네트워크인지 확인하세요.</string>
     <string name="event_scan_working">스캔 작업 만드는 중</string>
     <string name="event_scan_downloading">%2$d페이지 중 %1$d페이지 수신 중</string>
@@ -167,7 +167,7 @@
     <string name="event_print_cancelled">인쇄 취소됨</string>
     <string name="event_print_failed">%1$s 인쇄 실패: %2$s</string>
     <string name="event_share_missing">공유할 문서를 찾지 못했습니다</string>
-    <string name="event_share_failed">문서 공유 준비 실패: %1$s</string>
+    <string name="event_share_failed">문서 공유 준비 실패. 다시 시도하세요</string>
     <string name="event_export_done">%1$d개의 %2$s 파일 저장됨</string>
     <string name="event_export_location">%1$s을(를) Download/Mopria Scan &amp; Print/Scans에 저장함</string>
     <string name="event_export_cancelled">%1$s 내보내기 취소됨</string>
@@ -178,9 +178,9 @@
     <string name="event_system_print_blocked">인쇄 서비스 일시 중지, 재개 대기 중</string>
     <string name="event_system_print_started">인쇄 서비스 처리 중</string>
     <string name="event_system_print_waiting">인쇄 서비스 확인 대기 중</string>
-    <string name="event_open_print_failed">시스템 인쇄를 열 수 없음: %1$s</string>
+    <string name="event_open_print_failed">시스템 인쇄를 열 수 없음. 다시 시도하세요</string>
     <string name="event_android9_storage_permission">Android 9에서는 Download 폴더 저장에 저장공간 권한이 필요합니다</string>
-    <string name="event_share_open_failed">공유를 열 수 없음: %1$s</string>
+    <string name="event_share_open_failed">공유를 열 수 없음. 다시 시도하세요</string>
     <string name="print_phone_document">휴대전화 문서</string>
     <string name="print_phone_documents">휴대전화 문서(%1$d개)</string>
     <string name="format_pdf">PDF</string>
@@ -231,6 +231,10 @@
     <string name="edit_cancel">취소</string>
     <string name="edit_confirm">확인</string>
     <string name="edit_no_pages">편집할 페이지가 없습니다</string>
+    <string name="edit_crop_left">왼</string>
+    <string name="edit_crop_top">위</string>
+    <string name="edit_crop_right">오</string>
+    <string name="edit_crop_bottom">아</string>
     <string name="preset_document">문서</string>
     <string name="preset_document_description">300 dpi · 컬러 · PDF · 배경 정리</string>
     <string name="preset_photo">사진</string>
@@ -326,6 +330,9 @@
     <string name="document_mock_scan_name">모의 스캔 문서 %1$s</string>
     <string name="document_scanned_name">스캔 문서 %1$s</string>
     <string name="document_flatbed_name">평판 다중 페이지 문서 %1$s</string>
+    <string name="document_name_page_suffix"> · %1$d페이지</string>
+    <string name="document_multi_page_pdf">다중 페이지 PDF</string>
+    <string name="document_source_mock_escl">모의 eSCL</string>
     <string name="document_mock_appendix">부록</string>
     <string name="document_scanned_page">스캔 페이지 %1$d</string>
 </resources>

@@ -16,7 +16,7 @@ class ScanDocumentOrganizerTest {
         assertEquals("first", merged.id)
         assertEquals(listOf(1, 2), merged.pages.map(DocumentPage::pageNumber))
         assertEquals(listOf("p1", "p2"), merged.pages.map(DocumentPage::id))
-        assertTrue(merged.sourceLabel.endsWith("Multi-page PDF"))
+        assertTrue(merged.sourceLabel.endsWith("%multipage"))
     }
 
     @Test
@@ -58,6 +58,16 @@ class ScanDocumentOrganizerTest {
         val split = ScanDocumentOrganizer.splitPages(doc)
         assertEquals("Document - page 1", split[0].name)
         assertEquals("Document - page 2", split[1].name)
+    }
+
+    @Test
+    fun splitPagesCarriesPageNumberForDistinctDisplayNames() {
+        val doc = document("adf", listOf(
+            DocumentPage("p1", 1, "one"),
+            DocumentPage("p2", 2, "two"),
+        ))
+        val split = ScanDocumentOrganizer.splitPages(doc)
+        assertEquals(listOf(1, 2), split.map(MopriaDocument::generatedNamePageNumber))
     }
 
     @Test

@@ -155,7 +155,7 @@
 
     <string name="event_saved_documents_unavailable">部分已儲存文件無法載入</string>
     <string name="event_mode_changed">已切換至 %1$s：%2$s</string>
-    <string name="event_discovery_failed">%1$s 搜尋失敗：%2$s</string>
+    <string name="event_discovery_failed">%1$s 搜尋失敗。請再試一次</string>
     <string name="event_discovery_mock">找到 %1$d 個模擬裝置，可以開始測試。</string>
     <string name="event_discovery_none">找不到實體裝置，請檢查 Wi‑Fi 與裝置服務。</string>
     <string name="event_discovery_real">找到 %1$d 個網路裝置。</string>
@@ -179,7 +179,7 @@
     <string name="event_print_cancelled">列印已取消</string>
     <string name="event_print_failed">%1$s 列印失敗：%2$s</string>
     <string name="event_share_missing">找不到要分享的文件</string>
-    <string name="event_share_failed">準備分享文件時發生錯誤：%1$s</string>
+    <string name="event_share_failed">準備分享文件時發生錯誤。請再試一次</string>
     <string name="event_export_done">已儲存 %1$d 個 %2$s 檔案</string>
     <string name="event_export_location">%1$s 已儲存至 Download/Mopria Scan &amp; Print/Scans</string>
     <string name="event_export_cancelled">%1$s 匯出已取消</string>
@@ -190,9 +190,9 @@
     <string name="event_system_print_blocked">列印服務暫停，等待恢復</string>
     <string name="event_system_print_started">列印服務正在處理</string>
     <string name="event_system_print_waiting">等待列印服務確認</string>
-    <string name="event_open_print_failed">無法開啟系統列印：%1$s</string>
+    <string name="event_open_print_failed">無法開啟系統列印。請再試一次</string>
     <string name="event_android9_storage_permission">Android 9 需要儲存空間權限才能寫入 Download 資料夾</string>
-    <string name="event_share_open_failed">無法開啟分享：%1$s</string>
+    <string name="event_share_open_failed">無法開啟分享。請再試一次</string>
     <string name="print_phone_document">手機文件</string>
     <string name="print_phone_documents">手機文件（%1$d）</string>
 
@@ -242,6 +242,10 @@
     <string name="edit_cancel">取消</string>
     <string name="edit_confirm">確認</string>
     <string name="edit_no_pages">沒有可編輯的頁面</string>
+    <string name="edit_crop_left">左</string>
+    <string name="edit_crop_top">上</string>
+    <string name="edit_crop_right">右</string>
+    <string name="edit_crop_bottom">下</string>
     <string name="preset_document">文件</string>
     <string name="preset_document_description">300 dpi · 彩色 · PDF · 背景淨化</string>
     <string name="preset_photo">相片</string>
@@ -337,6 +341,9 @@
     <string name="document_mock_scan_name">模擬掃描文件 %1$s</string>
     <string name="document_scanned_name">掃描文件 %1$s</string>
     <string name="document_flatbed_name">平台多頁文件 %1$s</string>
+    <string name="document_name_page_suffix"> · 第 %1$d 頁</string>
+    <string name="document_multi_page_pdf">多頁 PDF</string>
+    <string name="document_source_mock_escl">模擬 eSCL</string>
     <string name="document_mock_appendix">附錄</string>
     <string name="document_scanned_page">掃描頁面 %1$d</string>
 </resources>

@@ -29,6 +29,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -170,9 +171,15 @@ private fun EditablePageCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Thumbnail with rotation
-            val bitmap = remember(page.id, page.rotationDegrees, page.cropRect) {
-                DocumentPageBitmapLoader.load(context, page, 200, 280)
+            val result by produceState<Result<android.graphics.Bitmap?>?>(
+                initialValue = null,
+                key1 = page.id,
+                key2 = page.rotationDegrees,
+                key3 = page.cropRect,
+            ) {
+                value = runCatching { DocumentPreviewLoader.load(context, page, 200, 280) }
             }
+            val bitmap = result?.getOrNull()
             Surface(
                 modifier = Modifier.size(72.dp, 100.dp),
                 shape = MaterialTheme.shapes.small,
@@ -235,10 +242,15 @@ private fun CropDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
-    val bitmap = remember(page.id, page.rotationDegrees) {
+    val result by produceState<Result<android.graphics.Bitmap?>?>(
+        initialValue = null,
+        key1 = page.id,
+        key2 = page.rotationDegrees,
+    ) {
         // Show the uncropped source while the sliders define the crop fractions.
-        DocumentPageBitmapLoader.load(context, page.copy(cropRect = null), 600, 800)
+        value = runCatching { DocumentPreviewLoader.load(context, page.copy(cropRect = null), 600, 800) }
     }
+    val bitmap = result?.getOrNull()
     val displayedCrop = remember(page.cropRect, page.rotationDegrees) {
         page.cropRect?.let { CropCoordinateMapper.sourceToDisplay(it, page.rotationDegrees) }
     }
@@ -289,10 +301,10 @@ private fun CropDialog(
                     }
                 }
                 Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                    CropSliderRow("L", left, 0f, (right - 0.05f).coerceAtLeast(0.01f)) { left = it }
-                    CropSliderRow("T", top, 0f, (bottom - 0.05f).coerceAtLeast(0.01f)) { top = it }
-                    CropSliderRow("R", right, (left + 0.05f).coerceAtMost(0.99f), 1f) { right = it }
-                    CropSliderRow("B", bottom, (top + 0.05f).coerceAtMost(0.99f), 1f) { bottom = it }
+                    CropSliderRow(stringResourceSafe(R.string.edit_crop_left), left, 0f, (right - 0.05f).coerceAtLeast(0.01f)) { left = it }
+                    CropSliderRow(stringResourceSafe(R.string.edit_crop_top), top, 0f, (bottom - 0.05f).coerceAtLeast(0.01f)) { top = it }
+                    CropSliderRow(stringResourceSafe(R.string.edit_crop_right), right, (left + 0.05f).coerceAtMost(0.99f), 1f) { right = it }
+                    CropSliderRow(stringResourceSafe(R.string.edit_crop_bottom), bottom, (top + 0.05f).coerceAtMost(0.99f), 1f) { bottom = it }
                 }
             }
         },

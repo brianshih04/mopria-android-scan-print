@@ -389,7 +389,7 @@ class RealIntegrationProvider(
             MopriaDocument(
                 id = "real-scan-$scanId",
                 name = "Scanned document ${scanId.toString().takeLast(4)}",
-                sourceLabel = "${scanner.name} · eSCL · ${settings.inputSource.eSclValue} · ${resolutionLabel(negotiated)} · ${colorModeLabel(negotiated.colorMode)}",
+                sourceLabel = "${scanner.name} · eSCL · ${settings.inputSource.displayToken} · ${resolutionLabel(negotiated)} · ${colorModeLabel(negotiated.colorMode)}",
                 pages = pages,
                 createdAt = scanId,
                 enhancementResults = enhancementResults,
@@ -729,7 +729,7 @@ class RealIntegrationProvider(
 
         fun colorModeLabel(value: String): String = ScanColorMode.entries
             .firstOrNull { it.eSclValue.equals(value, ignoreCase = true) }
-            ?.eSclValue
+            ?.displayToken
             ?: value
 
         fun resolutionLabel(settings: EsclNegotiatedSettings): String = if (settings.resolution == settings.yResolution) {

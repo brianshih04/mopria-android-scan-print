@@ -18,6 +18,9 @@ object TempFileCleanup {
     private const val SCANS_DIR = "scans"
     private const val CACHE_MAX_AGE_MS = 24L * 60L * 60L * 1000L
 
+    /** Files younger than this are left alone: they may belong to a scan that is still completing. */
+    private const val SCANS_GRACE_PERIOD_MS = 10L * 60L * 1000L
+
     /**
      * Delete all source files referenced by [document] from `filesDir/scans/`.
      * Called after successful export or when a document is deleted by the user.
@@ -43,13 +46,16 @@ object TempFileCleanup {
      * but whose files were left behind (e.g. process death before cleanup ran).
      *
      * [referencedPaths] is the set of all absolute file paths that current documents point to.
+     * Unreferenced files newer than [SCANS_GRACE_PERIOD_MS] are kept, because a scan completing
+     * concurrently with startup may not have entered the referenced set yet.
      */
     fun deleteOrphanedScans(context: Context, referencedPaths: Set<String>) {
         val scansDir = File(context.applicationContext.filesDir, SCANS_DIR)
         if (!scansDir.isDirectory) return
+        val cutoff = System.currentTimeMillis() - SCANS_GRACE_PERIOD_MS
         scansDir.listFiles()?.forEach { file ->
             val absolute = file.absolutePath
-            if (absolute !in referencedPaths) {
+            if (absolute !in referencedPaths && file.lastModified() < cutoff) {
                 runCatching { file.delete() }
             }
         }

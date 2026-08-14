@@ -155,7 +155,7 @@
 
     <string name="event_saved_documents_unavailable">部分已保存文件无法加载</string>
     <string name="event_mode_changed">已切换至 %1$s：%2$s</string>
-    <string name="event_discovery_failed">%1$s 搜索失败：%2$s</string>
+    <string name="event_discovery_failed">%1$s 搜索失败。请重试</string>
     <string name="event_discovery_mock">找到 %1$d 个模拟设备，可以开始测试。</string>
     <string name="event_discovery_none">找不到实体设备，请检查 Wi‑Fi 和设备服务。</string>
     <string name="event_discovery_real">找到 %1$d 个网络设备。</string>
@@ -179,7 +179,7 @@
     <string name="event_print_cancelled">打印已取消</string>
     <string name="event_print_failed">%1$s 打印失败：%2$s</string>
     <string name="event_share_missing">找不到要分享的文件</string>
-    <string name="event_share_failed">准备分享文件时出错：%1$s</string>
+    <string name="event_share_failed">准备分享文件时出错。请重试</string>
     <string name="event_export_done">已保存 %1$d 个 %2$s 文件</string>
     <string name="event_export_location">%1$s 已保存至 Download/Mopria Scan &amp; Print/Scans</string>
     <string name="event_export_cancelled">%1$s 导出已取消</string>
@@ -190,9 +190,9 @@
     <string name="event_system_print_blocked">打印服务暂停，等待恢复</string>
     <string name="event_system_print_started">打印服务正在处理</string>
     <string name="event_system_print_waiting">等待打印服务确认</string>
-    <string name="event_open_print_failed">无法打开系统打印：%1$s</string>
+    <string name="event_open_print_failed">无法打开系统打印。请重试</string>
     <string name="event_android9_storage_permission">Android 9 需要存储权限才能写入 Download 文件夹</string>
-    <string name="event_share_open_failed">无法打开分享：%1$s</string>
+    <string name="event_share_open_failed">无法打开分享。请重试</string>
     <string name="print_phone_document">手机文件</string>
     <string name="print_phone_documents">手机文件（%1$d）</string>
 
@@ -242,6 +242,10 @@
     <string name="edit_cancel">取消</string>
     <string name="edit_confirm">确认</string>
     <string name="edit_no_pages">没有可编辑的页面</string>
+    <string name="edit_crop_left">左</string>
+    <string name="edit_crop_top">上</string>
+    <string name="edit_crop_right">右</string>
+    <string name="edit_crop_bottom">下</string>
     <string name="preset_document">文档</string>
     <string name="preset_document_description">300 dpi · 彩色 · PDF · 背景净化</string>
     <string name="preset_photo">照片</string>
@@ -337,6 +341,9 @@
     <string name="document_mock_scan_name">模拟扫描文档 %1$s</string>
     <string name="document_scanned_name">扫描文档 %1$s</string>
     <string name="document_flatbed_name">平板多页文档 %1$s</string>
+    <string name="document_name_page_suffix"> · 第 %1$d 页</string>
+    <string name="document_multi_page_pdf">多页 PDF</string>
+    <string name="document_source_mock_escl">模拟 eSCL</string>
     <string name="document_mock_appendix">附录</string>
     <string name="document_scanned_page">扫描页面 %1$d</string>
 </resources>

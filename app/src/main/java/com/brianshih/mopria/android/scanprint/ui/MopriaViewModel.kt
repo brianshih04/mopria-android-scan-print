@@ -331,7 +331,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 throw error
             } catch (error: Exception) {
                 _uiState.update { it.copy(isDiscovering = false, devices = emptyList()) }
-                _events.tryEmit(text(R.string.event_discovery_failed, text(mode.labelRes), error.message ?: text(R.string.common_retry)))
+                _events.tryEmit(text(R.string.event_discovery_failed, text(mode.labelRes)))
             }
         }
     }
@@ -600,12 +600,14 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
 
     fun deleteDocument(documentId: String) {
         val document = _uiState.value.documents.firstOrNull { it.id == documentId } ?: return
-        TempFileCleanup.deleteDocumentFiles(getApplication(), document)
         _uiState.update { state ->
             state.copy(
                 documents = state.documents.filterNot { it.id == documentId },
                 selectedDocumentId = if (state.selectedDocumentId == documentId) null else state.selectedDocumentId,
             )
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            TempFileCleanup.deleteDocumentFiles(getApplication(), document)
         }
         persistDocuments()
         _events.tryEmit(text(R.string.event_document_deleted))
@@ -940,7 +942,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             } catch (error: SearchablePdfExportException) {
                 _events.tryEmit(text(error.failure.messageStringRes()))
             } catch (error: Exception) {
-                _events.tryEmit(text(R.string.event_share_failed, error.message ?: text(R.string.common_retry)))
+                _events.tryEmit(text(R.string.event_share_failed))
             }
         }
     }
@@ -996,8 +998,9 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 _events.tryEmit(message)
             } catch (error: Exception) {
                 _uiState.update { it.copy(activeJobId = null) }
-                updateJob(jobId, JobStatus.Failed, 0, error.message ?: text(R.string.event_export_failed, text(format.labelRes)))
-                _events.tryEmit(text(R.string.event_export_failed, text(format.labelRes)))
+                val message = text(R.string.event_export_failed, text(format.labelRes))
+                updateJob(jobId, JobStatus.Failed, 0, message)
+                _events.tryEmit(message)
             }
         }
     }

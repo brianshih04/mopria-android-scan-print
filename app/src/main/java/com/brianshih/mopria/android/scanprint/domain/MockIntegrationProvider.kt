@@ -43,7 +43,7 @@ class MockIntegrationProvider : DeviceDiscovery, ScanAcquisitionProvider, PrintP
         return MopriaDocument(
             id = "scan-$timestamp",
             name = "Mock scan document ${timestamp.toString().takeLast(4)}",
-            sourceLabel = "${scanner.name} · Mock eSCL · ${settings.inputSource.eSclValue} · ${settings.resolutionDpi} dpi · ${settings.colorMode.eSclValue}",
+            sourceLabel = "${scanner.name} · %mock · ${settings.inputSource.displayToken} · ${settings.resolutionDpi} dpi · ${settings.colorMode.displayToken}",
             pages = (1..pageCount).map { page ->
                 DocumentPage(
                     "$timestamp-page-$page",

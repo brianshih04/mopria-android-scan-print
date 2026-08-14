@@ -146,7 +146,7 @@
     <string name="event_discovery_mock">%1$d Testgeräte gefunden.</string>
     <string name="event_discovery_none">Keine physischen Geräte gefunden. WLAN und Dienste prüfen.</string>
     <string name="event_discovery_real">%1$d Netzwerkgeräte gefunden.</string>
-    <string name="event_discovery_failed">Suche nach %1$s fehlgeschlagen: %2$s</string>
+    <string name="event_discovery_failed">Suche nach %1$s fehlgeschlagen. Bitte erneut versuchen.</string>
     <string name="event_no_scanner">Kein Scanner in %1$s gefunden. Geräte müssen im selben Netzwerk sein.</string>
     <string name="event_scan_working">Scanauftrag wird erstellt</string>
     <string name="event_scan_downloading">Seite %1$d von %2$d wird empfangen</string>
@@ -167,7 +167,7 @@
     <string name="event_print_cancelled">Druck abgebrochen</string>
     <string name="event_print_failed">%1$s-Druck fehlgeschlagen: %2$s</string>
     <string name="event_share_missing">Dokument zum Teilen nicht gefunden</string>
-    <string name="event_share_failed">Dokument konnte nicht vorbereitet werden: %1$s</string>
+    <string name="event_share_failed">Dokument konnte nicht vorbereitet werden. Bitte erneut versuchen.</string>
     <string name="event_export_done">%1$d %2$s-Datei(en) gespeichert</string>
     <string name="event_export_location">%1$s in Download/Mopria Scan &amp; Print/Scans gespeichert</string>
     <string name="event_export_cancelled">%1$s-Export abgebrochen</string>
@@ -178,9 +178,9 @@
     <string name="event_system_print_blocked">Druckdienst pausiert; warte auf Fortsetzung</string>
     <string name="event_system_print_started">Druckdienst verarbeitet</string>
     <string name="event_system_print_waiting">Warte auf Bestätigung des Druckdienstes</string>
-    <string name="event_open_print_failed">Systemdruck konnte nicht geöffnet werden: %1$s</string>
+    <string name="event_open_print_failed">Systemdruck konnte nicht geöffnet werden. Bitte erneut versuchen.</string>
     <string name="event_android9_storage_permission">Android 9 benötigt Speicherberechtigung für den Download-Ordner</string>
-    <string name="event_share_open_failed">Teilen konnte nicht geöffnet werden: %1$s</string>
+    <string name="event_share_open_failed">Teilen konnte nicht geöffnet werden. Bitte erneut versuchen.</string>
     <string name="print_phone_document">Telefondokument</string>
     <string name="print_phone_documents">Telefondokumente (%1$d)</string>
     <string name="format_pdf">PDF</string>
@@ -231,6 +231,10 @@
     <string name="edit_cancel">Abbrechen</string>
     <string name="edit_confirm">Bestätigen</string>
     <string name="edit_no_pages">Keine Seiten zum Bearbeiten</string>
+    <string name="edit_crop_left">L</string>
+    <string name="edit_crop_top">O</string>
+    <string name="edit_crop_right">R</string>
+    <string name="edit_crop_bottom">U</string>
     <string name="preset_document">Dokument</string>
     <string name="preset_document_description">300 dpi · Farbe · PDF · Hintergrund säubern</string>
     <string name="preset_photo">Foto</string>
@@ -326,6 +330,9 @@
     <string name="document_mock_scan_name">Simuliertes Scandokument %1$s</string>
     <string name="document_scanned_name">Gescanntes Dokument %1$s</string>
     <string name="document_flatbed_name">Mehrseitiges Flachbettdokument %1$s</string>
+    <string name="document_name_page_suffix"> · Seite %1$d</string>
+    <string name="document_multi_page_pdf">Mehrseitiges PDF</string>
+    <string name="document_source_mock_escl">Simuliertes eSCL</string>
     <string name="document_mock_appendix">Anhang</string>
     <string name="document_scanned_page">Gescannte Seite %1$d</string>
 </resources>

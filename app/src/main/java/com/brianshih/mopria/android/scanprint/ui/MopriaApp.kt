@@ -104,10 +104,8 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
             printManager.print(title, adapter, attributes)
         }.onSuccess { printJob ->
             viewModel.monitorSystemPrint(printJob, title)
-        }.onFailure { error ->
-            viewModel.reportMessage(
-                resources.getString(R.string.event_open_print_failed, error.message ?: resources.getString(R.string.common_retry)),
-            )
+        }.onFailure {
+            viewModel.reportMessage(resources.getString(R.string.event_open_print_failed))
         }
     }
 
@@ -177,10 +175,8 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
             }
             runCatching {
                 context.startActivity(Intent.createChooser(sendIntent, resources.getString(R.string.documents_share) + " ${request.title}"))
-            }.onFailure { error ->
-                viewModel.reportMessage(
-                    resources.getString(R.string.event_share_open_failed, error.message ?: resources.getString(R.string.common_retry)),
-                )
+            }.onFailure {
+                viewModel.reportMessage(resources.getString(R.string.event_share_open_failed))
             }
         }
     }
