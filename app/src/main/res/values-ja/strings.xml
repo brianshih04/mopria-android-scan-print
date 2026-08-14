@@ -209,6 +209,22 @@
     <string name="print_options_media">用紙</string>
     <string name="print_options_orientation">方向</string>
     <string name="print_options_cancel">キャンセル</string>
+    <string name="ipp_sides_one">片面</string>
+    <string name="ipp_sides_two_long">両面(長辺とじ)</string>
+    <string name="ipp_sides_two_short">両面(短辺とじ)</string>
+    <string name="ipp_quality_draft">下書き</string>
+    <string name="ipp_quality_normal">標準</string>
+    <string name="ipp_quality_high">高品質</string>
+    <string name="ipp_orientation_portrait">縦</string>
+    <string name="ipp_orientation_landscape">横</string>
+    <string name="ipp_orientation_reverse_portrait">縦(反転)</string>
+    <string name="ipp_orientation_reverse_landscape">横(反転)</string>
+    <string name="ipp_media_a3">A3</string>
+    <string name="ipp_media_legal">リーガル</string>
+    <string name="print_read_failed">選択したドキュメントを読み込めません</string>
+    <string name="print_write_failed">印刷ドキュメントを作成できません</string>
+    <string name="print_selected_document_name">選択したドキュメント</string>
+    <string name="job_target_system_print">Android システム印刷</string>
 
     <string name="scan_error_scanner_not_ready">スキャナーの準備ができていません。デバイスを確認して再試行してください。</string>
     <string name="scan_error_adf_not_ready">原稿フィーダーが空か準備未完了です。原稿をセットして再試行してください。</string>

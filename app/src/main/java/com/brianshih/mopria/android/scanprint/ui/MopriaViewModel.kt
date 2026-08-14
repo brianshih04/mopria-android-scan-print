@@ -59,10 +59,12 @@ import com.brianshih.mopria.android.scanprint.domain.ScannerCapabilities
 import com.brianshih.mopria.android.scanprint.domain.TempFileCleanup
 import com.brianshih.mopria.android.scanprint.domain.SettingsStore
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -94,7 +96,9 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             ),
         ),
     )
-    private val _events = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    // Channel instead of SharedFlow: events emitted during startup (before the UI subscribes) stay
+    // buffered and are delivered once; a replaying SharedFlow would re-show stale snackbars on rotation.
+    private val _events = Channel<String>(Channel.BUFFERED)
     private val _printRequests = MutableSharedFlow<MopriaDocument>(extraBufferCapacity = 4)
     private val _shareRequests = MutableSharedFlow<ShareRequest>(extraBufferCapacity = 4)
     private val scanExportService = ScanExportService(application)
@@ -104,7 +108,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
     private val documentPersistenceGeneration = AtomicLong()
 
     val uiState = _uiState.asStateFlow()
-    val events = _events.asSharedFlow()
+    val events = _events.receiveAsFlow()
     val printRequests = _printRequests.asSharedFlow()
     internal val shareRequests = _shareRequests.asSharedFlow()
 
@@ -157,7 +161,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
-                _events.tryEmit(text(R.string.event_saved_documents_unavailable))
+                _events.trySend(text(R.string.event_saved_documents_unavailable))
             }
         }
     }
@@ -172,7 +176,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 devices = emptyList(),
             )
         }
-        _events.tryEmit(text(R.string.event_mode_changed, text(mode.labelRes), text(mode.descriptionRes)))
+        _events.trySend(text(R.string.event_mode_changed, text(mode.labelRes), text(mode.descriptionRes)))
         discoverDevices()
     }
 
@@ -254,17 +258,17 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         }) {
             is OcrPackDownloadResult.Ready -> {
                 refreshOcrLanguagePackStates()
-                _events.tryEmit(text(R.string.event_ocr_language_pack_downloaded, text(language.labelRes)))
+                _events.trySend(text(R.string.event_ocr_language_pack_downloaded, text(language.labelRes)))
             }
             is OcrPackDownloadResult.Requested -> {
                 refreshOcrLanguagePackStates()
-                _events.tryEmit(text(R.string.event_ocr_language_pack_unavailable, text(language.labelRes)))
+                _events.trySend(text(R.string.event_ocr_language_pack_unavailable, text(language.labelRes)))
             }
             is OcrPackDownloadResult.Failed -> {
                 updateOcrLanguagePackState(language) {
                     it.copy(status = OcrLanguagePackStatus.Failed, progress = 0)
                 }
-                _events.tryEmit(text(R.string.event_ocr_language_pack_failed, text(language.labelRes)))
+                _events.trySend(text(R.string.event_ocr_language_pack_failed, text(language.labelRes)))
             }
         }
     }
@@ -325,13 +329,13 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 if (adjustedSettings != currentSettings) settingsStore.saveScanSettings(adjustedSettings)
                 notifyEnhancementDisabled(currentSettings, adjustedSettings)
                 notifyOcrDisabled(currentSettings, adjustedSettings)
-                _events.tryEmit(discoveryMessage(mode, devices))
+                _events.trySend(discoveryMessage(mode, devices))
             } catch (error: CancellationException) {
                 _uiState.update { it.copy(isDiscovering = false) }
                 throw error
             } catch (error: Exception) {
                 _uiState.update { it.copy(isDiscovering = false, devices = emptyList()) }
-                _events.tryEmit(text(R.string.event_discovery_failed, text(mode.labelRes)))
+                _events.trySend(text(R.string.event_discovery_failed, text(mode.labelRes)))
             }
         }
     }
@@ -402,7 +406,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                             awaitingNextFlatbedPage = it.pendingFlatbedDocumentId != null,
                         )
                     }
-                    _events.tryEmit(text(R.string.event_no_scanner, text(mode.labelRes)))
+                    _events.trySend(text(R.string.event_no_scanner, text(mode.labelRes)))
                     return@launch
                 }
 
@@ -449,10 +453,10 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 document.enhancementResults.distinct().forEach { result ->
                     when (result) {
                         EnhancementResult.Applied -> Unit
-                        is EnhancementResult.Skipped -> _events.tryEmit(
+                        is EnhancementResult.Skipped -> _events.trySend(
                             text(R.string.event_scan_enhancement_skipped, text(result.reason.messageStringRes())),
                         )
-                        is EnhancementResult.Failed -> _events.tryEmit(
+                        is EnhancementResult.Failed -> _events.trySend(
                             text(R.string.event_scan_enhancement_failed, text(result.error.messageStringRes())),
                         )
                     }
@@ -462,11 +466,11 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                         ScanImageResult.Applied,
                         ScanImageResult.Unchanged,
                         -> Unit
-                        ScanImageResult.DroppedBlankPage -> _events.tryEmit(text(R.string.event_scan_blank_page_dropped))
-                        is ScanImageResult.Skipped -> _events.tryEmit(
+                        ScanImageResult.DroppedBlankPage -> _events.trySend(text(R.string.event_scan_blank_page_dropped))
+                        is ScanImageResult.Skipped -> _events.trySend(
                             text(R.string.event_scan_image_processing_skipped, text(result.reason.messageStringRes())),
                         )
-                        is ScanImageResult.Failed -> _events.tryEmit(
+                        is ScanImageResult.Failed -> _events.trySend(
                             text(R.string.event_scan_image_processing_failed, text(result.error.messageStringRes())),
                         )
                     }
@@ -474,10 +478,10 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 document.ocrResults.distinct().forEach { result ->
                     when (result) {
                         is OcrResult.Applied -> Unit
-                        is OcrResult.Skipped -> _events.tryEmit(
+                        is OcrResult.Skipped -> _events.trySend(
                             text(R.string.event_scan_ocr_skipped, text(result.reason.messageStringRes())),
                         )
-                        is OcrResult.Failed -> _events.tryEmit(
+                        is OcrResult.Failed -> _events.trySend(
                             text(R.string.event_scan_ocr_failed, text(result.error.messageStringRes())),
                         )
                     }
@@ -505,10 +509,10 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                         updateJob(currentJobId, JobStatus.Completed, 100, text(R.string.common_pages, merged.pages.size))
                         persistDocuments()
                         if (reachedLimit) {
-                            _events.tryEmit(text(R.string.event_scan_limit, MAX_SCAN_PAGES))
+                            _events.trySend(text(R.string.event_scan_limit, MAX_SCAN_PAGES))
                             saveScan(merged.id, ScanOutputFormat.Pdf)
                         } else {
-                            _events.tryEmit(text(R.string.event_scan_page_done, merged.pages.size))
+                            _events.trySend(text(R.string.event_scan_page_done, merged.pages.size))
                         }
                     }
                     settings.inputSource == ScanInputSource.Adf && !settings.combineAsPdf -> {
@@ -522,7 +526,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                         }
                         updateJob(currentJobId, JobStatus.Completed, 100, text(R.string.common_pages, document.pages.size))
                         persistDocuments()
-                        _events.tryEmit(text(R.string.event_scan_separate_done, text(mode.labelRes), document.pages.size))
+                        _events.trySend(text(R.string.event_scan_separate_done, text(mode.labelRes), document.pages.size))
                     }
                     else -> {
                         _uiState.update {
@@ -534,7 +538,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                         }
                         updateJob(currentJobId, JobStatus.Completed, 100, text(R.string.common_pages, document.pages.size))
                         persistDocuments()
-                        _events.tryEmit(text(R.string.event_scan_done, text(mode.labelRes), document.pages.size))
+                        _events.trySend(text(R.string.event_scan_done, text(mode.labelRes), document.pages.size))
                         if (settings.inputSource == ScanInputSource.Adf && settings.combineAsPdf) {
                             saveScan(document.id, ScanOutputFormat.Pdf)
                         }
@@ -560,7 +564,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                         awaitingNextFlatbedPage = it.pendingFlatbedDocumentId != null,
                     )
                 }
-                _events.tryEmit(message)
+                _events.trySend(message)
             } catch (error: Exception) {
                 val message = text(R.string.event_scan_failed, text(mode.labelRes), text(R.string.common_retry))
                 jobId?.let { updateJob(it, JobStatus.Failed, 0, message) }
@@ -571,7 +575,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                         awaitingNextFlatbedPage = it.pendingFlatbedDocumentId != null,
                     )
                 }
-                _events.tryEmit(message)
+                _events.trySend(message)
             }
         }
     }
@@ -610,7 +614,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             TempFileCleanup.deleteDocumentFiles(getApplication(), document)
         }
         persistDocuments()
-        _events.tryEmit(text(R.string.event_document_deleted))
+        _events.trySend(text(R.string.event_document_deleted))
     }
 
 
@@ -660,7 +664,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 documents = listOf(document) + it.documents,
             )
         }
-        _events.tryEmit(text(R.string.event_demo_created))
+        _events.trySend(text(R.string.event_demo_created))
     }
 
     fun print(documentId: String? = null) {
@@ -679,7 +683,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 if (mode == IntegrationMode.Real && _uiState.value.printMethod == PrintMethod.System) {
                     _uiState.update { it.copy(selectedDocumentId = document.id) }
                     _printRequests.emit(document)
-                    _events.tryEmit(text(R.string.event_print_opening))
+                    _events.trySend(text(R.string.event_print_opening))
                     return@launch
                 }
 
@@ -697,7 +701,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     // would mislead users into thinking Direct IPP was used. Surface an explicit error
                     // and let them switch print method in Settings if they want system print.
                     _uiState.update { it.copy(isDiscovering = false, devices = devices) }
-                    _events.tryEmit(
+                    _events.trySend(
                         if (mode == IntegrationMode.Real) text(R.string.event_no_ipp_printer)
                         else text(R.string.event_no_printer, text(mode.labelRes)),
                     )
@@ -722,7 +726,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 throw error
             } catch (_: Exception) {
                 _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
-                _events.tryEmit(text(R.string.event_print_failed, text(mode.labelRes), text(R.string.common_retry)))
+                _events.trySend(text(R.string.event_print_failed, text(mode.labelRes), text(R.string.common_retry)))
             }
         }
     }
@@ -771,7 +775,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             providers.print.print(printer, document, options)
             updateJob(currentJobId, JobStatus.Completed, 100, text(R.string.event_print_done))
             _uiState.update { it.copy(activeJobId = null) }
-            _events.tryEmit(text(R.string.event_print_done))
+            _events.trySend(text(R.string.event_print_done))
         } catch (error: CancellationException) {
             jobId?.let { updateJob(it, JobStatus.Cancelled, 0, text(R.string.event_print_cancelled)) }
             _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
@@ -780,12 +784,12 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             val message = text(error.messageStringRes())
             jobId?.let { updateJob(it, JobStatus.Failed, 0, message) }
             _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
-            _events.tryEmit(message)
+            _events.trySend(message)
         } catch (error: Exception) {
             val message = text(R.string.event_print_failed, text(mode.labelRes), text(R.string.common_retry))
             jobId?.let { updateJob(it, JobStatus.Failed, 0, message) }
             _uiState.update { it.copy(isDiscovering = false, activeJobId = null) }
-            _events.tryEmit(message)
+            _events.trySend(message)
         }
     }
 
@@ -906,7 +910,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun notifyEnhancementDisabled(requested: ScanSettings, adjusted: ScanSettings) {
         if (requested.enhanceBackground != null && adjusted.enhanceBackground == null) {
-            _events.tryEmit(text(R.string.event_scan_enhancement_disabled_high_resolution, adjusted.resolutionDpi))
+            _events.trySend(text(R.string.event_scan_enhancement_disabled_high_resolution, adjusted.resolutionDpi))
         }
     }
 
@@ -914,7 +918,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         if (requested.ocrMode != OcrMode.Disabled &&
             adjusted.ocrMode == OcrMode.Disabled
         ) {
-            _events.tryEmit(text(R.string.event_scan_ocr_disabled_high_resolution, adjusted.resolutionDpi))
+            _events.trySend(text(R.string.event_scan_ocr_disabled_high_resolution, adjusted.resolutionDpi))
         }
     }
 
@@ -930,7 +934,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         if (_uiState.value.isBusy) return
         val document = _uiState.value.documents.firstOrNull { it.id == documentId }
         if (document == null) {
-            _events.tryEmit(text(R.string.event_share_missing))
+            _events.trySend(text(R.string.event_share_missing))
             return
         }
         viewModelScope.launch {
@@ -940,9 +944,9 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             } catch (error: CancellationException) {
                 throw error
             } catch (error: SearchablePdfExportException) {
-                _events.tryEmit(text(error.failure.messageStringRes()))
+                _events.trySend(text(error.failure.messageStringRes()))
             } catch (error: Exception) {
-                _events.tryEmit(text(R.string.event_share_failed))
+                _events.trySend(text(R.string.event_share_failed))
             }
         }
     }
@@ -953,7 +957,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
         val document = documentId?.let { id -> _uiState.value.documents.firstOrNull { it.id == id } }
             ?: _uiState.value.documents.firstOrNull()
         if (document == null) {
-            _events.tryEmit(text(R.string.common_no_documents))
+            _events.trySend(text(R.string.common_no_documents))
             return
         }
 
@@ -986,7 +990,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 updateJob(jobId, JobStatus.Completed, 100, text(R.string.event_export_done, file.size, text(format.labelRes)))
                 persistDocuments()
-                _events.tryEmit(text(R.string.event_export_location, text(format.labelRes)))
+                _events.trySend(text(R.string.event_export_location, text(format.labelRes)))
             } catch (error: CancellationException) {
                 updateJob(jobId, JobStatus.Cancelled, 0, text(R.string.event_export_cancelled, text(format.labelRes)))
                 _uiState.update { it.copy(activeJobId = null) }
@@ -995,12 +999,12 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 val message = text(error.failure.messageStringRes())
                 _uiState.update { it.copy(activeJobId = null) }
                 updateJob(jobId, JobStatus.Failed, 0, message)
-                _events.tryEmit(message)
+                _events.trySend(message)
             } catch (error: Exception) {
                 _uiState.update { it.copy(activeJobId = null) }
                 val message = text(R.string.event_export_failed, text(format.labelRes))
                 updateJob(jobId, JobStatus.Failed, 0, message)
-                _events.tryEmit(message)
+                _events.trySend(message)
             }
         }
     }
@@ -1011,7 +1015,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             id = jobId,
             kind = JobKind.Print,
             title = title,
-            targetLabel = "Android Print Framework",
+            targetLabel = text(R.string.job_target_system_print),
             status = JobStatus.Queued,
             progress = 0,
             detail = text(R.string.event_print_opening),
@@ -1061,7 +1065,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun reportMessage(message: String) {
-        _events.tryEmit(message)
+        _events.trySend(message)
     }
 
     private fun updateJob(id: String, status: JobStatus, progress: Int, detail: String) {

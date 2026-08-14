@@ -209,6 +209,22 @@
     <string name="print_options_media">Бумага</string>
     <string name="print_options_orientation">Ориентация</string>
     <string name="print_options_cancel">Отмена</string>
+    <string name="ipp_sides_one">Односторонняя</string>
+    <string name="ipp_sides_two_long">Двусторонняя (длинный край)</string>
+    <string name="ipp_sides_two_short">Двусторонняя (короткий край)</string>
+    <string name="ipp_quality_draft">Черновик</string>
+    <string name="ipp_quality_normal">Обычное</string>
+    <string name="ipp_quality_high">Высокое</string>
+    <string name="ipp_orientation_portrait">Книжная</string>
+    <string name="ipp_orientation_landscape">Альбомная</string>
+    <string name="ipp_orientation_reverse_portrait">Книжная (перевёрнутая)</string>
+    <string name="ipp_orientation_reverse_landscape">Альбомная (перевёрнутая)</string>
+    <string name="ipp_media_a3">A3</string>
+    <string name="ipp_media_legal">Legal</string>
+    <string name="print_read_failed">Не удалось прочитать выбранный документ</string>
+    <string name="print_write_failed">Не удалось создать документ для печати</string>
+    <string name="print_selected_document_name">Выбранный документ</string>
+    <string name="job_target_system_print">Печать Android</string>
 
     <string name="scan_error_scanner_not_ready">Сканер не готов. Проверьте устройство и попробуйте снова.</string>
     <string name="scan_error_adf_not_ready">Устройство автоматической подачи пусто или не готово. Загрузите документы и попробуйте снова.</string>

@@ -221,6 +221,22 @@
     <string name="print_options_media">Paper</string>
     <string name="print_options_orientation">Orientation</string>
     <string name="print_options_cancel">Cancel</string>
+    <string name="ipp_sides_one">One-sided</string>
+    <string name="ipp_sides_two_long">Two-sided (long edge)</string>
+    <string name="ipp_sides_two_short">Two-sided (short edge)</string>
+    <string name="ipp_quality_draft">Draft</string>
+    <string name="ipp_quality_normal">Normal</string>
+    <string name="ipp_quality_high">High</string>
+    <string name="ipp_orientation_portrait">Portrait</string>
+    <string name="ipp_orientation_landscape">Landscape</string>
+    <string name="ipp_orientation_reverse_portrait">Reverse portrait</string>
+    <string name="ipp_orientation_reverse_landscape">Reverse landscape</string>
+    <string name="ipp_media_a3">A3</string>
+    <string name="ipp_media_legal">Legal</string>
+    <string name="print_read_failed">Could not read the selected document</string>
+    <string name="print_write_failed">Could not create the print document</string>
+    <string name="print_selected_document_name">Selected document</string>
+    <string name="job_target_system_print">Android Print Framework</string>
 
     <string name="scan_error_scanner_not_ready">The scanner is not ready. Please check the device and try again.</string>
     <string name="scan_error_adf_not_ready">The document feeder is empty or not ready. Load documents and try again.</string>

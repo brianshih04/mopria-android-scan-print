@@ -209,6 +209,22 @@
     <string name="print_options_media">Papier</string>
     <string name="print_options_orientation">Ausrichtung</string>
     <string name="print_options_cancel">Abbrechen</string>
+    <string name="ipp_sides_one">Einseitig</string>
+    <string name="ipp_sides_two_long">Beidseitig (lange Kante)</string>
+    <string name="ipp_sides_two_short">Beidseitig (kurze Kante)</string>
+    <string name="ipp_quality_draft">Entwurf</string>
+    <string name="ipp_quality_normal">Normal</string>
+    <string name="ipp_quality_high">Hoch</string>
+    <string name="ipp_orientation_portrait">Hochformat</string>
+    <string name="ipp_orientation_landscape">Querformat</string>
+    <string name="ipp_orientation_reverse_portrait">Hochformat gedreht</string>
+    <string name="ipp_orientation_reverse_landscape">Querformat gedreht</string>
+    <string name="ipp_media_a3">A3</string>
+    <string name="ipp_media_legal">Legal</string>
+    <string name="print_read_failed">Ausgewähltes Dokument konnte nicht gelesen werden</string>
+    <string name="print_write_failed">Druckdokument konnte nicht erstellt werden</string>
+    <string name="print_selected_document_name">Ausgewähltes Dokument</string>
+    <string name="job_target_system_print">Android-Druck</string>
 
     <string name="scan_error_scanner_not_ready">Der Scanner ist nicht bereit. Überprüfen Sie das Gerät und versuchen Sie es erneut.</string>
     <string name="scan_error_adf_not_ready">Der Dokumenteneinzug ist leer oder nicht bereit. Legen Sie Dokumente ein und versuchen Sie es erneut.</string>

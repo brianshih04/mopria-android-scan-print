@@ -209,6 +209,22 @@
     <string name="print_options_media">용지</string>
     <string name="print_options_orientation">방향</string>
     <string name="print_options_cancel">취소</string>
+    <string name="ipp_sides_one">단면</string>
+    <string name="ipp_sides_two_long">양면(긴 변 제본)</string>
+    <string name="ipp_sides_two_short">양면(짧은 변 제본)</string>
+    <string name="ipp_quality_draft">초안</string>
+    <string name="ipp_quality_normal">표준</string>
+    <string name="ipp_quality_high">고품질</string>
+    <string name="ipp_orientation_portrait">세로</string>
+    <string name="ipp_orientation_landscape">가로</string>
+    <string name="ipp_orientation_reverse_portrait">세로(반전)</string>
+    <string name="ipp_orientation_reverse_landscape">가로(반전)</string>
+    <string name="ipp_media_a3">A3</string>
+    <string name="ipp_media_legal">리걸</string>
+    <string name="print_read_failed">선택한 문서를 읽을 수 없음</string>
+    <string name="print_write_failed">인쇄 문서를 만들 수 없음</string>
+    <string name="print_selected_document_name">선택한 문서</string>
+    <string name="job_target_system_print">Android 시스템 인쇄</string>
 
     <string name="scan_error_scanner_not_ready">스캐너가 준비되지 않았습니다. 장치를 확인하고 다시 시도해 주세요.</string>
     <string name="scan_error_adf_not_ready">급지 장치가 비어 있거나 준비되지 않았습니다. 용지를 넣고 다시 시도해 주세요.</string>

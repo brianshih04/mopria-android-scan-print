@@ -446,10 +446,10 @@ class RealIntegrationProvider(
             IppDocumentFormat.producible,
         ) ?: throw PrintError.UnsupportedFormat(printer.advertisedFormats)
         val dpi = client.preferredResolution(attributes)
-        val colorSpace = chooseColorSpace(client.printColorModesSupported(attributes))
         val pclmStripHeight = client.pclmStripHeightPreferred(attributes)
         val supportsMultipleDocuments = client.multipleDocumentJobsSupported(attributes)
         val coercedOptions = options?.coerceTo(client.parseCapabilities(attributes))
+        val colorSpace = chooseColorSpace(client.printColorModesSupported(attributes), coercedOptions?.colorMode)
         val rendered = renderPrintDocument(document, format, dpi, colorSpace, pclmStripHeight)
         try {
             val batches = rendered.jobBatches(supportsMultipleDocuments)
@@ -474,9 +474,17 @@ class RealIntegrationProvider(
         Unit
     }
 
-    /** Pick RGB when the printer supports color; otherwise use grayscale for raster formats. */
-    private fun chooseColorSpace(modes: List<String>): ColorSpace =
-        if (modes.any { it.equals("color", ignoreCase = true) }) ColorSpace.Rgb else ColorSpace.Grayscale
+    /**
+     * Pick grayscale when the user chose a monochrome print option; otherwise RGB when the printer
+     * supports color, else grayscale for raster formats. Rendering grayscale directly keeps the
+     * raster payload ~3x smaller instead of shipping RGB bytes the printer would discard.
+     */
+    private fun chooseColorSpace(modes: List<String>, requestedColorMode: String?): ColorSpace {
+        val monochromeRequested = requestedColorMode?.equals("monochrome", ignoreCase = true) == true ||
+            requestedColorMode?.equals("bi-level", ignoreCase = true) == true
+        if (monochromeRequested) return ColorSpace.Grayscale
+        return if (modes.any { it.equals("color", ignoreCase = true) }) ColorSpace.Rgb else ColorSpace.Grayscale
+    }
 
     override suspend fun capabilities(printer: IntegrationDevice): PrintCapabilities? = withContext(Dispatchers.IO) {
         val host = printer.host ?: return@withContext null

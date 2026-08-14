@@ -209,6 +209,22 @@
     <string name="print_options_media">Papel</string>
     <string name="print_options_orientation">Orientação</string>
     <string name="print_options_cancel">Cancelar</string>
+    <string name="ipp_sides_one">Um lado</string>
+    <string name="ipp_sides_two_long">Frente e verso (margem longa)</string>
+    <string name="ipp_sides_two_short">Frente e verso (margem curta)</string>
+    <string name="ipp_quality_draft">Rascunho</string>
+    <string name="ipp_quality_normal">Normal</string>
+    <string name="ipp_quality_high">Alta</string>
+    <string name="ipp_orientation_portrait">Retrato</string>
+    <string name="ipp_orientation_landscape">Paisagem</string>
+    <string name="ipp_orientation_reverse_portrait">Retrato invertido</string>
+    <string name="ipp_orientation_reverse_landscape">Paisagem invertida</string>
+    <string name="ipp_media_a3">A3</string>
+    <string name="ipp_media_legal">Ofício</string>
+    <string name="print_read_failed">Não foi possível ler o documento selecionado</string>
+    <string name="print_write_failed">Não foi possível criar o documento de impressão</string>
+    <string name="print_selected_document_name">Documento selecionado</string>
+    <string name="job_target_system_print">Impressão do Android</string>
 
     <string name="scan_error_scanner_not_ready">O scanner não está pronto. Verifique o dispositivo e tente novamente.</string>
     <string name="scan_error_adf_not_ready">O alimentador de documentos está vazio ou não está pronto. Carregue documentos e tente novamente.</string>

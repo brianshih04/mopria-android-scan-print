@@ -17,6 +17,7 @@ import android.print.PrintDocumentAdapter
 import android.print.PrintDocumentInfo
 import android.provider.OpenableColumns
 import androidx.core.graphics.createBitmap
+import com.brianshih.mopria.android.scanprint.R
 import java.io.FileNotFoundException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -81,8 +82,8 @@ class UriPrintAdapter(
                 )
             } catch (_: CancellationException) {
                 callback.onLayoutCancelled()
-            } catch (error: Exception) {
-                callback.onLayoutFailed(error.message ?: "Could not read selected document")
+            } catch (_: Exception) {
+                callback.onLayoutFailed(context.getString(R.string.print_read_failed))
             }
         }
     }
@@ -156,9 +157,9 @@ class UriPrintAdapter(
             } catch (_: CancellationException) {
                 runCatching { destination.close() }
                 callback.onWriteCancelled()
-            } catch (error: Exception) {
+            } catch (_: Exception) {
                 runCatching { destination.close() }
-                callback.onWriteFailed(error.message ?: "Could not create print document")
+                callback.onWriteFailed(context.getString(R.string.print_write_failed))
             } finally {
                 pdf.close()
             }
@@ -233,7 +234,7 @@ class UriPrintAdapter(
         context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) return cursor.getString(0)
         }
-        return uri.lastPathSegment ?: "Selected document"
+        return uri.lastPathSegment ?: context.getString(R.string.print_selected_document_name)
     }
 
     private fun ensureNotCancelled(signal: CancellationSignal) {

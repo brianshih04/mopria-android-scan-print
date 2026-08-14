@@ -220,6 +220,22 @@
     <string name="print_options_media">紙張</string>
     <string name="print_options_orientation">方向</string>
     <string name="print_options_cancel">取消</string>
+    <string name="ipp_sides_one">單面</string>
+    <string name="ipp_sides_two_long">雙面(長邊裝訂)</string>
+    <string name="ipp_sides_two_short">雙面(短邊裝訂)</string>
+    <string name="ipp_quality_draft">草稿</string>
+    <string name="ipp_quality_normal">標準</string>
+    <string name="ipp_quality_high">高</string>
+    <string name="ipp_orientation_portrait">直向</string>
+    <string name="ipp_orientation_landscape">橫向</string>
+    <string name="ipp_orientation_reverse_portrait">反向直向</string>
+    <string name="ipp_orientation_reverse_landscape">反向橫向</string>
+    <string name="ipp_media_a3">A3</string>
+    <string name="ipp_media_legal">Legal</string>
+    <string name="print_read_failed">無法讀取所選文件</string>
+    <string name="print_write_failed">無法建立列印文件</string>
+    <string name="print_selected_document_name">已選擇的文件</string>
+    <string name="job_target_system_print">Android 系統列印</string>
 
     <string name="scan_error_scanner_not_ready">掃描器尚未就緒，請檢查設備後再試一次。</string>
     <string name="scan_error_adf_not_ready">進紙器中沒有文件或尚未就緒，請放入文件後再試。</string>

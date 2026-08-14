@@ -41,8 +41,8 @@ import com.brianshih.mopria.android.scanprint.domain.PrintOptions
 
 /**
  * Direct IPP print-options sheet. Every control is shown only when the printer advertises that option
- * (capability-driven), and the raw IPP keyword is displayed for each value — a future pass can map
- * keywords (e.g. `two-sided-long-edge`) to localized labels. On confirm the chosen [PrintOptions] are
+ * (capability-driven), and standard IPP/PWG keywords are mapped to localized labels; vendor-specific
+ * keywords the app does not know fall back to the raw keyword. On confirm the chosen [PrintOptions] are
  * submitted; [PrintOptions.coerceTo] in the provider guarantees nothing unsupported is sent.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -145,14 +145,54 @@ private fun OptionRow(
         ) {
             Text(stringResource(labelRes))
             Text(
-                selected ?: "—",
+                selected?.let { localizedIppKeyword(it) } ?: "—",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             values.forEach { value ->
-                DropdownMenuItem(text = { Text(value) }, onClick = { onSelect(value); expanded = false })
+                DropdownMenuItem(
+                    text = { Text(localizedIppKeyword(value)) },
+                    onClick = { onSelect(value); expanded = false },
+                )
             }
         }
     }
+}
+
+@Composable
+private fun localizedIppKeyword(keyword: String): String =
+    ippKeywordLabelRes(keyword)?.let { stringResource(it) } ?: keyword
+
+/** Standard IPP/PWG keywords with localized labels; unknown (vendor-specific) keywords return null. */
+@StringRes
+private fun ippKeywordLabelRes(keyword: String): Int? = when (keyword) {
+    // sides (PWG 5100.7)
+    "one-sided" -> R.string.ipp_sides_one
+    "two-sided-long-edge" -> R.string.ipp_sides_two_long
+    "two-sided-short-edge" -> R.string.ipp_sides_two_short
+    // print-color-mode
+    "auto" -> R.string.scan_size_auto
+    "color" -> R.string.color_color
+    "monochrome" -> R.string.color_grayscale
+    "bi-level" -> R.string.color_black_white
+    // print-quality
+    "draft" -> R.string.ipp_quality_draft
+    "normal" -> R.string.ipp_quality_normal
+    "high" -> R.string.ipp_quality_high
+    // orientation-requested
+    "portrait" -> R.string.ipp_orientation_portrait
+    "landscape" -> R.string.ipp_orientation_landscape
+    "reverse-portrait" -> R.string.ipp_orientation_reverse_portrait
+    "reverse-landscape" -> R.string.ipp_orientation_reverse_landscape
+    // media (PWG 5101.1 self-describing size names); reuses the scan-side size labels
+    "iso_a3_297x420mm" -> R.string.ipp_media_a3
+    "iso_a4_210x297mm" -> R.string.scan_size_a4
+    "iso_a5_148x210mm" -> R.string.scan_size_a5
+    "na_letter_8.5x11in" -> R.string.scan_size_letter
+    "na_legal_8.5x14in" -> R.string.ipp_media_legal
+    "na_4x6_4x6in", "na_index-4x6_4x6in" -> R.string.scan_size_photo_4x6
+    "na_5x7_5x7in", "na_index-5x7_5x7in" -> R.string.scan_size_photo_5x7
+    "na_8x10_8x10in" -> R.string.scan_size_photo_8x10
+    else -> null
 }
