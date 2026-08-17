@@ -66,8 +66,24 @@ internal fun ScanScreen(
     onPresetChange: (ScanPreset) -> Unit,
     onContinueFlatbed: () -> Unit,
     onFinishFlatbed: () -> Unit,
+    onContinueAdf: () -> Unit,
+    onFinishAdf: () -> Unit,
 ) {
-    if (uiState.awaitingNextFlatbedPage) {
+    if (uiState.awaitingAdfRecovery) {
+        val pageCount = uiState.pendingAdfDocumentId
+            ?.let { id -> uiState.documents.firstOrNull { it.id == id } }
+            ?.pages
+            ?.size
+            ?: 0
+        AlertDialog(
+            onDismissRequest = {},
+            icon = { Icon(Icons.Outlined.DocumentScanner, contentDescription = null) },
+            title = { Text(stringResource(R.string.scan_adf_jam_title)) },
+            text = { Text(stringResource(R.string.scan_adf_jam_message, pageCount)) },
+            confirmButton = { TextButton(onClick = onContinueAdf) { Text(stringResource(R.string.scan_adf_continue)) } },
+            dismissButton = { TextButton(onClick = onFinishAdf) { Text(stringResource(R.string.scan_adf_finish)) } },
+        )
+    } else if (uiState.awaitingNextFlatbedPage) {
         val pageCount = uiState.pendingFlatbedDocumentId
             ?.let { id -> uiState.documents.firstOrNull { it.id == id } }
             ?.pages
@@ -82,6 +98,7 @@ internal fun ScanScreen(
             dismissButton = { TextButton(onClick = onFinishFlatbed) { Text(stringResource(R.string.scan_finish_pdf)) } },
         )
     }
+    val scanSettingsEnabled = !uiState.isBusy && !uiState.awaitingAdfRecovery && !uiState.awaitingNextFlatbedPage
     val isTablet = isTabletLayout()
     LazyColumn(
         modifier = Modifier
@@ -94,7 +111,7 @@ internal fun ScanScreen(
         item {
             PresetSelectorCard(
                 selectedPreset = uiState.scanPreset,
-                enabled = !uiState.isBusy,
+                enabled = scanSettingsEnabled,
                 onSelect = onPresetChange,
             )
         }
@@ -102,7 +119,7 @@ internal fun ScanScreen(
             ScanComposerCard(
                 settings = uiState.scanSettings,
                 caps = uiState.scannerCapabilities,
-                enabled = !uiState.isBusy,
+                enabled = scanSettingsEnabled,
                 onChanged = onScanSettingsChanged,
                 onScan = onScan,
             )

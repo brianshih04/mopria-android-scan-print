@@ -20,6 +20,25 @@ class ScanDocumentOrganizerTest {
     }
 
     @Test
+    fun appendsAdfRecoveryPagesIntoOneOrderedDocument() {
+        val partial = document(
+            "partial",
+            listOf(DocumentPage("p1", 1, "one"), DocumentPage("p2", 2, "two")),
+        )
+        val resumed = document(
+            "resumed",
+            listOf(DocumentPage("p3", 1, "three"), DocumentPage("p4", 2, "four")),
+        )
+
+        val merged = ScanDocumentOrganizer.appendAdfPages(partial, resumed)
+
+        assertEquals("partial", merged.id)
+        assertEquals(listOf("p1", "p2", "p3", "p4"), merged.pages.map(DocumentPage::id))
+        assertEquals(listOf(1, 2, 3, 4), merged.pages.map(DocumentPage::pageNumber))
+        assertTrue(merged.pages.all { it.generatedTitle == GeneratedPageTitle.Scanned })
+    }
+
+    @Test
     fun splitsAdfPagesIntoIndependentDocumentsWhenPdfMergeIsDisabled() {
         val pages = listOf(DocumentPage("p1", 1, "one"), DocumentPage("p2", 2, "two"))
         val split = ScanDocumentOrganizer.splitPages(document("adf", pages))

@@ -98,6 +98,10 @@
     <string name="scan_start">開始掃描</string>
     <string name="scan_page_complete_title">第 %1$d 頁完成</string>
     <string name="scan_page_complete_message">放入下一頁繼續，或完成並儲存為單一 PDF。</string>
+    <string name="scan_adf_jam_title">ADF 卡紙</string>
+    <string name="scan_adf_jam_message">請排除卡紙並重新放入剩餘文件，再繼續掃描。已掃描的 %1$d 頁會保留在同一份文件中。</string>
+    <string name="scan_adf_continue">繼續掃描</string>
+    <string name="scan_adf_finish">完成文件</string>
     <string name="scan_next_page">下一頁</string>
     <string name="scan_finish_pdf">完成 PDF</string>
 
@@ -239,6 +243,7 @@
 
     <string name="scan_error_scanner_not_ready">掃描器尚未就緒，請檢查設備後再試一次。</string>
     <string name="scan_error_adf_not_ready">進紙器中沒有文件或尚未就緒，請放入文件後再試。</string>
+    <string name="scan_error_adf_jam">進紙器回報卡紙。請排除卡紙後繼續掃描。</string>
     <string name="scan_error_http">無法與掃描器通訊，請再試一次。</string>
     <string name="scan_error_timeout">掃描逾時，請再試一次。</string>
     <string name="scan_error_job_stopped">掃描工作已停止或取消。</string>

@@ -168,8 +168,8 @@ class SystemPrintAdapter(
         ranges.any { pageIndex in it.start..it.end }
 
     private companion object {
-        const val PAGE_WIDTH = 612
-        const val PAGE_HEIGHT = 792
+        const val PAGE_WIDTH = 595
+        const val PAGE_HEIGHT = 842
         const val POINTS_PER_INCH = 72f
     }
 }

@@ -91,6 +91,10 @@
     <string name="scan_start">Iniciar escaneo</string>
     <string name="scan_page_complete_title">Página %1$d completada</string>
     <string name="scan_page_complete_message">Coloca la siguiente página para continuar o termina y guarda un solo PDF.</string>
+    <string name="scan_adf_jam_title">Atasco de papel en el ADF</string>
+    <string name="scan_adf_jam_message">Elimina el atasco, vuelve a colocar las páginas restantes y continúa. Las páginas ya escaneadas permanecerán en este documento (%1$d páginas).</string>
+    <string name="scan_adf_continue">Continuar escaneo</string>
+    <string name="scan_adf_finish">Finalizar documento</string>
     <string name="scan_next_page">Siguiente página</string>
     <string name="scan_finish_pdf">Terminar PDF</string>
     <string name="documents_my_files">Mis documentos</string>
@@ -228,6 +232,7 @@
 
     <string name="scan_error_scanner_not_ready">El escáner no está listo. Compruebe el dispositivo e inténtelo de nuevo.</string>
     <string name="scan_error_adf_not_ready">El alimentador de documentos está vacío o no está listo. Cargue documentos e inténtelo de nuevo.</string>
+    <string name="scan_error_adf_jam">El alimentador de documentos ha informado de un atasco de papel. Elimine el atasco y continúe el escaneo.</string>
     <string name="scan_error_http">No se pudo comunicar con el escáner. Inténtelo de nuevo.</string>
     <string name="scan_error_timeout">El escaneo ha superado el tiempo de espera. Inténtelo de nuevo.</string>
     <string name="scan_error_job_stopped">El trabajo de escaneo se detuvo o canceló.</string>

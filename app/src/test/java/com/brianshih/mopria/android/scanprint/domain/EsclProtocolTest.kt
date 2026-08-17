@@ -258,6 +258,22 @@ class EsclProtocolTest {
     }
 
     @Test
+    fun detectsAdfJamFromScannerOrJobReason() {
+        val status = EsclProtocol.parseScannerStatus(
+            """
+            <scan:ScannerStatus xmlns:scan="${EsclProtocol.XML_NAMESPACE}" xmlns:pwg="${EsclProtocol.PWG_NAMESPACE}">
+              <pwg:Version>2.63</pwg:Version><pwg:State>Stopped</pwg:State><scan:AdfState>ScannerAdfJam</scan:AdfState>
+              <scan:Jobs><scan:JobInfo><pwg:JobUri>/eSCL/ScanJobs/7</pwg:JobUri>
+                <pwg:JobState>Stopped</pwg:JobState><pwg:JobStateReasons><pwg:JobStateReason>ScannerAdfJam</pwg:JobStateReason></pwg:JobStateReasons>
+              </scan:JobInfo></scan:Jobs>
+            </scan:ScannerStatus>
+            """.trimIndent(),
+        )
+
+        assertTrue(status.isAdfJam("http://192.0.2.1/eSCL/ScanJobs/7"))
+    }
+
+    @Test
     fun resolvesRelativeJobAndAllowsSameHostHttpsUpgrade() {
         assertEquals(
             "http://192.0.2.1:8080/custom/ScanJobs/123/NextDocument",

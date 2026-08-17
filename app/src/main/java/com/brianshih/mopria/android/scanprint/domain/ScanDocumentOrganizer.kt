@@ -24,6 +24,30 @@ object ScanDocumentOrganizer {
         )
     }
 
+    /** Combines an ADF retry with pages downloaded before the feeder reported a jam. */
+    fun appendAdfPages(existing: MopriaDocument?, scanned: MopriaDocument): MopriaDocument {
+        require(scanned.pages.isNotEmpty()) { "ADF scan has no pages to combine" }
+        val base = existing ?: scanned
+        val combinedPages = (existing?.pages.orEmpty() + scanned.pages).mapIndexed { index, page ->
+            page.copy(
+                pageNumber = index + 1,
+                title = "Scanned page ${index + 1}",
+                generatedTitle = GeneratedPageTitle.Scanned,
+                generatedTitleNumber = index + 1,
+            )
+        }
+        return base.copy(
+            pages = combinedPages,
+            exportedPath = null,
+            savedFiles = emptyList(),
+            enhancementResults = existing?.enhancementResults.orEmpty() + scanned.enhancementResults,
+            imageProcessingResults = existing?.imageProcessingResults.orEmpty() + scanned.imageProcessingResults,
+            ocrResults = existing?.ocrResults.orEmpty() + scanned.ocrResults,
+            searchablePdf = base.searchablePdf || scanned.searchablePdf,
+            actualScanSettingsReported = (existing?.actualScanSettingsReported ?: true) && scanned.actualScanSettingsReported,
+        )
+    }
+
     fun splitPages(document: MopriaDocument): List<MopriaDocument> {
         require(document.pages.isNotEmpty()) { "ADF scan has no pages to split" }
         return document.pages.mapIndexed { index, page ->

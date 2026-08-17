@@ -91,6 +91,10 @@
     <string name="scan_start">스캔 시작</string>
     <string name="scan_page_complete_title">%1$d페이지 완료</string>
     <string name="scan_page_complete_message">다음 페이지를 놓고 계속하거나 완료하여 하나의 PDF로 저장하세요.</string>
+    <string name="scan_adf_jam_title">ADF 용지 걸림</string>
+    <string name="scan_adf_jam_message">용지 걸림을 해결하고 남은 페이지를 다시 넣은 다음 계속하세요. 이미 스캔한 %1$d페이지는 이 문서에 유지됩니다.</string>
+    <string name="scan_adf_continue">스캔 계속</string>
+    <string name="scan_adf_finish">문서 완료</string>
     <string name="scan_next_page">다음 페이지</string>
     <string name="scan_finish_pdf">PDF 완료</string>
     <string name="documents_my_files">내 문서</string>
@@ -228,6 +232,7 @@
 
     <string name="scan_error_scanner_not_ready">스캐너가 준비되지 않았습니다. 장치를 확인하고 다시 시도해 주세요.</string>
     <string name="scan_error_adf_not_ready">급지 장치가 비어 있거나 준비되지 않았습니다. 용지를 넣고 다시 시도해 주세요.</string>
+    <string name="scan_error_adf_jam">문서 급지 장치에서 용지 걸림을 보고했습니다. 걸림을 해결한 후 스캔을 계속하세요.</string>
     <string name="scan_error_http">스캐너와 통신할 수 없습니다. 다시 시도해 주세요.</string>
     <string name="scan_error_timeout">스캔 시간이 초과되었습니다. 다시 시도해 주세요.</string>
     <string name="scan_error_job_stopped">스캔 작업이 중지되거나 취소되었습니다.</string>

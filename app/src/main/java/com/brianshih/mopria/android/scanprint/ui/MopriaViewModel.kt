@@ -14,6 +14,7 @@ import com.brianshih.mopria.android.scanprint.domain.DeviceKind
 import com.brianshih.mopria.android.scanprint.domain.DeviceHealthValidator
 import com.brianshih.mopria.android.scanprint.domain.DocumentPage
 import com.brianshih.mopria.android.scanprint.domain.CropRect
+import com.brianshih.mopria.android.scanprint.domain.defaultPrintOptions
 import com.brianshih.mopria.android.scanprint.domain.DocumentEditor
 import com.brianshih.mopria.android.scanprint.domain.EnhancementError
 import com.brianshih.mopria.android.scanprint.domain.EnhancementResult
@@ -27,6 +28,7 @@ import com.brianshih.mopria.android.scanprint.domain.JobStatus
 import com.brianshih.mopria.android.scanprint.domain.MockIntegrationProvider
 import com.brianshih.mopria.android.scanprint.domain.MopriaDocument
 import com.brianshih.mopria.android.scanprint.domain.MopriaUiState
+import com.brianshih.mopria.android.scanprint.domain.ManualDeviceAddress
 import com.brianshih.mopria.android.scanprint.domain.OcrError
 import com.brianshih.mopria.android.scanprint.domain.OcrLanguagePack
 import com.brianshih.mopria.android.scanprint.domain.OcrLanguagePackManager
@@ -127,11 +129,14 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     _uiState.update { current ->
                         val currentIds = current.documents.mapTo(mutableSetOf()) { it.id }
                         val restored = persisted.documents.filter { it.id !in currentIds }
-                        val pendingId = current.pendingFlatbedDocumentId ?: persisted.pendingFlatbedDocumentId
+                        val pendingFlatbedId = current.pendingFlatbedDocumentId ?: persisted.pendingFlatbedDocumentId
+                        val pendingAdfId = current.pendingAdfDocumentId ?: persisted.pendingAdfDocumentId
                         current.copy(
                             documents = current.documents + restored,
-                            pendingFlatbedDocumentId = pendingId,
-                            awaitingNextFlatbedPage = pendingId != null,
+                            pendingFlatbedDocumentId = pendingFlatbedId,
+                            awaitingNextFlatbedPage = pendingFlatbedId != null,
+                            pendingAdfDocumentId = pendingAdfId,
+                            awaitingAdfRecovery = current.awaitingAdfRecovery || pendingAdfId != null,
                         )
                     }
                 }
@@ -397,13 +402,17 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 } else {
                     providers.discovery.discover(_uiState.value.manualDeviceAddress)
                 }
-                val scanner = devices.firstOrNull { it.kind == DeviceKind.Scanner }
+                val manualHost = ManualDeviceAddress.normalize(_uiState.value.manualDeviceAddress)
+                val scanner = devices.firstOrNull {
+                    it.kind == DeviceKind.Scanner && manualHost != null && it.host.equals(manualHost, ignoreCase = true)
+                } ?: devices.firstOrNull { it.kind == DeviceKind.Scanner }
                 if (scanner == null) {
                     _uiState.update {
                         it.copy(
                             isDiscovering = false,
                             devices = devices,
                             awaitingNextFlatbedPage = it.pendingFlatbedDocumentId != null,
+                            awaitingAdfRecovery = it.awaitingAdfRecovery || it.pendingAdfDocumentId != null,
                         )
                     }
                     _events.trySend(text(R.string.event_no_scanner, text(mode.labelRes)))
@@ -416,16 +425,29 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     ScannerCapabilities.DEFAULT
                 }
                 val requestedSettings = _uiState.value.scanSettings
-                val settings = scannerCaps.reconcile(requestedSettings)
+                val reconciledSettings = scannerCaps.reconcile(requestedSettings)
+                val pendingAdfPageCount = _uiState.value.pendingAdfDocumentId
+                    ?.let { id -> _uiState.value.documents.firstOrNull { it.id == id } }
+                    ?.pages
+                    ?.size
+                // A recovery job should request only the remaining pages, while the visible
+                // setting remains the user's original total-page limit.
+                val settings = if (reconciledSettings.inputSource == ScanInputSource.Adf && pendingAdfPageCount != null) {
+                    reconciledSettings.copy(
+                        maxPages = (reconciledSettings.maxPages - pendingAdfPageCount).coerceAtLeast(1),
+                    )
+                } else {
+                    reconciledSettings
+                }
                 _uiState.update {
                     it.copy(
                         scannerCapabilities = scannerCaps,
-                        scanSettings = settings,
+                        scanSettings = reconciledSettings,
                     )
                 }
-                if (settings != requestedSettings) settingsStore.saveScanSettings(settings)
-                notifyEnhancementDisabled(requestedSettings, settings)
-                notifyOcrDisabled(requestedSettings, settings)
+                if (reconciledSettings != requestedSettings) settingsStore.saveScanSettings(reconciledSettings)
+                notifyEnhancementDisabled(requestedSettings, reconciledSettings)
+                notifyOcrDisabled(requestedSettings, reconciledSettings)
 
                 val currentJobId = "scan-job-${System.currentTimeMillis()}"
                 jobId = currentJobId
@@ -515,6 +537,30 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                             _events.trySend(text(R.string.event_scan_page_done, merged.pages.size))
                         }
                     }
+                    settings.inputSource == ScanInputSource.Adf && (
+                        settings.combineAsPdf || _uiState.value.pendingAdfDocumentId != null
+                    ) -> {
+                        val existingId = _uiState.value.pendingAdfDocumentId
+                        val existing = existingId?.let { id -> _uiState.value.documents.firstOrNull { it.id == id } }
+                        val merged = ScanDocumentOrganizer.appendAdfPages(existing, document)
+                        _uiState.update { state ->
+                            state.copy(
+                                activeJobId = null,
+                                selectedDocumentId = merged.id,
+                                documents = if (existing == null) {
+                                    listOf(merged) + state.documents
+                                } else {
+                                    state.documents.map { if (it.id == merged.id) merged else it }
+                                },
+                                pendingAdfDocumentId = null,
+                                awaitingAdfRecovery = false,
+                            )
+                        }
+                        updateJob(currentJobId, JobStatus.Completed, 100, text(R.string.common_pages, merged.pages.size))
+                        persistDocuments()
+                        _events.tryEmit(text(R.string.event_scan_done, text(mode.labelRes), merged.pages.size))
+                        saveScan(merged.id, ScanOutputFormat.Pdf)
+                    }
                     settings.inputSource == ScanInputSource.Adf && !settings.combineAsPdf -> {
                         val separateDocuments = ScanDocumentOrganizer.splitPages(document)
                         _uiState.update {
@@ -551,9 +597,39 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                         isDiscovering = false,
                         activeJobId = null,
                         awaitingNextFlatbedPage = it.pendingFlatbedDocumentId != null,
+                        awaitingAdfRecovery = it.awaitingAdfRecovery || it.pendingAdfDocumentId != null,
                     )
                 }
                 throw error
+            } catch (error: ScanError.AdfJam) {
+                val message = text(error.messageStringRes())
+                jobId?.let { updateJob(it, JobStatus.Failed, 0, message) }
+                val state = _uiState.value
+                val existing = state.pendingAdfDocumentId
+                    ?.let { id -> state.documents.firstOrNull { it.id == id } }
+                val merged = error.partialDocument?.let { partial ->
+                    ScanDocumentOrganizer.appendAdfPages(existing, partial)
+                } ?: existing
+                val documents = merged?.let { candidate ->
+                    if (state.documents.any { it.id == candidate.id }) {
+                        state.documents.map { if (it.id == candidate.id) candidate else it }
+                    } else {
+                        listOf(candidate) + state.documents
+                    }
+                } ?: state.documents
+                _uiState.update {
+                    it.copy(
+                        isDiscovering = false,
+                        activeJobId = null,
+                        documents = documents,
+                        selectedDocumentId = merged?.id ?: it.selectedDocumentId,
+                        pendingAdfDocumentId = merged?.id ?: it.pendingAdfDocumentId,
+                        awaitingAdfRecovery = true,
+                        awaitingNextFlatbedPage = it.pendingFlatbedDocumentId != null,
+                    )
+                }
+                persistDocuments()
+                _events.tryEmit(message)
             } catch (error: ScanError) {
                 val message = text(error.messageStringRes())
                 jobId?.let { updateJob(it, JobStatus.Failed, 0, message) }
@@ -562,6 +638,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                         isDiscovering = false,
                         activeJobId = null,
                         awaitingNextFlatbedPage = it.pendingFlatbedDocumentId != null,
+                        awaitingAdfRecovery = it.awaitingAdfRecovery || it.pendingAdfDocumentId != null,
                     )
                 }
                 _events.trySend(message)
@@ -573,6 +650,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                         isDiscovering = false,
                         activeJobId = null,
                         awaitingNextFlatbedPage = it.pendingFlatbedDocumentId != null,
+                        awaitingAdfRecovery = it.awaitingAdfRecovery || it.pendingAdfDocumentId != null,
                     )
                 }
                 _events.trySend(message)
@@ -599,6 +677,42 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
             )
         }
         saveScan(documentId, ScanOutputFormat.Pdf)
+        persistDocuments()
+    }
+
+    fun continueAdfScan() {
+        val state = _uiState.value
+        if (state.isBusy || !state.awaitingAdfRecovery) return
+        val pageCount = state.pendingAdfDocumentId
+            ?.let { id -> state.documents.firstOrNull { it.id == id } }
+            ?.pages
+            ?.size
+            ?: 0
+        if (pageCount >= state.scanSettings.maxPages && state.pendingAdfDocumentId != null) {
+            finishAdfScan()
+            return
+        }
+        if (state.scanSettings.inputSource != ScanInputSource.Adf) {
+            val adfSettings = state.scanSettings.copy(inputSource = ScanInputSource.Adf)
+            _uiState.update { it.copy(scanSettings = adfSettings) }
+            settingsStore.saveScanSettings(adfSettings)
+        }
+        _uiState.update { it.copy(awaitingAdfRecovery = false) }
+        scan()
+    }
+
+    fun finishAdfScan() {
+        val state = _uiState.value
+        if (state.isBusy || !state.awaitingAdfRecovery) return
+        val documentId = state.pendingAdfDocumentId
+        _uiState.update {
+            it.copy(
+                pendingAdfDocumentId = null,
+                awaitingAdfRecovery = false,
+                selectedDocumentId = documentId ?: it.selectedDocumentId,
+            )
+        }
+        if (documentId != null) saveScan(documentId, ScanOutputFormat.Pdf)
         persistDocuments()
     }
 
@@ -695,7 +809,10 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 } else {
                     providers.discovery.discover(_uiState.value.manualDeviceAddress)
                 }
-                val printer = devices.firstOrNull { it.kind == DeviceKind.Printer }
+                val manualHost = ManualDeviceAddress.normalize(_uiState.value.manualDeviceAddress)
+                val printer = devices.firstOrNull {
+                    it.kind == DeviceKind.Printer && manualHost != null && it.host.equals(manualHost, ignoreCase = true)
+                } ?: devices.firstOrNull { it.kind == DeviceKind.Printer }
                 if (printer == null) {
                     // Direct IPP found no printer: do NOT silently fall back to system print — that
                     // would mislead users into thinking Direct IPP was used. Surface an explicit error
@@ -714,7 +831,14 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     val capabilities = providers.print.capabilities(printer)
                     if (capabilities != null && capabilities.hasAnyOption()) {
                         _uiState.update {
-                            it.copy(directIppPrintPrompt = DirectIppPrintPrompt(document, printer, capabilities))
+                            it.copy(
+                                directIppPrintPrompt = DirectIppPrintPrompt(
+                                    document = document,
+                                    printer = printer,
+                                    capabilities = capabilities,
+                                    options = capabilities.defaultPrintOptions(document.documentSize),
+                                ),
+                            )
                         }
                         return@launch
                     }
@@ -809,6 +933,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
     private fun ScanError.messageStringRes(): Int = when (this) {
         is ScanError.ScannerNotReady -> R.string.scan_error_scanner_not_ready
         is ScanError.AdfNotReady -> R.string.scan_error_adf_not_ready
+        is ScanError.AdfJam -> R.string.scan_error_adf_jam
         is ScanError.HttpError -> R.string.scan_error_http
         is ScanError.DocumentTimeout -> R.string.scan_error_timeout
         is ScanError.JobAborted -> R.string.scan_error_job_stopped
@@ -1059,7 +1184,13 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                 // Collapse queued writes and always snapshot state immediately before the newest save.
                 if (generation != documentPersistenceGeneration.get()) return@withLock
                 val state = _uiState.value
-                runCatching { documentStore.save(state.documents, state.pendingFlatbedDocumentId) }
+                runCatching {
+                    documentStore.save(
+                        state.documents,
+                        state.pendingFlatbedDocumentId,
+                        state.pendingAdfDocumentId,
+                    )
+                }
             }
         }
     }

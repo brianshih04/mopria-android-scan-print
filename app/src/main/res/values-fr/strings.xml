@@ -91,6 +91,10 @@
     <string name="scan_start">Démarrer le scan</string>
     <string name="scan_page_complete_title">Page %1$d terminée</string>
     <string name="scan_page_complete_message">Placez la page suivante pour continuer, ou terminez et enregistrez un seul PDF.</string>
+    <string name="scan_adf_jam_title">Bourrage dans le chargeur</string>
+    <string name="scan_adf_jam_message">Éliminez le bourrage, rechargez les pages restantes, puis continuez. Les pages déjà numérisées restent dans ce document (%1$d pages).</string>
+    <string name="scan_adf_continue">Continuer la numérisation</string>
+    <string name="scan_adf_finish">Terminer le document</string>
     <string name="scan_next_page">Page suivante</string>
     <string name="scan_finish_pdf">Terminer le PDF</string>
     <string name="documents_my_files">Mes documents</string>
@@ -228,6 +232,7 @@
 
     <string name="scan_error_scanner_not_ready">Le scanner n\'est pas prêt. Vérifiez l\'appareil et réessayez.</string>
     <string name="scan_error_adf_not_ready">Le chargeur de documents est vide ou non prêt. Chargez des documents et réessayez.</string>
+    <string name="scan_error_adf_jam">Le chargeur de documents signale un bourrage papier. Éliminez-le, puis continuez la numérisation.</string>
     <string name="scan_error_http">Impossible de communiquer avec le scanner. Veuillez réessayer.</string>
     <string name="scan_error_timeout">Le délai d\'attente de numérisation est dépassé. Veuillez réessayer.</string>
     <string name="scan_error_job_stopped">La tâche de numérisation a été arrêtée ou annulée.</string>

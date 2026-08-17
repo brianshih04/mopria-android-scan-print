@@ -65,10 +65,23 @@ class RealIntegrationProvider(
                 mainHandler.removeCallbacks(timeout)
                 stopDiscovery()
                 ManualDeviceAddress.candidates(manualDeviceAddress.orEmpty()).forEach { candidate ->
-                    val hasResolvedCandidate = devices.values.any { existing ->
-                        existing.kind == candidate.kind && existing.host.equals(candidate.host, ignoreCase = true)
-                    }
-                    if (!hasResolvedCandidate) {
+                    val sameHostKeys = devices
+                        .filterValues { existing ->
+                            existing.kind == candidate.kind && existing.host.equals(candidate.host, ignoreCase = true)
+                        }
+                        .keys
+                        .toList()
+                    // An explicit manual host is also the user's opt-in to the plain 80/631
+                    // endpoints described in Settings. Do not let an untrusted mDNS TLS service
+                    // shadow the reachable manual candidate on the same host.
+                    val replacesSecureManualCandidate =
+                        devices.values.any { existing ->
+                            existing.kind == candidate.kind &&
+                                existing.host.equals(candidate.host, ignoreCase = true) &&
+                                existing.secure && !candidate.secure
+                        }
+                    if (sameHostKeys.isEmpty() || replacesSecureManualCandidate) {
+                        sameHostKeys.forEach(devices::remove)
                         devices["manual:${candidate.kind}:${candidate.host}"] = candidate
                     }
                 }
@@ -202,6 +215,7 @@ class RealIntegrationProvider(
         val payloads = mutableListOf<EsclDocumentPayload>()
         var location: String? = null
         var jobFinished = false
+        var adfJamDetected = false
         try {
             val jobLocation = httpClient.createScanJob(baseUrl, scanSettingsXml)
             location = jobLocation
@@ -226,6 +240,11 @@ class RealIntegrationProvider(
                             temporaryFile,
                         )
                     } catch (error: EsclNextDocumentTimeoutException) {
+                        val scannerStatus = runCatching { httpClient.fetchScannerStatus(baseUrl) }.getOrNull()
+                        if (settings.inputSource == ScanInputSource.Adf && scannerStatus?.isAdfJam(jobUrl) == true) {
+                            adfJamDetected = true
+                            break@pageLoop
+                        }
                         when (jobTransferState(baseUrl, jobUrl)) {
                             JobTransferState.Completed -> {
                                 break@pageLoop
@@ -238,18 +257,29 @@ class RealIntegrationProvider(
                             JobTransferState.Missing -> throw error
                         }
                     } catch (error: EsclHttpException) {
+                        val scannerStatus = runCatching { httpClient.fetchScannerStatus(baseUrl) }.getOrNull()
+                        if (settings.inputSource == ScanInputSource.Adf && scannerStatus?.isAdfJam(jobUrl) == true) {
+                            adfJamDetected = true
+                            break@pageLoop
+                        }
                         if (error.statusCode == HTTP_GONE && jobTransferState(baseUrl, jobUrl) == JobTransferState.Completed) {
                             break@pageLoop
                         }
                         throw error
                     }
                     if (fetched == null) {
-                        val adfStillLoaded = settings.inputSource == ScanInputSource.Adf &&
-                            runCatching { httpClient.fetchScannerStatus(baseUrl).adfState }
-                                .getOrNull()
-                                ?.let { state ->
-                                    state.equals("ScannerAdfLoaded", true) || state.equals("ScannerAdfProcessing", true)
-                                } == true
+                        val scannerStatus = if (settings.inputSource == ScanInputSource.Adf) {
+                            runCatching { httpClient.fetchScannerStatus(baseUrl) }.getOrNull()
+                        } else {
+                            null
+                        }
+                        if (scannerStatus?.isAdfJam(jobUrl) == true) {
+                            adfJamDetected = true
+                            break@pageLoop
+                        }
+                        val adfStillLoaded = scannerStatus?.adfState?.let { state ->
+                            state.equals("ScannerAdfLoaded", true) || state.equals("ScannerAdfProcessing", true)
+                        } == true
                         if (adfStillLoaded && notFoundRetries < NEXT_DOCUMENT_STATUS_RETRIES) {
                             notFoundRetries += 1
                             delay(ADF_NEXT_DOCUMENT_DELAY_MS)
@@ -281,7 +311,10 @@ class RealIntegrationProvider(
             finishScanJob(baseUrl, jobUrl, jobLocation)
             jobFinished = true
 
-            if (payloads.isEmpty()) throw ScanError.NoImages
+            if (payloads.isEmpty()) {
+                if (adfJamDetected) throw ScanError.AdfJam(null)
+                throw ScanError.NoImages
+            }
 
             val ocrProcessingSettings = settings.copy(
                 deskew = settings.deskew || settings.ocrMode != OcrMode.Disabled,
@@ -313,7 +346,10 @@ class RealIntegrationProvider(
                 emptyList()
             }
 
-            if (payloads.isEmpty()) throw ScanError.NoImages
+            if (payloads.isEmpty()) {
+                if (adfJamDetected) throw ScanError.AdfJam(null)
+                throw ScanError.NoImages
+            }
 
             // Apply background enhancement after download. The result is carried with the
             // document so the ViewModel can report Skipped/Failed without losing the source.
@@ -386,7 +422,7 @@ class RealIntegrationProvider(
                     )
                 }
 
-            MopriaDocument(
+            val document = MopriaDocument(
                 id = "real-scan-$scanId",
                 name = "Scanned document ${scanId.toString().takeLast(4)}",
                 sourceLabel = "${scanner.name} · eSCL · ${settings.inputSource.displayToken} · ${resolutionLabel(negotiated)} · ${colorModeLabel(negotiated.colorMode)}",
@@ -403,6 +439,20 @@ class RealIntegrationProvider(
                 generatedName = GeneratedDocumentName.Scanned,
                 generatedNameSuffix = scanId.toString().takeLast(4),
             )
+            if (adfJamDetected) throw ScanError.AdfJam(document)
+            document
+        } catch (error: ScanError.AdfJam) {
+            // Keep the downloaded page files: the ViewModel will attach this partial document to
+            // the pending ADF session and append the next job's pages after the user clears the jam.
+            if (location != null) {
+                withContext(NonCancellable + Dispatchers.IO) {
+                    runCatching { httpClient.cancelScanJob(baseUrl, location) }
+                }
+            }
+            directory.listFiles()
+                ?.filter { file -> file.name.startsWith("real-scan-$scanId-page-") && file.extension == "part" }
+                ?.forEach(File::delete)
+            throw error
         } catch (error: EsclHttpException) {
             if (!jobFinished && location != null) {
                 withContext(NonCancellable + Dispatchers.IO) { runCatching { httpClient.cancelScanJob(baseUrl, location) } }
@@ -448,7 +498,12 @@ class RealIntegrationProvider(
         val dpi = client.preferredResolution(attributes)
         val pclmStripHeight = client.pclmStripHeightPreferred(attributes)
         val supportsMultipleDocuments = client.multipleDocumentJobsSupported(attributes)
-        val coercedOptions = options?.coerceTo(client.parseCapabilities(attributes))
+        val capabilities = client.parseCapabilities(attributes)
+        val preferredMedia = (document.documentSize ?: ScanDocumentSize.A4).toIppMediaKeyword()
+        val effectiveOptions = (options ?: PrintOptions()).let { selected ->
+            selected.copy(media = selected.media ?: preferredMedia)
+        }
+        val coercedOptions = effectiveOptions.coerceTo(capabilities)
         val colorSpace = chooseColorSpace(client.printColorModesSupported(attributes), coercedOptions?.colorMode)
         val rendered = renderPrintDocument(document, format, dpi, colorSpace, pclmStripHeight)
         try {
@@ -725,9 +780,10 @@ class RealIntegrationProvider(
     private companion object {
         const val DISCOVERY_TIMEOUT_MS = 8_000L
         const val MAX_SCAN_PAGES = 50
-        const val PDF_PAGE_WIDTH = 612 // US Letter, points
-        const val PDF_PAGE_HEIGHT = 792
-        const val PDF_MARGIN = 36
+        const val PDF_PAGE_WIDTH = 595 // A4, points
+        const val PDF_PAGE_HEIGHT = 842
+        // The printer owns its non-printable edge; do not add an application-side scale-down.
+        const val PDF_MARGIN = 0
         const val IPP_IMAGE_QUALITY = 90
         const val JOB_READY_ATTEMPTS = 60
         const val JOB_STATUS_POLL_MS = 500L

@@ -91,6 +91,10 @@
     <string name="scan_start">Scan starten</string>
     <string name="scan_page_complete_title">Seite %1$d abgeschlossen</string>
     <string name="scan_page_complete_message">Nächste Seite einlegen oder beenden und als ein PDF speichern.</string>
+    <string name="scan_adf_jam_title">Papierstau im Dokumenteneinzug</string>
+    <string name="scan_adf_jam_message">Beseitigen Sie den Papierstau, legen Sie die übrigen Seiten ein und setzen Sie den Scan fort. Bereits gescannte Seiten bleiben in diesem Dokument (%1$d Seiten).</string>
+    <string name="scan_adf_continue">Scan fortsetzen</string>
+    <string name="scan_adf_finish">Dokument fertigstellen</string>
     <string name="scan_next_page">Nächste Seite</string>
     <string name="scan_finish_pdf">PDF beenden</string>
     <string name="documents_my_files">Meine Dokumente</string>
@@ -228,6 +232,7 @@
 
     <string name="scan_error_scanner_not_ready">Der Scanner ist nicht bereit. Überprüfen Sie das Gerät und versuchen Sie es erneut.</string>
     <string name="scan_error_adf_not_ready">Der Dokumenteneinzug ist leer oder nicht bereit. Legen Sie Dokumente ein und versuchen Sie es erneut.</string>
+    <string name="scan_error_adf_jam">Der Dokumenteneinzug meldet einen Papierstau. Beseitigen Sie den Stau und setzen Sie den Scan fort.</string>
     <string name="scan_error_http">Die Kommunikation mit dem Scanner ist fehlgeschlagen. Bitte erneut versuchen.</string>
     <string name="scan_error_timeout">Der Scan-Vorgang hat ein Zeitlimit überschritten. Bitte erneut versuchen.</string>
     <string name="scan_error_job_stopped">Der Scan-Auftrag wurde gestoppt oder abgebrochen.</string>

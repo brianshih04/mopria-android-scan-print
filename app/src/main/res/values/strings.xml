@@ -99,6 +99,10 @@
     <string name="scan_start">Start scan</string>
     <string name="scan_page_complete_title">Page %1$d complete</string>
     <string name="scan_page_complete_message">Place the next page to continue, or finish and save as one PDF.</string>
+    <string name="scan_adf_jam_title">ADF paper jam</string>
+    <string name="scan_adf_jam_message">Clear the paper jam and reload any remaining pages, then continue. Pages already scanned stay in this document (%1$d pages).</string>
+    <string name="scan_adf_continue">Continue scan</string>
+    <string name="scan_adf_finish">Finish document</string>
     <string name="scan_next_page">Next page</string>
     <string name="scan_finish_pdf">Finish PDF</string>
 
@@ -240,6 +244,7 @@
 
     <string name="scan_error_scanner_not_ready">The scanner is not ready. Please check the device and try again.</string>
     <string name="scan_error_adf_not_ready">The document feeder is empty or not ready. Load documents and try again.</string>
+    <string name="scan_error_adf_jam">The document feeder reported a paper jam. Clear the jam, then continue the scan.</string>
     <string name="scan_error_http">Could not communicate with the scanner. Please try again.</string>
     <string name="scan_error_timeout">The scan timed out. Please try again.</string>
     <string name="scan_error_job_stopped">The scan job was stopped or canceled.</string>

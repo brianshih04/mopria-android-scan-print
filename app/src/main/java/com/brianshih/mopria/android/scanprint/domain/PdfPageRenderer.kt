@@ -18,9 +18,9 @@ import java.io.OutputStream
  */
 object PdfPageRenderer {
 
-    /** Standard US Letter page size in PDF points (1/72 inch). */
-    const val PAGE_WIDTH = 612
-    const val PAGE_HEIGHT = 792
+    /** Default A4 page size in PDF points (1/72 inch). */
+    const val PAGE_WIDTH = 595
+    const val PAGE_HEIGHT = 842
 
     /**
      * Renders [document] to [output] as a multi-page PDF. Each page is [PAGE_WIDTH]×[PAGE_HEIGHT]

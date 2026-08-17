@@ -245,8 +245,8 @@ class UriPrintAdapter(
         ranges.any { pageIndex in it.start..it.end }
 
     private companion object {
-        const val DEFAULT_PAGE_WIDTH = 612
-        const val DEFAULT_PAGE_HEIGHT = 792
+        const val DEFAULT_PAGE_WIDTH = 595
+        const val DEFAULT_PAGE_HEIGHT = 842
         const val POINTS_PER_INCH = 72f
         const val MAX_BITMAP_EDGE = 3072
     }

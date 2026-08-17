@@ -19,6 +19,9 @@ sealed class ScanError(message: String) : RuntimeException(message) {
     /** ADF tray is empty or in an abnormal state. [adfState] is the raw scan:AdfState. */
     class AdfNotReady(val adfState: String) : ScanError("ADF not ready: $adfState")
 
+    /** The ADF reported a paper jam; [partialDocument] contains pages already downloaded. */
+    class AdfJam(val partialDocument: MopriaDocument?) : ScanError("ADF paper jam")
+
     /** Scan job creation failed or an HTTP error occurred (e.g. 401, 500). [statusCode] is the HTTP code, or 0 for a non-HTTP failure. */
     class HttpError(val statusCode: Int) : ScanError("scan HTTP error: status=$statusCode")
 

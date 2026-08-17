@@ -97,7 +97,13 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
         selectedDestinationName = AppDestination.Home.name
     }
 
-    fun openPrint(title: String, adapter: PrintDocumentAdapter, attributes: PrintAttributes? = null) {
+    fun openPrint(
+        title: String,
+        adapter: PrintDocumentAdapter,
+        attributes: PrintAttributes? = PrintAttributes.Builder()
+            .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+            .build(),
+    ) {
         runCatching {
             val activity = checkNotNull(context.findActivity()) { resources.getString(R.string.common_retry) }
             val printManager = activity.getSystemService(Context.PRINT_SERVICE) as PrintManager
@@ -267,6 +273,8 @@ fun MopriaApp(viewModel: MopriaViewModel = viewModel()) {
                     onPresetChange = viewModel::applyScanPreset,
                     onContinueFlatbed = viewModel::continueFlatbedScan,
                     onFinishFlatbed = viewModel::finishFlatbedScan,
+                    onContinueAdf = viewModel::continueAdfScan,
+                    onFinishAdf = viewModel::finishAdfScan,
                 )
 
                 AppDestination.Print -> PrintScreen(
@@ -346,14 +354,14 @@ internal tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 private fun MopriaDocument.defaultPrintAttributes(): PrintAttributes? {
-    val mediaSize = when (documentSize) {
+    val mediaSize = when (documentSize ?: ScanDocumentSize.A4) {
         ScanDocumentSize.A4 -> PrintAttributes.MediaSize.ISO_A4
         ScanDocumentSize.Letter -> PrintAttributes.MediaSize.NA_LETTER
         ScanDocumentSize.A5 -> PrintAttributes.MediaSize.ISO_A5
         ScanDocumentSize.Photo4x6 -> PrintAttributes.MediaSize.NA_INDEX_4X6
         ScanDocumentSize.Photo5x7 -> PrintAttributes.MediaSize("PHOTO_5X7", "5 × 7 in", 5_000, 7_000)
         ScanDocumentSize.Photo8x10 -> PrintAttributes.MediaSize("PHOTO_8X10", "8 × 10 in", 8_000, 10_000)
-        ScanDocumentSize.Auto, null -> return null
+        ScanDocumentSize.Auto -> PrintAttributes.MediaSize.ISO_A4
     }
     return PrintAttributes.Builder().setMediaSize(mediaSize).build()
 }

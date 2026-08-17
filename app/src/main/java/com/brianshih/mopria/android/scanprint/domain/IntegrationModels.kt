@@ -70,8 +70,8 @@ data class PdfPageSize(val widthPoints: Int, val heightPoints: Int)
 
 /** Converts the eSCL 1/300-inch scan region to PDF points. */
 fun ScanDocumentSize.toPdfPageSize(): PdfPageSize {
-    val width = widthHundredthsOfInch ?: ScanDocumentSize.Letter.widthHundredthsOfInch!!
-    val height = heightHundredthsOfInch ?: ScanDocumentSize.Letter.heightHundredthsOfInch!!
+    val width = widthHundredthsOfInch ?: ScanDocumentSize.A4.widthHundredthsOfInch!!
+    val height = heightHundredthsOfInch ?: ScanDocumentSize.A4.heightHundredthsOfInch!!
     return PdfPageSize(
         widthPoints = (width * 72f / 300f).roundToInt(),
         heightPoints = (height * 72f / 300f).roundToInt(),
@@ -279,7 +279,7 @@ data class MopriaDocument(
     val ocrResults: List<OcrResult> = emptyList(),
     /** Whether the user opted in to an OCR text layer when exporting this document as PDF. */
     val searchablePdf: Boolean = false,
-    /** Requested physical original size; null preserves Letter output for legacy documents. */
+    /** Requested physical original size; null uses the A4 default for legacy documents. */
     val documentSize: ScanDocumentSize? = null,
     /** False when source metadata contains requested values because the scanner omitted actual values. */
     val actualScanSettingsReported: Boolean = true,
@@ -328,6 +328,8 @@ data class MopriaUiState(
     val scanSettings: ScanSettings = ScanSettings(),
     val pendingFlatbedDocumentId: String? = null,
     val awaitingNextFlatbedPage: Boolean = false,
+    val pendingAdfDocumentId: String? = null,
+    val awaitingAdfRecovery: Boolean = false,
     val directIppPrintPrompt: DirectIppPrintPrompt? = null,
     val scannerCapabilities: ScannerCapabilities = ScannerCapabilities.DEFAULT,
     val scanPreset: ScanPreset = ScanPreset.Document,

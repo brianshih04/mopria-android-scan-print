@@ -1,5 +1,7 @@
 package com.brianshih.mopria.android.scanprint.domain
 
+const val DEFAULT_IPP_MEDIA = "iso_a4_210x297mm"
+
 /**
  * Direct IPP print capabilities advertised by a printer (from Get-Printer-Attributes).
  *
@@ -49,4 +51,21 @@ data class PrintOptions(
         quality = quality?.takeIf { it in capabilities.qualities },
         orientation = orientation?.takeIf { it in capabilities.orientations },
     )
+}
+
+/** Maps the document sizes exposed by the app to standard IPP media keywords. */
+fun ScanDocumentSize.toIppMediaKeyword(): String = when (this) {
+    ScanDocumentSize.Auto,
+    ScanDocumentSize.A4 -> DEFAULT_IPP_MEDIA
+    ScanDocumentSize.Letter -> "na_letter_8.5x11in"
+    ScanDocumentSize.A5 -> "iso_a5_148x210mm"
+    ScanDocumentSize.Photo4x6 -> "na_index-4x6_4x6in"
+    ScanDocumentSize.Photo5x7 -> "na_5x7_5x7in"
+    ScanDocumentSize.Photo8x10 -> "na_8x10_8x10in"
+}
+
+/** Selects the requested document size only when the printer advertises that media. */
+fun PrintCapabilities.defaultPrintOptions(documentSize: ScanDocumentSize?): PrintOptions {
+    val preferredMedia = (documentSize ?: ScanDocumentSize.A4).toIppMediaKeyword()
+    return PrintOptions(media = preferredMedia.takeIf { it in media })
 }

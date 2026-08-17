@@ -144,6 +144,14 @@ data class EsclScannerStatus(
             jobPath == expectedPath || expectedPath.endsWith(jobPath) || jobPath.endsWith(expectedPath)
         }
     }
+
+    /** Returns true when the scanner or the active job identifies an ADF paper jam. */
+    fun isAdfJam(jobUrl: String? = null): Boolean {
+        if (adfState?.contains("jam", ignoreCase = true) == true) return true
+        return jobUrl?.let { url ->
+            jobFor(url)?.stateReasons?.any { reason -> reason.contains("jam", ignoreCase = true) }
+        } == true
+    }
 }
 
 /** Namespace-aware, XXE-hardened eSCL XML and URL policy boundary. */

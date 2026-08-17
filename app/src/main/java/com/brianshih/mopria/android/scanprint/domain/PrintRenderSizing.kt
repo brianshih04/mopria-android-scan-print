@@ -16,7 +16,7 @@ internal data class PrintRenderSize(
 /**
  * Converts PDF point dimensions to a bounded print-resolution bitmap budget.
  *
- * 300 dpi preserves normal scan/office-document detail while bounding a Letter page to about 32 MiB
+ * 300 dpi preserves normal scan/office-document detail while bounding an A4 page to about 32 MiB
  * per ARGB bitmap. A printer may still request a higher raster output resolution, but source images
  * embedded in the intermediate PDF are capped here instead of being decoded at unlimited scan size.
  */

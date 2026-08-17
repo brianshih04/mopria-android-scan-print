@@ -11,7 +11,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Persists the in-memory document list and Flatbed session state to internal storage so they survive
+ * Persists the in-memory document list and pending scan session state to internal storage so they survive
  * process death. Scan image/PDF files already live on disk in `filesDir/scans/`; this store only
  * records the metadata (paths, names, page info) needed to reconstruct [MopriaDocument] objects.
  *
@@ -22,8 +22,12 @@ class DocumentStore(context: Context) {
     private val storeFile = File(filesDir, STORE_FILENAME)
     private val ocrLayoutDirectory = File(filesDir, OCR_LAYOUT_DIRECTORY)
 
-    /** Persist [documents] and [pendingFlatbedDocumentId] so they can be restored after process death. */
-    fun save(documents: List<MopriaDocument>, pendingFlatbedDocumentId: String?) {
+    /** Persist [documents] and pending Flatbed/ADF session ids so they can be restored after process death. */
+    fun save(
+        documents: List<MopriaDocument>,
+        pendingFlatbedDocumentId: String?,
+        pendingAdfDocumentId: String? = null,
+    ) {
         val json = JSONObject()
         val docsArray = JSONArray()
         val retainedOcrSidecars = mutableSetOf<String>()
@@ -76,12 +80,13 @@ class DocumentStore(context: Context) {
         }
         json.put("documents", docsArray)
         pendingFlatbedDocumentId?.let { json.put("pendingFlatbedDocumentId", it) }
+        pendingAdfDocumentId?.let { json.put("pendingAdfDocumentId", it) }
 
         writeTextAtomically(storeFile, json.toString())
         deleteUnreferencedOcrSidecars(retainedOcrSidecars)
     }
 
-    /** Load persisted documents and Flatbed session, or null if no store exists or it is corrupt. */
+    /** Load persisted documents and pending scan sessions, or null if no store exists or it is corrupt. */
     fun load(): PersistedState? {
         if (!storeFile.isFile) return null
         return runCatching {
@@ -151,6 +156,7 @@ class DocumentStore(context: Context) {
             PersistedState(
                 documents = valid,
                 pendingFlatbedDocumentId = json.optString("pendingFlatbedDocumentId").takeIf { it.isNotBlank() },
+                pendingAdfDocumentId = json.optString("pendingAdfDocumentId").takeIf { it.isNotBlank() },
             )
         }.getOrNull()
     }
@@ -217,8 +223,9 @@ class DocumentStore(context: Context) {
     }
 }
 
-/** Result of loading persisted state: the document list and the in-progress Flatbed session, if any. */
+/** Result of loading persisted state: the document list and any in-progress scan sessions. */
 data class PersistedState(
     val documents: List<MopriaDocument>,
     val pendingFlatbedDocumentId: String?,
+    val pendingAdfDocumentId: String? = null,
 )

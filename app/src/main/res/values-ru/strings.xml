@@ -91,6 +91,10 @@
     <string name="scan_start">Начать сканирование</string>
     <string name="scan_page_complete_title">Страница %1$d готова</string>
     <string name="scan_page_complete_message">Положите следующую страницу или завершите сканирование и сохраните один PDF.</string>
+    <string name="scan_adf_jam_title">Замятие бумаги в ADF</string>
+    <string name="scan_adf_jam_message">Устраните замятие, загрузите оставшиеся страницы и продолжите. Уже отсканированные страницы останутся в этом документе (%1$d стр.).</string>
+    <string name="scan_adf_continue">Продолжить сканирование</string>
+    <string name="scan_adf_finish">Завершить документ</string>
     <string name="scan_next_page">Следующая страница</string>
     <string name="scan_finish_pdf">Завершить PDF</string>
     <string name="documents_my_files">Мои документы</string>
@@ -228,6 +232,7 @@
 
     <string name="scan_error_scanner_not_ready">Сканер не готов. Проверьте устройство и попробуйте снова.</string>
     <string name="scan_error_adf_not_ready">Устройство автоматической подачи пусто или не готово. Загрузите документы и попробуйте снова.</string>
+    <string name="scan_error_adf_jam">Устройство подачи документов сообщило о замятии бумаги. Устраните замятие и продолжите сканирование.</string>
     <string name="scan_error_http">Не удалось связаться со сканером. Попробуйте снова.</string>
     <string name="scan_error_timeout">Время сканирования истекло. Попробуйте снова.</string>
     <string name="scan_error_job_stopped">Задание сканирования было остановлено или отменено.</string>

@@ -91,6 +91,10 @@
     <string name="scan_start">Iniciar digitalização</string>
     <string name="scan_page_complete_title">Página %1$d concluída</string>
     <string name="scan_page_complete_message">Coloque a próxima página para continuar ou finalize e salve como um PDF.</string>
+    <string name="scan_adf_jam_title">Atolamento no ADF</string>
+    <string name="scan_adf_jam_message">Elimine o atolamento, recoloque as páginas restantes e continue. As páginas já digitalizadas permanecem neste documento (%1$d páginas).</string>
+    <string name="scan_adf_continue">Continuar digitalização</string>
+    <string name="scan_adf_finish">Finalizar documento</string>
     <string name="scan_next_page">Próxima página</string>
     <string name="scan_finish_pdf">Finalizar PDF</string>
     <string name="documents_my_files">Meus documentos</string>
@@ -228,6 +232,7 @@
 
     <string name="scan_error_scanner_not_ready">O scanner não está pronto. Verifique o dispositivo e tente novamente.</string>
     <string name="scan_error_adf_not_ready">O alimentador de documentos está vazio ou não está pronto. Carregue documentos e tente novamente.</string>
+    <string name="scan_error_adf_jam">O alimentador de documentos informou um atolamento de papel. Elimine-o e continue a digitalização.</string>
     <string name="scan_error_http">Não foi possível comunicar com o scanner. Tente novamente.</string>
     <string name="scan_error_timeout">O tempo da verificação expirou. Tente novamente.</string>
     <string name="scan_error_job_stopped">O trabalho de verificação foi interrompido ou cancelado.</string>

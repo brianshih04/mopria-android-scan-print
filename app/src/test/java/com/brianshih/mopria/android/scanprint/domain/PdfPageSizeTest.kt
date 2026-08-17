@@ -12,7 +12,12 @@ class PdfPageSizeTest {
     }
 
     @Test
-    fun autoUsesLegacyLetterFallback() {
-        assertEquals(PdfPageSize(612, 792), ScanDocumentSize.Auto.toPdfPageSize())
+    fun autoUsesA4Fallback() {
+        assertEquals(PdfPageSize(595, 842), ScanDocumentSize.Auto.toPdfPageSize())
+    }
+
+    @Test
+    fun scanSettingsDefaultToA4() {
+        assertEquals(ScanDocumentSize.A4, ScanSettings().documentSize)
     }
 }

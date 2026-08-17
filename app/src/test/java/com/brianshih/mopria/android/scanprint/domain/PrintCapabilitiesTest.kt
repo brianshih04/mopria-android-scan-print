@@ -101,6 +101,22 @@ class PrintCapabilitiesTest {
     }
 
     @Test
+    fun defaultPrintOptionsPreferA4WhenAdvertised() {
+        val caps = PrintCapabilities(
+            copies = 1..1,
+            media = listOf(DEFAULT_IPP_MEDIA, "na_letter_8.5x11in"),
+            sides = emptyList(),
+            colorModes = emptyList(),
+            qualities = emptyList(),
+            orientations = emptyList(),
+        )
+
+        assertEquals(DEFAULT_IPP_MEDIA, caps.defaultPrintOptions(null).media)
+        assertEquals(DEFAULT_IPP_MEDIA, caps.defaultPrintOptions(ScanDocumentSize.Auto).media)
+        assertEquals("na_letter_8.5x11in", caps.defaultPrintOptions(ScanDocumentSize.Letter).media)
+    }
+
+    @Test
     fun coerceCopiesBoundary() {
         val caps = PrintCapabilities(copies = 2..4, media = emptyList(), sides = emptyList(), colorModes = emptyList(), qualities = emptyList(), orientations = emptyList())
         assertNull(PrintOptions(copies = 1).coerceTo(caps).copies)  // below range

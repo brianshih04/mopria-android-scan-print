@@ -91,6 +91,10 @@
     <string name="scan_start">スキャン開始</string>
     <string name="scan_page_complete_title">%1$dページ完了</string>
     <string name="scan_page_complete_message">次のページを置いて続けるか、完了して1つのPDFとして保存します。</string>
+    <string name="scan_adf_jam_title">ADFの紙詰まり</string>
+    <string name="scan_adf_jam_message">紙詰まりを解消し、残りの原稿をセットしてから続行してください。スキャン済みの%1$dページはこの文書に残ります。</string>
+    <string name="scan_adf_continue">スキャンを続行</string>
+    <string name="scan_adf_finish">文書を完了</string>
     <string name="scan_next_page">次のページ</string>
     <string name="scan_finish_pdf">PDFを完了</string>
     <string name="documents_my_files">マイドキュメント</string>
@@ -228,6 +232,7 @@
 
     <string name="scan_error_scanner_not_ready">スキャナーの準備ができていません。デバイスを確認して再試行してください。</string>
     <string name="scan_error_adf_not_ready">原稿フィーダーが空か準備未完了です。原稿をセットして再試行してください。</string>
+    <string name="scan_error_adf_jam">原稿フィーダーで紙詰まりが発生しました。紙詰まりを解消してスキャンを続行してください。</string>
     <string name="scan_error_http">スキャナーと通信できません。再試行してください。</string>
     <string name="scan_error_timeout">スキャンがタイムアウトしました。再試行してください。</string>
     <string name="scan_error_job_stopped">スキャンジョブが停止またはキャンセルされました。</string>
