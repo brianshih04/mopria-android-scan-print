@@ -1,5 +1,13 @@
 # Mopria Android Scan & Print 測試報告
 
+> **📝 後續更新（2026-09-16）：** 本報告中所有 Brother 相關的 Fail
+> （QA-001 解析度/ScanRegion/色彩未採用、QA-006 ADF 不取紙）根因已確認：
+> POST ScanJobs 的 Content-Type 必須為 `application/xml`，Brother firmware
+> 對 `text/xml` 走 200dpi 降級 fallback 並忽略 Feeder/ScanRegion 請求。
+> 修復（一行）已於 2026-09-16 合併，App 實測 300/600dpi、灰階、A5/4×6/5×7
+> 全部精確命中，ADF 取紙正常。詳見 `docs/brother-contenttype-rootcause.md`。
+> 下列 Fail 項目在修復後應全數轉為 Pass，待下次正式測試輪重跑確認。
+
 狀態：現有環境執行完成；待外部設備／修正項目明列為 Blocked 或 Not Run
 測試計畫：`TEST_PLAN.md` v1.1
 測試日期：2026-08-12（Asia/Taipei）

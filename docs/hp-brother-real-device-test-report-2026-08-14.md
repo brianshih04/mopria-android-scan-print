@@ -1,5 +1,12 @@
 # HP 與 Brother MFP 實機測試報告
 
+> **📝 後續更新（2026-09-16）：** 本報告的兩個 Brother 開放問題均已解決/翻案。
+> (1) 「ADF 未取紙」與「1680×2193 低解析」的真正根因是 POST ScanJobs 的
+> Content-Type 必須為 `application/xml`（Brother firmware 對 `text/xml` 走降級
+> fallback）——修復後 ADF 取紙正常、300/600dpi/A5/4×6/5×7 全部精確命中，
+> 詳見 `docs/brother-contenttype-rootcause.md`。
+> (2) HP 經对照測試不受 Content-Type 影響，各尺寸解析度皆精確。
+
 測試日期：2026-08-14（Asia/Taipei）
 測試模式：Real mode、Android API 36 emulator、同一區域網路
 測試範圍：eSCL 掃描、ADF／Flatbed、A4／300 dpi／RGB24、JPEG／PDF 匯出，以及 IPP 列印結果

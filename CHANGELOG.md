@@ -2,6 +2,12 @@
 
 本專案依 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 的概念記錄重要變更；GitHub Release `v0.1.0` 已建立，目前合併後續變更記錄在 Unreleased。
 
+## [Unreleased] - 2026-09-16
+
+### Fixed — Brother eSCL Resolution/ADF Root Cause
+
+- POST `/eSCL/ScanJobs` 的 Content-Type 由 `text/xml; charset=utf-8` 改為 `application/xml`。Brother MFC-L2715DW firmware（debut/1.30）只對 `application/xml` 走完整 eSCL 路徑；`text/xml` 會落入 200dpi 全感光 fallback（1680×2193、忽略 ScanRegion/解析度/Feeder 請求）。修復後 App 實測 ADF 300dpi 得 2448×3486、600dpi 得 4912×6970，A5/4×6/5×7 region 與 Grayscale8 皆精確命中。HP LaserJet Pro MFP 3104fdw 對兩種 Content-Type 皆正常，不受影響。2026-08-13 的「TCP client 特徵」結論為錯誤歸因，已作廢。詳見 `docs/brother-contenttype-rootcause.md`。
+
 ## [Unreleased] - 2026-08-12
 
 ### Fixed — Product Test Follow-up

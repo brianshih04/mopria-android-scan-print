@@ -2,7 +2,7 @@
 
 Kotlin／Jetpack Compose Android App，透過 eSCL（AirScan）掃描文件，並可透過 Android Print Framework 或實驗性的 Direct IPP 列印手機檔案與掃描結果。專案目前版本為 `0.1.0`，`minSdk 28`、`targetSdk 36`。
 
-> 目前狀態（2026-08-12）：`main` 已包含 Mock／Real、eSCL pull scan、Flatbed／ADF、多頁文件、OpenCV file-first 影像處理（deskew／auto-crop／blank-page drop／背景淨化）、Google ML Kit Text Recognition v2、opt-in Searchable PDF、PDF／JPEG 文件庫、Android 系統列印、opt-in Direct IPP、10 種語言 UI、Dark Mode、文件／Flatbed／OCR layout 持久化與暫存檔清理。最新產品測試修正已涵蓋 System Print Activity context、選定原稿尺寸對應輸出紙張、Direct IPP 額外縮小、options sheet inset、endpoint health check 與 Mock 編輯輸出；實際測試數量以當次 Gradle 輸出為準。GitHub Actions 仍須確認 Linux wrapper 修正後才可宣稱綠燈。Brother eSCL ADF 互通、跨品牌真實 scanner／printer、ARM ML Kit accuracy／PSS、16 KB 與多語字型 coverage 仍是外部 gate。
+> 目前狀態（2026-09-16 更新）：`main` 已包含 Mock／Real、eSCL pull scan、Flatbed／ADF、多頁文件、OpenCV file-first 影像處理（deskew／auto-crop／blank-page drop／背景淨化）、Google ML Kit Text Recognition v2、opt-in Searchable PDF、PDF／JPEG 文件庫、Android 系統列印、opt-in Direct IPP、10 種語言 UI、Dark Mode、文件／Flatbed／OCR layout 持久化與暫存檔清理。Brother eSCL 解析度/ADF 互通問題已於 2026-09-16 解決（根因：POST ScanJobs Content-Type 需為 `application/xml`，見 `docs/brother-contenttype-rootcause.md`）；Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 均已實機驗證掃描（ADF 多頁、多解析度、多尺寸、灰階）與 Direct IPP 列印。跨品牌 ARM 實機、ML Kit accuracy／PSS、16 KB 與多語字型 coverage 仍是外部 gate。
 
 ## Android／Mopria 技術邊界
 
@@ -14,7 +14,7 @@ Android 沒有一個同時提供 Mopria 掃描與列印的公開「Mopria API」
 | 系統列印（預設） | Android `PrintManager` + `PrintDocumentAdapter` | 文件選擇、內容轉換、預覽入口與工作狀態；Print Service 負責探索、IPP/IPPS、紙張、色彩、雙面與 spool |
 | Direct IPP（opt-in） | `IppDiscovery` + `IppPrintClient` + `IppTransport` | 探索 `_ipp/_ipps`、capability 協商、格式轉換、送件、job polling 與錯誤清理 |
 
-因此，eSCL／AirScan 是掃描協定；列印方面，Real 模式可在設定切換「系統列印（Mopria，預設）」與「直接 IPP」——前者走 Android Print Framework，後者透過 `IppPrintClient` 探索 `_ipp/_ipps` 並送件；不支援 PDF 的印表機會依 capability 轉成 PWG-Raster 或 PCLm。JPEG／PNG 多頁工作會遵守 `multiple-document-jobs-supported`，不支援多文件工作的印表機改為逐頁建立單文件 job。Direct IPP 找不到印表機時會顯示明確錯誤，不會默默改走系統列印。直接 IPP 尚未以實體印表機驗證（見「下一階段」）。
+因此，eSCL／AirScan 是掃描協定；列印方面，Real 模式可在設定切換「系統列印（Mopria，預設）」與「直接 IPP」——前者走 Android Print Framework，後者透過 `IppPrintClient` 探索 `_ipp/_ipps` 並送件；不支援 PDF 的印表機會依 capability 轉成 PWG-Raster 或 PCLm。JPEG／PNG 多頁工作會遵守 `multiple-document-jobs-supported`，不支援多文件工作的印表機改為逐頁建立單文件 job。Direct IPP 找不到印表機時會顯示明確錯誤，不會默默改走系統列印。直接 IPP 已於 2026-09-16 在 HP LaserJet Pro MFP 3104fdw 實機驗證（7 頁 ADF 掃描 → PDF → Direct IPP 列印，job Completed）。
 
 ## 已完成的使用者功能
 

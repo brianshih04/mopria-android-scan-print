@@ -1,5 +1,11 @@
 # ADF Scan Resolution Investigation — 2026-08-13
 
+> **⚠️ 本文件結論已被推翻（2026-09-16）。**
+> 「Brother 依 TCP 層級特徵降級解析度」為錯誤歸因（當時測試順序的巧合）。
+> 真正根因是 **POST ScanJobs 的 Content-Type**：Brother firmware 只對
+> `application/xml` 走完整 eSCL 路徑，`text/xml` 落入 200dpi 降級 fallback。
+> 修復與完整驗證見 `docs/brother-contenttype-rootcause.md`。以下內容僅供歷史參考。
+
 ## 背景
 
 Brother MFC-L2715DW（eSCL v2.63, firmware `debut/1.30`）ADF 掃描回傳低解析度圖像。
