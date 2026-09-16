@@ -1,0 +1,19 @@
+# Normalize line endings — gradlew MUST be LF or Linux CI fails with exit 127
+* text=auto
+
+# Windows-only files keep CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Shell scripts / wrapper must be LF
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.webp binary
+*.ttf binary
+*.otf binary
+*.jar binary
+*.keystore binary
