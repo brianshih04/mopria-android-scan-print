@@ -558,7 +558,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                         }
                         updateJob(currentJobId, JobStatus.Completed, 100, text(R.string.common_pages, merged.pages.size))
                         persistDocuments()
-                        _events.tryEmit(text(R.string.event_scan_done, text(mode.labelRes), merged.pages.size))
+                        _events.trySend(text(R.string.event_scan_done, text(mode.labelRes), merged.pages.size))
                         saveScan(merged.id, ScanOutputFormat.Pdf)
                     }
                     settings.inputSource == ScanInputSource.Adf && !settings.combineAsPdf -> {
@@ -629,7 +629,7 @@ class MopriaViewModel(application: Application) : AndroidViewModel(application) 
                     )
                 }
                 persistDocuments()
-                _events.tryEmit(message)
+                _events.trySend(message)
             } catch (error: ScanError) {
                 val message = text(error.messageStringRes())
                 jobId?.let { updateJob(it, JobStatus.Failed, 0, message) }
