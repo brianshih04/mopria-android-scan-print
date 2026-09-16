@@ -69,10 +69,26 @@ Brother 光學寬度為 2448px @300dpi（8.16"），略小於 A4 的 2480（8.27
 
 ## 其餘觀察（2026-09-16 實測補充）
 
-- Brother ADF：單頁 job 掃完後會把整疊紙退出（載 7 張掃 1 張剩餘全部退出）——測試時每次放 1 張
+- Brother ADF：單頁 job 掃完後會把整疊紙退出（載 7 張掃 1 張剩餘全部退出）；HP ADF 同樣行為——測試時每次放 1 張
 - Brother 無 Bonjour 廣告，需手動 IP（與 iOS 報告一致）；HP `_uscan._tcp` 在 emulator 內亦不可靠，手動 IP 可用
+- HP eSCL canonical port 為 8080（mDNS TXT）；80 也可回應
 - HP LaserJet Pro MFP 3104fdw：ADF 7 頁連續掃描全部 2480×3508 ✅、PDF 匯出 ✅、Direct IPP 列印 job Completed ✅（本輪 App 端到端實測）
 - Brother 殘留 job（ScannerStatus 列出的 JobUri）會導致 POST 失敗，DELETE 清理（可能 404）後恢復
+
+### HP 矩陣測試（2026-09-16，curl :8080）
+
+| Case | 結果 | 判定 |
+|---|---|---|
+| `text/xml; charset=utf-8` 300dpi RGB A4 | 2480×3508 | ✅ **HP 不受 Content-Type 影響**（Content-Type 問題為 Brother 特有） |
+| `application/xml` 300dpi RGB A4 | 2480×3508 | ✅ 精確 |
+| 600dpi RGB（Feeder） | HTTP 409 `Input Settings Mismatch` | 非 bug：HP ADF caps 上限 300dpi（600 僅 Platen）；App `negotiate()` 會 coerce，不會送出 |
+| 300dpi Grayscale8 A4 | 2480×3508 | ✅ |
+| BlackAndWhite1 + JPEG | HTTP 409 `Input Settings Mismatch` | 非問題：App 黑白模式送 `application/pdf`，不會送此組合 |
+| A5 region | 1748×2480 | ✅ 精確 |
+| 4×6 region | 1200×1800 | ✅ 精確 |
+| 5×7 region | 1500×2100 | ✅ 精確 |
+
+HP 的 409 回應帶 HP ErrorInfo XML（`conflictWithExisting — Input Settings Mismatch Error!`），是設定驗證拒絕，非 job 衝突、非間隔問題。
 
 ## 結論
 
