@@ -58,7 +58,7 @@ class EsclHttpClient(
             method = "POST",
             url = "$baseUrl/ScanJobs",
             body = settingsXml.toByteArray(Charsets.UTF_8),
-            contentType = "text/xml; charset=utf-8",
+            contentType = "application/xml",
         )
         requireSuccessful(response, "POST ScanJobs", setOf(HttpURLConnection.HTTP_CREATED))
         return response.header("Location") ?: error("eSCL ScanJobs 201 response missing Location header")

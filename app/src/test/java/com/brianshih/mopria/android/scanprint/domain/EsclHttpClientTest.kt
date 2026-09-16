@@ -66,7 +66,7 @@ class EsclHttpClientTest {
             val location = client.createScanJob(baseUrl, EsclProtocol.buildScanSettings())
             assertEquals("/custom/ScanJobs/test-job", location)
             assertTrue(receivedSettings.contains("<pwg:Version>"))
-            assertTrue(receivedContentType.startsWith("text/xml"))
+            assertTrue(receivedContentType.startsWith("application/xml"))
             val payload = client.fetchNextDocument(EsclProtocol.nextDocumentUrl(baseUrl, location), downloadedPage)
             assertArrayEquals(imageBytes, payload?.file?.readBytes())
             assertEquals("image/jpeg", payload?.contentType)
