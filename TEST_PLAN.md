@@ -1,7 +1,8 @@
 # Mopria Android Scan & Print 測試計畫
 
-文件版本：1.1
+文件版本：1.2
 建立日期：2026-08-12
+更新日期：2026-09-16
 測試對象：Android App `com.brianshih.mopria.android.scanprint`
 目前產品版本：0.1.0
 文件負責人：QA Lead
@@ -13,9 +14,9 @@
 - 使用者操作成功，狀態與錯誤訊息正確。
 - 掃描檔案與實體列印結果的尺寸、頁數、方向、色彩及內容正確。
 - 失敗、取消、斷線及 App 重啟後，不產生損壞文件、卡住的 UI 或無法清理的設備工作。
-- 不因 Mock、emulator 或單一品牌結果宣稱 Mopria Certified 或跨品牌相容。
+- 不因 Mock、emulator 或有限機型結果宣稱 Mopria Certified、整個品牌或未測型號相容。
 
-2026-08-11 已完成一輪 Brother MFC-L2715DW（`10.1.121.175`）Flatbed A4／300 dpi／彩色 eSCL 掃描，以及 Direct IPP 工作完成驗證。這是基準結果，不取代本文件的完整回歸與跨品牌驗收。
+Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 已於 2026-09-16 完成 eSCL 掃描與 plain Direct IPP 基本工作驗證；Brother 修復後覆蓋 ADF、300／600 dpi、A5／4×6／5×7 與 Grayscale8，HP 覆蓋 7 頁 ADF → PDF → Direct IPP。這是兩款實機的基準結果，不取代本文件的完整 IPPS、格式／選項／錯誤與 soak matrix。
 
 ## 2. 測試範圍
 
@@ -85,9 +86,9 @@
 
 | ID | 設備 | 必測能力 | 備註 |
 |---|---|---|---|
-| MFP-01 | Brother MFC-L2715DW | Flatbed、ADF、eSCL HTTP、IPP | 已知基準；目前 IP `10.1.121.175`，若 DHCP 改變以當次報告為準 |
-| MFP-02 | 第二品牌 eSCL MFP | Flatbed、ADF、不同 capability／韌體 | Release gate |
-| PRN-02 | 第二品牌 Mopria／IPP printer | 系統列印、Direct IPP、至少一種 raster format | Release gate；可與 MFP-02 為同一台 |
+| MFP-01 | Brother MFC-L2715DW | Flatbed、ADF、eSCL HTTP、plain IPP | 基本實機基準完成；IP 以當次測試報告為準 |
+| MFP-02 | HP LaserJet Pro MFP 3104fdw | Flatbed、ADF、不同 capability／韌體、plain IPP | 基本實機基準完成；7 頁 ADF → PDF → Direct IPP 已驗證 |
+| PRN-03 | 後續 Mopria／IPP printer | 系統列印、IPPS、至少一種 raster format | 擴充 release matrix；也需在 MFP-01／02 補齊未測項目 |
 | TLS-01 | 具有效受信任憑證的 `_uscans` 或 `_ipps` 設備 | TLS、hostname 驗證 | 若本輪無設備，列為明確未測風險 |
 | TLS-02 | self-signed 或 hostname mismatch 測試端點 | 拒絕不可信連線 | 可使用隔離測試環境，不可加入 trust-all |
 
@@ -348,7 +349,7 @@ git diff --check
 4. ADF、多頁、尺寸與文件／匯出回歸。
 5. 系統列印與完整 Direct IPP matrix。
 6. ARM OCR／Searchable PDF。
-7. 第二品牌、IPPS、安全與中斷測試。
+7. 擴充其他機型、IPPS、安全與中斷測試。
 8. 多語系、無障礙、平板及 soak。
 9. Defect fix verification 與受影響範圍回歸。
 

@@ -451,7 +451,7 @@ Dependency spike 與發布 gate 另加：
 
 若 `ANDROID_SDK_ROOT` 未設定，使用 `local.properties` 中實際 SDK 路徑；不可把個人絕對路徑提交進 repository。
 
-2026-08-11 本機 `main` 快照：163 JVM tests、28 個 API 36 instrumentation tests、lint、debug／release APK、AAB、兩 ARM ABI 與 zipalign 通過。GitHub Actions 同一版在 Gradle 前因 Linux runner 無法執行 `./gradlew`（exit 127）失敗；修復 CI 前不可將 phase gate 描述為全綠。
+2026-08-11 本機 `main` 快照：163 JVM tests、28 個 API 36 instrumentation tests、lint、debug／release APK、AAB、兩 ARM ABI 與 zipalign 通過。GitHub Actions 同一版曾在 Gradle 前因 Linux runner 無法執行 `./gradlew`（exit 127）失敗；wrapper／line-ending 修復後，`main@68c2112` 已於 2026-09-16 通過 CI。
 
 ## 12. 後續里程碑：透視校正
 

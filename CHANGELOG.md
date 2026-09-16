@@ -8,6 +8,11 @@
 
 - POST `/eSCL/ScanJobs` 的 Content-Type 由 `text/xml; charset=utf-8` 改為 `application/xml`。Brother MFC-L2715DW firmware（debut/1.30）只對 `application/xml` 走完整 eSCL 路徑；`text/xml` 會落入 200dpi 全感光 fallback（1680×2193、忽略 ScanRegion/解析度/Feeder 請求）。修復後 App 實測 ADF 300dpi 得 2448×3486、600dpi 得 4912×6970，A5/4×6/5×7 region 與 Grayscale8 皆精確命中。HP LaserJet Pro MFP 3104fdw 對兩種 Content-Type 皆正常，不受影響。2026-08-13 的「TCP client 特徵」結論為錯誤歸因，已作廢。詳見 `docs/brother-contenttype-rootcause.md`。
 
+### Verified — Brother／HP Real Devices
+
+- Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 已完成 eSCL 掃描及 plain Direct IPP 基本工作驗證；HP 另完成 7 頁 ADF 掃描 → PDF → Direct IPP 並回報 job `Completed`。這些結果不延伸為 IPPS、所有格式／選項／錯誤情境、其他型號或 Mopria 認證。
+- Linux Gradle wrapper／line-ending 修復後，`main@68c2112` 已於 2026-09-16 通過 GitHub Actions；README、HANDOFF、開發計畫、使用指南與 Direct IPP 追蹤文件同步移除過期的「尚未實機驗證／CI 仍阻塞」敘述。
+
 ## [Unreleased] - 2026-08-12
 
 ### Fixed — Product Test Follow-up
@@ -77,7 +82,7 @@
 - 背景淨化測試補上 RGB channel／色相、強度差異、PDF／unsupported format 及原始檔不變驗證；測試總數以當次 Gradle 輸出為準。
 - 新增 deskew、auto-crop、blank-page、OCR native boundary、asset/package contract、OCR sidecar、50 頁 Searchable PDF 與 OpenCV memory soak instrumentation；實際測試數量以當次 Gradle 輸出為準。
 - Debug lint／assemble、Release assemble 與 release APK `zipalign -P 16` 驗證通過；16 KB page-size emulator、ARM model load／accuracy／PSS 與真實 scanner 仍待外部驗證。
-- 2026-08-11 `main` 本機快照：163 JVM tests、28 個 API 36 instrumentation tests、lint、debug／release APK、AAB 與 zipalign 全數通過；GitHub Actions 同一 commit 在 Gradle 啟動前因 Linux runner 無法執行 `./gradlew`（exit 127）失敗，CI 尚未恢復綠燈。
+- 2026-08-11 `main` 本機快照：163 JVM tests、28 個 API 36 instrumentation tests、lint、debug／release APK、AAB 與 zipalign 全數通過；GitHub Actions 同一 commit 在 Gradle 啟動前因 Linux runner 無法執行 `./gradlew`（exit 127）失敗。此為歷史記錄；wrapper／line-ending 修復後 `main@68c2112` 已於 2026-09-16 通過 CI。
 
 
 

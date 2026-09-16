@@ -1,12 +1,12 @@
 # OpenCV 背景淨化整合接手指南
 
-更新日期：2026-08-11
-狀態：Phase 0–4C 實作完成；Phase 5 實機／模型 gate 待完成
+更新日期：2026-09-16
+狀態：Phase 0–4C 實作完成；Brother／HP eSCL 實機基準完成，Phase 5 ARM 模型／16 KB／OCR 產品 gate 待完成
 主計畫：`docs/opencv-integration-plan.md`
 
 ## 1. 接手者先知道的事
 
-目前 `main` 已完成 Phase 0–4C 的主要實作：官方 OpenCV AAR、file-first pipeline、原子寫回、`EnhancementResult`、ADF deskew／auto-crop／blank-page drop、OCR settings/backend seam、ML Kit Text Recognition v2、預設 English／繁中／簡中、區域語言選擇、本地化錯誤，以及 OCR 啟用時的自動 deskew／auto-crop、bounded sampled bitmap、結構化文字座標／confidence 與版面／數字後處理。一般 Release 只保留兩個 ARM ABI；debug 保留 emulator ABI，`zipalign -P 16` 與 API 36 emulator instrumentation 已驗證。16 KB、真實 scanner、ML Kit 模型下載／accuracy／ARM PSS gate 尚未完成。透視校正仍不在本期範圍。
+目前 `main` 已完成 Phase 0–4C 的主要實作：官方 OpenCV AAR、file-first pipeline、原子寫回、`EnhancementResult`、ADF deskew／auto-crop／blank-page drop、OCR settings/backend seam、ML Kit Text Recognition v2、預設 English／繁中／簡中、區域語言選擇、本地化錯誤，以及 OCR 啟用時的自動 deskew／auto-crop、bounded sampled bitmap、結構化文字座標／confidence 與版面／數字後處理。一般 Release 只保留兩個 ARM ABI；debug 保留 emulator ABI，`zipalign -P 16` 與 API 36 emulator instrumentation 已驗證。Brother／HP eSCL 真實 payload 已完成基本掃描驗證；16 KB、真實 payload 的 OCR／OpenCV accuracy、ML Kit 模型下載／accuracy／ARM PSS gate 尚未完成。透視校正仍不在本期範圍。
 
 本文件只提供快速接手路線。技術決策、phase gate、測試矩陣與完成條件以 `docs/opencv-integration-plan.md` 為準；若兩份文件不一致，以主計畫為準。
 
@@ -33,8 +33,8 @@
 | 檔案格式 | JPEG／PNG 嘗試處理；scanner-returned PDF 跳過 |
 | 單元測試 | 以當次 Gradle 輸出為準，不在文件固定數量 |
 | 2026-08-11 本機快照 | 163 JVM tests、28 個 API 36 instrumentation tests、lint、debug／release／AAB、zipalign 通過 |
-| GitHub Actions | 同一 `main` 版本因 Linux runner 無法執行 `./gradlew`（exit 127）而在 Gradle 前失敗 |
-| 實機驗證 | 尚未完成，不可宣稱品牌相容 |
+| GitHub Actions | 舊版本曾因 Linux `./gradlew` exit 127 失敗；wrapper／line-ending 修復後 `main@68c2112` 已於 2026-09-16 成功 |
+| 實機驗證 | Brother／HP eSCL 基本掃描已驗證；OpenCV／OCR accuracy、ARM PSS、16 KB 與更廣設備矩陣仍未完成 |
 | eSCL image stream | HTTP response 直接落地 sibling file；不建立影像 ByteArray；OCR Bitmap 受 12 MP／4096 px 限制 |
 | ADF／平台 processing | deskew、auto-crop、blank-page drop 已接線並有 instrumentation contract |
 | OCR option | ML Kit Text Recognition v2 option、settings、capability safety、script model request、language catalog、結構化 bounds／confidence 與版面／數字 formatter；模型由 Google Play services 管理 |
@@ -45,7 +45,7 @@
 - A4 300 dpi 與 ADF 10 頁 PSS 已在目前 emulator 通過 absolute 256 MB／retained 64 MB gate；ARM64 實機尚未量測。
 - 16 KB page-size emulator／ARM 實機、ML Kit model download／accuracy／PSS、Google Play services 缺失 fallback 尚未完成；一般 release artifact 只保留兩個 ARM ABI，debug 保留 x86/x86_64。
 - 實際低磁碟、取消、replace 失敗與 OpenCV 初始化失敗的 instrumentation gate 尚待補齊。
-- 真實 scanner payload 與彩色文件 fixture 尚未完成實機驗證。
+- Brother／HP 真實 scanner payload 已完成基本 eSCL 驗證；仍需以這些 payload 與彩色／多語文件完成 OpenCV／OCR accuracy、PSS 與輸出品質 gate。
 
 ## 4. 已決定的方向
 

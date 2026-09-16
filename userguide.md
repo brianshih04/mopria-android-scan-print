@@ -111,7 +111,7 @@ Android 9 會在需要寫入公開 Download 資料夾時要求儲存權限。
 
 ## 5. 從手機檔案列印
 
-1. 切換到「實體裝置」後，到「設定」選擇列印方式；建議先保留預設的「系統列印」，Direct IPP 是尚待跨品牌實機驗證的 opt-in 功能。
+1. 切換到「實體裝置」後，到「設定」選擇列印方式；建議先保留預設的「系統列印」。Direct IPP 是 opt-in 功能，plain IPP 基本流程已在 Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 實機驗證，但 IPPS、完整格式／選項／錯誤矩陣與高 DPI 多頁 soak 尚未完成。
 2. 在首頁點選「列印」。
 3. 在 Android DocumentsUI 選擇一個或多個 PDF／JPEG／PNG。
 4. 確認選取後，App 會依列印方式繼續：
@@ -163,4 +163,4 @@ Direct IPP 可送出 PDF、JPEG、PNG，並可依印表機 capability 轉為 PWG
 
 ## 8. 功能邊界
 
-目前版本不宣稱支援 Push Scan、ADF duplex UI、使用者認證輸入、手動 IP／URL、語意化表格欄位抽取、無 Google Play services 的 OCR fallback 或 Mopria 認證。OCR／Searchable PDF 已提供 opt-in 實作並有 emulator proof，但 ML Kit ARM 實機 accuracy／PSS、日韓／混合字型 coverage、16 KB 與真實 scanner payload 尚未完成產品 gate。Direct IPP 也尚未完成跨品牌實機驗證；高 DPI 多頁 PWG-Raster／PCLm 仍需實體 soak，因此不應視為 Mopria Certified 或特定廠牌相容證據。
+目前版本不宣稱支援 Push Scan、ADF duplex 跨機型相容性、使用者認證輸入、QR／NFC 加入設備、語意化表格欄位抽取、無 Google Play services 的 OCR fallback 或 Mopria 認證。OCR／Searchable PDF 已提供 opt-in 實作並有 emulator proof，但 ML Kit ARM 實機 accuracy／PSS、日韓／混合字型 coverage、16 KB 與真實 scanner OCR payload 尚未完成產品 gate。Brother／HP 的 eSCL 與 plain Direct IPP 基本流程已實機驗證；IPPS、完整格式／選項／錯誤矩陣與高 DPI 多頁 PWG-Raster／PCLm soak 仍未完成，因此結果只適用於已記錄的機型與情境，不代表 Mopria Certified 或整個品牌相容。

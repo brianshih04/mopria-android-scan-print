@@ -1,12 +1,12 @@
 # Direct IPP 後續修改清單
 
-更新日期：2026-08-11
+更新日期：2026-09-16
 
 > 本文件只追蹤 Direct IPP。`main` 目前也包含 OpenCV 影像處理、Google ML Kit OCR 與 opt-in Searchable PDF；完整現況請搭配 `README.md`、`HANDOFF.md` 與 `dev_plan.md` 閱讀。
 
 ## 文件目的
 
-本文件供接手開發者追蹤 Direct IPP 已完成的 code review fixes 與剩餘風險。PR #5 已將 Direct IPP、PWG-Raster／PCLm、格式 payload 一致性、job polling、fixed-length streaming、OOM sampling、錯誤本地化、no-printer error 與 instrumentation tests 合併到 `main`；Direct IPP 仍應維持 experimental opt-in，直到實體設備與高 DPI 多頁 soak 驗證完成。
+本文件供接手開發者追蹤 Direct IPP 已完成的 code review fixes 與剩餘風險。PR #5 已將 Direct IPP、PWG-Raster／PCLm、格式 payload 一致性、job polling、fixed-length streaming、OOM sampling、錯誤本地化、no-printer error 與 instrumentation tests 合併到 `main`；Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 已完成 plain IPP 基本工作。Direct IPP 仍維持 experimental opt-in，直到 IPPS、完整格式／錯誤矩陣與高 DPI 多頁 soak 驗證完成。
 
 ## 審查基準
 
@@ -16,8 +16,8 @@
 - 變更內容：Direct IPP base、PWG-Raster／PCLm、capability options、reliability 與 review fixes
 - Android Studio bundled JDK：25.0.2
 - 2026-08-11 本機驗證：163 JVM tests、28 個 API 36 emulator instrumentation tests、lint、debug／release APK、AAB 與 zipalign 均成功
-- CI 現況：`main` 的 GitHub Actions 在 Gradle 啟動前因 Linux runner 無法執行 `./gradlew`（exit 127）失敗；不能沿用舊版 CI 綠燈敘述
-- 尚未完成：實體 IPP/IPPS 印表機跨品牌驗證，以及高 DPI 多頁 PWG-Raster／PCLm streaming／OOM soak
+- CI 現況：舊 run 曾因 Linux runner 無法執行 `./gradlew`（exit 127）失敗；wrapper／line-ending 修復後，`main@68c2112` 已於 2026-09-16 通過 GitHub Actions
+- 實機現況：Brother／HP plain IPP 基本 job completion 已驗證；尚未完成 IPPS／憑證、完整 PDF／JPEG／PNG／PWG-Raster／PCLm、選項／錯誤矩陣，以及高 DPI 多頁 streaming／OOM soak
 
 ## 目前接手重點
 
@@ -31,7 +31,8 @@
 - [x] Direct IPP 找不到印表機時顯示明確錯誤，不再 silent fallback。
 - [x] Direct IPP 錯誤訊息支援 string resources。
 - [x] 恢復 instrumentation test dependencies 與基本 UI smoke tests。
-- [ ] 實體設備驗證 IPP、IPPS、PWG-Raster、PCLm、job lifecycle 與憑證行為。
+- [x] Brother／HP 實體設備驗證 plain IPP 基本 job lifecycle。
+- [ ] 實體設備驗證 IPPS、憑證行為、PWG-Raster／PCLm 與完整格式／錯誤矩陣。
 - [x] `IppRasterizer` 已改為逐頁 bitmap streaming，不再同時保留所有頁面；swath streaming 與實體高 DPI soak 仍是後續 gate。
 
 ## P1：實機 rollout 或擴大測試前必須處理
@@ -89,9 +90,9 @@ git diff --check
 
 目前 `_ipps._tcp` discovery 會優先於 `_ipp._tcp`，並使用 Android system trust store。實體印表機常見 self-signed certificate、hostname 與 resolved IP 不一致，可能造成 TLS 或 hostname verification 失敗。
 
-請使用至少一台實體設備驗證：
+plain IPP 已在 Brother／HP 實機完成基本工作；仍請使用至少一台適合的實體設備驗證：
 
-- `_ipp._tcp` plain IPP。
+- `_ipp._tcp` plain IPP 回歸，作為 IPPS 對照組。
 - `_ipps._tcp` 有效憑證。
 - `_ipps._tcp` self-signed／hostname mismatch 時，確認錯誤訊息與 fallback 行為。
 - 同一台設備同時宣告 IPP/IPPS 時，確認 secure candidate 被選取。
@@ -114,15 +115,15 @@ git diff --check
 
 ### 8. 驗證 HTTP streaming interoperability
 
-[`IppTransport.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppTransport.kt) 已改用已知長度的 fixed-length HTTP body，不再使用 chunked streaming；JVM test server 已驗證 `Content-Length`。仍需在至少兩個品牌實體印表機確認 Create-Job／Send-Document 的 interoperability。
+[`IppTransport.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppTransport.kt) 已改用已知長度的 fixed-length HTTP body，不再使用 chunked streaming；JVM test server 已驗證 `Content-Length`，Brother／HP plain IPP 也已完成基本 Create-Job／Send-Document interoperability。仍需補齊各格式、選項、錯誤與 IPPS 情境。
 
 ### 9. 補 capability-driven print options
 
-capability-driven print options 已完成：從 `Get-Printer-Attributes` 解析 copies、media、sides、color mode、quality、orientation，UI 只送經 `coerceTo` 後符合 printer capability 的 job-template attributes。實體印表機仍需確認不同品牌對各 option 的語意。
+capability-driven print options 已完成：從 `Get-Printer-Attributes` 解析 copies、media、sides、color mode、quality、orientation，UI 只送經 `coerceTo` 後符合 printer capability 的 job-template attributes。Brother／HP 已覆蓋基本 media／job 流程；其餘 option 組合仍需逐項實機確認。
 
 ### 10. 補 Android／emulator integration coverage
 
-目前已恢復 `androidTest` dependencies；2026-08-11 的完整 API 36 suite 為 28 個 instrumentation tests，包含 MainActivity smoke、print method persistence、PDF→PWG-Raster/PCLm Android rasterizer path、bounded image decode，以及後續加入的 OpenCV／OCR／Searchable PDF coverage。Direct IPP 真實網路與 no-printer UI 仍以實體／mock discovery test 擴充為後續工作。
+目前已恢復 `androidTest` dependencies；2026-08-11 的完整 API 36 suite 為 28 個 instrumentation tests，包含 MainActivity smoke、print method persistence、PDF→PWG-Raster/PCLm Android rasterizer path、bounded image decode，以及後續加入的 OpenCV／OCR／Searchable PDF coverage。Brother／HP 已補上真實 plain IPP 基本網路證據；no-printer UI、TLS／IPPS 與錯誤情境仍以 emulator／mock／實機測試擴充。
 
 ## 文件與 release 同步
 
@@ -130,25 +131,26 @@ capability-driven print options 已完成：從 `Get-Printer-Attributes` 解析 
 
 - README、HANDOFF、CHANGELOG 的驗證快照：2026-08-11 本機實際為 163 JVM tests、28 個 emulator instrumentation tests；後續仍應以當次 Gradle 輸出為準。
 - README 的環境需求：JDK 25 daemon、compileSdk 37、Android SDK 版本要一致。
-- CHANGELOG 可記載 Get-Job-Attributes／Cancel-Job lifecycle 已接線並有 JVM tests；實體 printer job lifecycle 仍待驗證。
+- CHANGELOG 可記載 Get-Job-Attributes／Cancel-Job lifecycle 已接線並有 JVM tests；Brother／HP plain IPP 基本 job lifecycle 已驗證，未測矩陣必須另外列出。
 - 明確記載 Direct IPP 是否仍為 opt-in，以及找不到設備時是否允許 fallback。
 - 說明 APK 位於 GitHub Release，而不是 repository 的 `release/` 目錄。
 - 保持 Mopria eSCL specification PDF 不進入 repository。
 
 ## 建議接手順序
 
-1. 使用真實 IPP／IPPS 印表機測試 discovery、TLS、格式、選項與 job lifecycle。
+1. 以 Brother／HP 的 plain IPP 結果為基準，補 IPPS、TLS、各格式、選項、失敗／取消與 job lifecycle 回歸。
 2. 針對 PCLm／PWG-Raster 高 DPI 多頁工作，在既有逐頁 bitmap streaming 上量測實體峰值，再評估是否需要 swath streaming。
 3. 補充 Direct IPP no-printer、TLS error、選項與文件列印流程的 emulator／mock coverage。
-4. 所有實體驗證通過後，再評估是否改變 Direct IPP 的 experimental opt-in 策略。
+4. 完整 IPPS／格式／錯誤／高 DPI 實體矩陣通過後，再評估是否改變 Direct IPP 的 experimental opt-in 策略。
 
 ## 完成條件
 
 - [x] PDF／JPEG／PNG／PWG-Raster／PCLm 的宣告格式與實際 bytes 一致。
 - [x] 列印完成狀態來自 IPP job state，而不是只看 Send-Document response。
 - [x] IPP job failure、cancel、timeout 都能轉成 domain/UI error。
-- [ ] CI 在乾淨環境可取得正確 Android SDK 並通過 test、lint、debug assemble；Android 37 package id 已修正，但 2026-08-11 Linux runner 仍因 `./gradlew` 無法執行而在 Gradle 前失敗。
-- [ ] 至少一台 plain IPP 與一台 IPPS 實體設備完成驗證。
+- [x] CI 在乾淨環境取得正確 Android SDK 並通過 test、lint、debug assemble；wrapper／line-ending 修復後 `main@68c2112` 已於 2026-09-16 成功。
+- [x] Brother／HP plain IPP 實體設備完成基本驗證。
+- [ ] 至少一台 IPPS 實體設備完成有效憑證與失敗憑證情境驗證。
 - [x] Direct IPP 錯誤支援 English、繁中、簡中。
 - [x] JPEG／PNG 多頁不會對 single-document printer 傳送第二個 document payload。
 - [x] 一般圖片不會在 Direct IPP render 前被固定降為約 72 dpi。

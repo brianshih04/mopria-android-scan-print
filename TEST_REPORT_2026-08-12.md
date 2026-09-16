@@ -7,6 +7,9 @@
 > 修復（一行）已於 2026-09-16 合併，App 實測 300/600dpi、灰階、A5/4×6/5×7
 > 全部精確命中，ADF 取紙正常。詳見 `docs/brother-contenttype-rootcause.md`。
 > 下列 Fail 項目在修復後應全數轉為 Pass，待下次正式測試輪重跑確認。
+> 同日也已完成 HP LaserJet Pro MFP 3104fdw 的 7 頁 ADF 掃描、PDF 匯出與
+> plain Direct IPP job `Completed`；Brother／HP 均已有實機基準。以下正文仍保留
+> 2026-08-12 當時的環境與結果，不能用其中的「第二品牌未執行」描述目前狀態。
 
 狀態：現有環境執行完成；待外部設備／修正項目明列為 Blocked 或 Not Run
 測試計畫：`TEST_PLAN.md` v1.1

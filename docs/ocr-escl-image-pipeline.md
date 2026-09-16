@@ -55,7 +55,7 @@ ML Kit 模型由 Google Play services 下載與更新，不由 App 直接保存�
 3. 以真實 eSCL scanner payload 驗證 deskew／auto-crop 與不同紙張品質；目前 `Brian.jpg`、`b1.jpg`、`b2.jpg` 只在 API 36 emulator 做過 ML Kit sample smoke test，不是產品準確率證據。
 4. 語意化表格 cell extraction、欄位驗證，以及日文／韓文等多語字型 coverage 與真實 scanner payload 的 Searchable PDF 驗收；目前 Searchable PDF 已是獨立 opt-in，OCR layout 除了 page-scoped `DocumentPage.ocrResult`，也會以 gzip sidecar 原子保存。process death 或 sidecar 損毀後缺少 layout 時會要求重新 OCR，不會靜默輸出普通 PDF。
 
-2026-08-11 的本機 `main` 快照為 163 JVM tests、28 個 API 36 instrumentation tests，包含 50 頁 Searchable PDF 與 256 MB absolute PSS gate；GitHub Actions 同一版本因 Linux runner 無法執行 `./gradlew`（exit 127）而在 Gradle 前失敗，CI 尚未完成驗收。
+2026-08-11 的本機 `main` 快照為 163 JVM tests、28 個 API 36 instrumentation tests，包含 50 頁 Searchable PDF 與 256 MB absolute PSS gate；該版本的 GitHub Actions 曾因 Linux runner 無法執行 `./gradlew`（exit 127）而在 Gradle 前失敗。wrapper／line-ending 修復後，`main@68c2112` 已於 2026-09-16 通過 CI。
 
 官方參考：
 

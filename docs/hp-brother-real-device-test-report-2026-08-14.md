@@ -1,19 +1,31 @@
 # HP 與 Brother MFP 實機測試報告
 
-> **📝 後續更新（2026-09-16）：** 本報告的兩個 Brother 開放問題均已解決/翻案。
+> **📝 後續更新（2026-09-16）：** 本報告的兩個 Brother 開放問題均已解決／翻案。
 > (1) 「ADF 未取紙」與「1680×2193 低解析」的真正根因是 POST ScanJobs 的
 > Content-Type 必須為 `application/xml`（Brother firmware 對 `text/xml` 走降級
 > fallback）——修復後 ADF 取紙正常、300/600dpi/A5/4×6/5×7 全部精確命中，
 > 詳見 `docs/brother-contenttype-rootcause.md`。
-> (2) HP 經对照測試不受 Content-Type 影響，各尺寸解析度皆精確。
+> (2) HP 經對照測試不受 Content-Type 影響，各尺寸解析度皆精確。
+> 本文第 1–6 節保留 2026-08-14 修復前觀察供歷史追溯；目前結論以第 0 節與
+> `docs/brother-contenttype-rootcause.md` 為準。
 
 測試日期：2026-08-14（Asia/Taipei）
 測試模式：Real mode、Android API 36 emulator、同一區域網路
 測試範圍：eSCL 掃描、ADF／Flatbed、A4／300 dpi／RGB24、JPEG／PDF 匯出，以及 IPP 列印結果
 
-## 1. 執行摘要
+## 0. 2026-09-16 重測結論
 
-本輪測試顯示，HP 與 Brother 的差異主要發生在 eSCL 掃描輸出的影像尺寸，不是 App 產生 A4 PDF 或 IPP 列印的共通問題。
+| 項目 | HP LaserJet Pro MFP 3104fdw | Brother MFC-L2715DW |
+|---|---|---|
+| eSCL 掃描 | ADF 7 頁均為 2480×3508；300 dpi／Grayscale8／A5／4×6／5×7 通過 | `application/xml` 修復後 ADF 正常；300／600 dpi、Grayscale8、A5／4×6／5×7 均命中設備 capability／光學範圍 |
+| Direct IPP | 7 頁 ADF → PDF → plain Direct IPP，job `Completed` | plain Direct IPP 工作完成，A4 media option 可用 |
+| 未完成 | IPPS／憑證、完整格式／選項／錯誤矩陣、高 DPI PWG-Raster／PCLm soak、尺規級 1:1 驗收 | 同左 |
+
+這些結果確認兩款機型的基本 eSCL 與 plain Direct IPP 流程可用；不代表其他型號、整個品牌、IPPS 或 Mopria Certified。
+
+## 1. 2026-08-14 原始執行摘要（修復前）
+
+本節記錄 Content-Type 修復前的觀察：當時 HP 與 Brother 的差異主要發生在 eSCL 掃描輸出的影像尺寸，不是 App 產生 A4 PDF 或 IPP 列印的共通問題。
 
 - HP LaserJet Pro MFP 3104fdw（`10.1.121.182`）的 ADF 三頁原始影像均為 `2480 x 3508 px`、JPEG 標示 `300 x 300 dpi`，符合 A4 300 dpi。
 - Brother MFC-L2715DW（`10.1.121.175`）的 Flatbed 原始影像為 `1680 x 2193 px`，比例為 `0.7661`，與 A4 比例 `0.7070` 不符；App 仍只能依請求值保存為 A4，因設備沒有回報實際掃描設定。
@@ -64,7 +76,7 @@ HP App PDF 的頁面 MediaBox 為 `595 x 842 pt`，即 A4。PDF 內嵌影像為 
 
 列印測試中，plain IPP 工作可完成。初次列印曾觀察到縮小，重新 Scan／Print 後，實際列印結果與 Scan 原稿尺寸一致；這項尺寸結果是人工觀察，尚未以尺規或列印後再掃描方式量測。
 
-## 4. Brother 測試結果
+## 4. Brother 修復前測試結果
 
 ### 4.1 Flatbed eSCL
 
@@ -83,7 +95,7 @@ Brother Flatbed A4／300 dpi／RGB24 掃描可以建立工作並取得 JPEG，�
 
 Brother 匯出的 PDF 頁面仍是 A4 `595 x 842 pt`，但內嵌影像為 `1569 x 2048 px`。這正好保留了原始 JPEG 的非 A4 比例，所以 PDF 的白邊是「非 A4 掃描內容等比例放入 A4 頁面」的結果，不是 PDF 把影像變形。
 
-現有解析度調查也記錄到：在 Android／Linux HTTP client 下，Brother 多次回傳 `1680 x 2193`；只有 Windows `curl.exe` 的特定 Winsock 行為曾取得接近 300 dpi 的 `2448 x 3470`。因此目前強烈懷疑是 Brother MFC-L2715DW firmware／TCP client 行為相關的 eSCL 互通問題，而非 App 單純縮放。
+當時的解析度調查記錄到 Android／Linux HTTP client 多次取得 `1680 x 2193`，而 Windows `curl.exe` 曾取得接近 300 dpi 的 `2448 x 3470`，因此一度誤判為 TCP client 行為差異。2026-09-16 已證實真正差異是 POST ScanJobs 的 Content-Type；此舊歸因作廢。
 
 ### 4.2 ADF
 
@@ -93,13 +105,13 @@ Brother ADF 測試未能穩定取紙。即使工作回報建立／完成，取�
 - ADF 紙張沒有被實際帶入掃描路徑，設備狀態會在 `Loaded`／`Empty` 間變化。
 - Brother 面板 Copy 與 Windows WIA LAN ADF 可運作，因此問題目前集中在 App eSCL request 與 Brother eSCL 互通。
 
-判定：ADF interoperability Fail／Open；尚不能用 Brother ADF 與 HP ADF 做等價的三頁掃描比較。
+當時判定：ADF interoperability Fail／Open。此判定已由 2026-09-16 `application/xml` 修復後重測關閉。
 
 ### 4.3 IPP 列印
 
 Brother IPP 列印工作可完成，列印選項顯示 `iso_a4_210x297mm`，目前記錄有三個 completed jobs。這證明列印工作生命週期與 A4 media option 可以運作，但沒有證明 Brother eSCL 回傳的掃描影像是 A4，也沒有完成以尺規量測的 1:1 實體列印驗收。
 
-## 5. 主要差異
+## 5. 修復前主要差異（歷史）
 
 | 比較項目 | HP | Brother | 差異判讀 |
 |---|---|---|---|
@@ -111,17 +123,16 @@ Brother IPP 列印工作可完成，列印選項顯示 `iso_a4_210x297mm`，目�
 | PDF 內嵌影像 | A4 比例 | 保留 Brother 非 A4 比例 | 差異在 Scan payload，不在 PDF 外框 |
 | IPP job | plain IPP 成功 | IPP job 成功 | 列印傳輸大致可用，但不代表 Scan 尺寸正確 |
 
-## 6. 結論
+## 6. 2026-08-14 原始結論（已被重測取代）
 
 1. HP MFP 在本次測試中沒有發現 Brother 那種 Scan 尺寸問題；HP ADF 三頁均為 A4 300 dpi 尺寸。
 2. Brother 的問題可分成兩層：Flatbed eSCL 回傳非 A4／低像素影像，以及 ADF 未取紙。兩者都發生在掃描端，不是 plain IPP 列印端。
 3. App 目前把 Brother 文件標成 A4，是因為使用者請求為 A4，而 Brother 沒有回報 actual scan settings；這個 metadata 行為已經明確標示為 requested settings，不能當成設備實際回傳尺寸。
 4. A4 PDF 外框可以保持正確，但不能自動把 Brother 原始影像變成真正的 A4。若直接拉伸會破壞比例；後續應在「保留原始比例」與「裁切／補白成 A4」之間做產品決策。
 
-## 7. 後續建議與限制
+## 7. 目前後續建議與限制
 
-- 先確認 Brother MFC-L2715DW 是否有更新 firmware，並用官方 Mopria Scan 或 macOS AirPrint 做 eSCL 對照。
-- 若產品要求固定輸出 A4，應明確定義補白或裁切策略，並在 metadata 中保留原始像素尺寸與實際設定回報狀態。
-- 重新驗證 Brother Flatbed：同一張已知 A4 對位頁，記錄原始 JPEG 尺寸、JPEG DPI、PDF MediaBox、內嵌影像尺寸與列印後實測尺寸。
-- Brother ADF 仍需另行解決；在 ADF 互通修正前，不應宣稱跨品牌 ADF 相容。
-- 本報告只整理目前實機觀察，不代表 Mopria Certified 或完整跨品牌相容性認證。原始影像、PDF、capabilities XML 與測試暫存檔未納入 repository。
+- 以同一張已知 A4 對位頁補齊尺規或列印後再掃描的 1:1 實體尺寸驗收；保留原始像素、JPEG DPI、PDF MediaBox 與設備是否回報 actual settings。
+- 補 IPPS／憑證、ADF duplex、取消／離線／卡紙、完整格式與 option matrix，以及高 DPI 多頁 PWG-Raster／PCLm soak。
+- 擴充其他 scanner／printer 型號；Brother／HP 的結果只代表本文列出的設備與情境。
+- 本報告不代表 Mopria Certified 或完整品牌相容性認證。原始影像、PDF、capabilities XML 與測試暫存檔未納入 repository。
