@@ -1,6 +1,6 @@
 # Development Handoff
 
-更新日期：2026-09-16
+更新日期：2026-09-17
 
 Repository：`brianshih04/mopria-android-scan-print`
 
@@ -10,9 +10,9 @@ Repository：`brianshih04/mopria-android-scan-print`
 
 目前 `main` 已完成可執行的 Android Compose App、Mock／Real 模式、eSCL v2.97 pull-scan client、Flatbed／ADF 多頁文件工作流、capability-aware ADF 單面／雙面選擇、OpenCV file-first 影像處理、opt-in ML Kit OCR／Searchable PDF、PDF／JPEG 文件庫、Android Print Framework 預設列印入口、opt-in Direct IPP，以及 10 種語言與系統語系 fallback。ADF 雙面目前只有自動測試與 capability UI 驗證，尚未以廣告 `AdfDuplexInputCaps` 的實體 MFP 驗收。OCR feature branch 已 fast-forward 合併；合併前的 `main` 保留於 `main-backup`。
 
-既有 JVM／instrumentation 驗證可由下方固定指令重跑。Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 已完成 eSCL 掃描與 plain Direct IPP 基本流程實機驗證；尚未完成的是 IPPS／憑證、完整格式與錯誤矩陣、ADF duplex 跨機型、Direct IPP 高 DPI 多頁 PWG-Raster／PCLm streaming／OOM soak，以及更廣的設備覆蓋。已記錄的實機結果不可延伸描述成 Mopria Certified 或整個品牌／所有型號相容。
+既有 JVM／instrumentation 驗證可由下方固定指令重跑。Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 已完成基本實體 eSCL 掃描驗證；Brother 另已透過 Android Default Print Service（Mopria，手動 IP 加入）完成一次系統列印。HP Direct IPP 已完成，Brother Direct IPP 實測失敗；Direct IPP 的 IPPS、高 DPI 多頁 PWG-Raster／PCLm streaming／OOM soak 與跨品牌完整驗收仍未完成。請勿把 Mock／fixture 結果描述成 Mopria Certified 或廠牌相容證據。
 
-2026-08-12 產品測試後已修正 System Print Activity context、輸出紙張尺寸、Direct IPP bitmap 額外縮小、options sheet navigation inset、手動 endpoint 健康檢查、PDF metadata 重疊與 Mock crop／rotation。System Print 已在 API 36 實際開啟 Print Spooler；A4 MediaBox 與上述 UI 邊界有 instrumentation coverage。Brother／HP 的 plain Direct IPP job 已完成實機流程驗證；實體 1:1 尺規量測、不可達 endpoint UI、十語系完整流程與 Mock 編輯輸出仍需人工重測。Brother MFC-L2715DW 的 eSCL ADF／解析度問題已於 2026-09-16 解決：根因為 POST ScanJobs Content-Type 需為 `application/xml`（`text/xml` 觸發 Brother 降級 fallback），修復後 ADF 取紙與 300／600 dpi、A5／4×6／5×7、Grayscale8 均正常，詳見 `docs/brother-contenttype-rootcause.md`。
+2026-08-12 產品測試後已修正 System Print Activity context、輸出紙張尺寸、Direct IPP bitmap 額外縮小、options sheet navigation inset、手動 endpoint 健康檢查、PDF metadata 重疊與 Mock crop／rotation。System Print 已在 API 36 實際開啟 Print Spooler；A4 MediaBox 與上述 UI 邊界有 instrumentation coverage。2026-09-17 實機矩陣：Brother MFC-L2715DW 透過 Android Default Print Service（手動 IP）列印工作為 `Completed`；HP LaserJet Pro MFP 3104fdw Direct IPP 工作為 `Completed`；Brother Direct IPP 工作為 `Failed`，待 format-specific PWG-Raster resolution negotiation 修正後重測。~~Brother MFC-L2715DW 的 eSCL ADF 不取紙仍未解決~~ → **已解決（2026-09-16）**：根因為 POST ScanJobs Content-Type 需為 `application/xml`（`text/xml` 觸發 Brother 降級 fallback），修復後 ADF 取紙與解析度全部正常，詳見 `docs/brother-contenttype-rootcause.md`。
 
 OpenCV 與 eSCL file-first 影像管線已接入：使用官方 `org.opencv:opencv:4.14.0` AAR、原子檔案替換、ADF deskew、平台 auto-crop、blank-page drop 與背景淨化；`android:largeHeap="true"` 已設定，A4 300 dpi 十頁 OpenCV soak 以 absolute 256 MB peak／64 MB retained-PSS gate 驗證。OCR option 使用 Google ML Kit Text Recognition v2，接入 settings、capability safety、四種 script recognizer、Google Play services unbundled model request、預設 English／繁中／簡中與區域語言選擇；影像以 12 MP／4096 px 上限取樣，OCR 掃描只協商 JPEG，PDF-only profile 會在建立工作前回報。日文／韓文模型及 Searchable PDF 地域字型均由使用者按需準備，JP／KR TTF 不進主 APK；字型 URL 固定至 Noto CJK commit 並驗證 SHA-256。Searchable PDF 透過獨立 opt-in 設定接入 PDFBox mixed/temp storage，以 page-scoped OCR layout、bounded bitmap 與 crop／rotation 座標轉換產生不可見文字層；layout 以壓縮 sidecar 原子保存，缺少 OCR／字型時明確失敗，不會靜默降級。API 36 emulator 的三張中文樣本輸出與文字抽取已通過。實機模型下載、辨識準確率／PSS、16 KB、真實 scanner 與多語字型覆蓋率仍待驗證，細節見 `docs/opencv-integration-plan.md`、`docs/ocr-escl-image-pipeline.md` 與 `docs/searchable-pdf-poc.md`。
 
@@ -109,17 +109,20 @@ Flatbed multi-page 是多個獨立 eSCL Platen job 的 App-level session，不�
 - Mopria Alliance eSCL Technical Specification v2.97 PDF 只存在開發者本機，不在 Git，也不應被複製到 repository、issue 或 CI artifact。
 - 公開入口可連結 [Mopria eSCL Specification](https://mopria.org/mopria-escl-specification)。
 - ScanBridge／eSCLKt 為 GPL-3.0-or-later：本專案只參考可觀察行為，不複製或連結其程式碼。
-- HP JIPP（MIT；`jipp-core` + `jipp-pdl`）已作為直接 IPP client 依賴納入；Real 模式列印可在設定切換「系統列印（預設）」與「直接 IPP」。Direct IPP 支援 PDF、JPEG／PNG、PWG-Raster、PCLm、capability-constrained job options、固定長度 HTTP、job polling 與 timeout cancel；圖片 renderer 使用最高 300 dpi 的 bounded pixel budget，JPEG／PNG 多頁會依 `multiple-document-jobs-supported` 選擇單一多文件 job 或逐頁單文件 jobs。找不到 IPP 印表機時會顯示明確錯誤，不會 fallback。Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 已完成 plain Direct IPP 基本工作；IPPS、全部格式／選項／錯誤路徑與高 DPI 多頁 soak 仍待驗證。
+- HP JIPP（MIT；`jipp-core` + `jipp-pdl`）已作為直接 IPP client 依賴納入；Real 模式列印可在設定切換「系統列印（預設）」與「直接 IPP」。Direct IPP 支援 PDF、JPEG／PNG、PWG-Raster、PCLm、capability-constrained job options、固定長度 HTTP、job polling 與 timeout cancel；圖片 renderer 使用最高 300 dpi 的 bounded pixel budget，JPEG／PNG 多頁會依 `multiple-document-jobs-supported` 選擇單一多文件 job 或逐頁單文件 jobs。找不到 IPP 印表機時會顯示明確錯誤，不會 fallback。2026-09-17 實機驗證為 HP Direct IPP `Completed`、Brother Direct IPP `Failed`；Brother MFC-L2715DW 的 PWG-Raster capability 只宣告 600×600，而通用 `printer-resolution-supported` 同時宣告 300／600／1200，現行 client 偏好 300 的 negotiation mismatch 是初步疑點，尚未證實或修正。
 
 ## 6. 最新驗證證據
 
 | 驗證 | 結果 |
 |---|---|
-| `:app:testDebugUnitTest` | 2026-09-16 本機 180 passed，0 failed |
-| `:app:lintDebug` | 2026-09-16 本機 0 errors、12 warnings |
-| `:app:assembleDebug` | passed；APK 位於 `app/build/outputs/apk/debug/app-debug.apk` |
-| `:app:assembleRelease`／`:app:bundleRelease` | 2026-09-16 passed；R8 minify 開啟，兩個 ARM ABI 的 unsigned release APK 約 60.8 MB，AAB 約 37.6 MB |
-| `:app:connectedDebugAndroidTest` | 2026-08-11 API 36 emulator 28 passed，0 failed |
+| `:app:testDebugUnitTest` | 2026-09-17 本機 180 passed，0 failed |
+| `:app:lintDebug` | 2026-09-17 0 errors、12 warnings |
+| `:app:assembleDebug` | 2026-09-17 passed；APK 位於 `app/build/outputs/apk/debug/app-debug.apk` |
+| `:app:assembleRelease` | passed；R8 minify 開啟，兩個 ARM ABI 的 unsigned release APK 約 60.4 MB |
+| `:app:connectedDebugAndroidTest` | 2026-09-17 API 36 emulator 34 passed，0 failed |
+| Brother MFC-L2715DW／Android Default Print Service | API 36 emulator 手動加入 `10.1.121.175`；system print job 與 App History `Completed`，Brother queue 0／idle |
+| HP LaserJet Pro MFP 3104fdw／Direct IPP | `10.1.121.182`；App History 與 HP eWS job `Completed` |
+| Brother MFC-L2715DW／Direct IPP | `10.1.121.175`；IPP capability 200 OK，但 App History `Failed`，未觀察到紙張輸出 |
 | OpenCV A4 300 dpi ten-page soak | absolute peak PSS ≤256 MB、GC/idle 後 retained PSS 增量 ≤64 MB |
 | Release native ABI | `arm64-v8a`、`armeabi-v7a`；加上 `-PreleaseAbiSplits=true` 可產生個別 APK；`zipalign -c -P 16 -v 4` passed |
 | 16 KB page-size device | 尚未驗證；目前 AVD 為 4 KB page size |
@@ -140,7 +143,7 @@ Lint 目前無 error；Kotlin compiler 仍有既有 `EditScreen` rotate icon dep
 
 ## 7. 已知限制與風險
 
-- Brother／HP 已驗證基本 eSCL capability、ADF、多解析度／尺寸與灰階流程；`_uscans` TLS 憑證、更多 capability 差異、ADF duplex／卡紙／斷線與 job retention 仍待擴充。
+- Brother／HP 的基本實體 eSCL scanner／ADF 路徑已驗證；仍未完成更廣泛的廠商 capability 差異、TLS 憑證、ADF 空紙／卡紙與 job retention 驗收。
 - 尚未實作 401 credential UI；目前會顯示 challenge 資訊並失敗。
 - `426` 可切換同 host HTTPS，但沒有 RFC 2817 同一 TCP connection raw Upgrade。
 - 掃描設定 UI 顯示 150／300／600 dpi 的產品選項，Real provider 會依 scanner capability 過濾／協商；仍需真實設備驗證非標準 resolution profile 的 UX。
@@ -151,6 +154,7 @@ Lint 目前無 error；Kotlin compiler 仍有既有 `EditScreen` rotate icon dep
 - 一般 PDF 輸出使用 Android `PdfDocument` 重繪頁面，不保留原始 PDF 的文字／向量語意；只有使用者同時啟用 OCR 與 Searchable PDF 時改走 PDFBox invisible text layer。
 - 50 頁是 App 安全上限；大型高 dpi 掃描仍需實機 soak 與儲存空間檢查。
 - Direct IPP 的 `IppRasterizer` 已逐頁持有 bitmap，但在完成實體高 DPI 多頁 soak（必要時再做 swath streaming）前，不應宣稱大型多頁工作已具產品級穩定性。
+- Brother MFC-L2715DW 的 Direct IPP 目前在 capability 查詢後送件失敗；其 PWG-Raster 解析度只宣告 600×600，而現行 client 的通用解析度偏好可能選 300，需完成 format-specific negotiation 並重新實測。
 
 ## 8. Android 平台注意事項
 
@@ -166,6 +170,6 @@ Lint 目前無 error；Kotlin compiler 仍有既有 `EditScreen` rotate icon dep
 3. 擴充 Flatbed JPEG、ADF PDF、`SelectSinglePage` true／false、取消、503、卡紙與斷線回歸。
 4. 以更多真實 capability 驗證 ViewModel 對來源／解析度／色彩的動態限制與 fallback UX。
 5. 設計持久化 job model 與 raw scan retention，再處理進行中工作在 background／process death 後的恢復策略。
-6. 在已完成的 Brother／HP plain IPP 基本流程上，補齊 Android Print Service、IPPS、格式、capability options、失敗／取消、TLS 與高 DPI 多頁 soak，完成矩陣後再準備 Beta 宣稱。
+6. 先修正並重測 Brother Direct IPP 的 format-specific resolution negotiation，再補 IPPS、格式、job lifecycle、TLS 與高 DPI 多頁 soak；完成至少兩品牌硬體 matrix 後才準備 Beta 宣稱。
 
 詳細產品範圍見 [`README.md`](README.md)，里程碑見 [`dev_plan.md`](dev_plan.md)，本輪變更見 [`CHANGELOG.md`](CHANGELOG.md)。

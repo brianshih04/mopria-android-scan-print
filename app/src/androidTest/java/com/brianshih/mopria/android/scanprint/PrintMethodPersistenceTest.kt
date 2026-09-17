@@ -3,8 +3,11 @@ package com.brianshih.mopria.android.scanprint
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.brianshih.mopria.android.scanprint.domain.PrintMethod
+import com.brianshih.mopria.android.scanprint.domain.SettingsStore
 import com.brianshih.mopria.android.scanprint.ui.MopriaViewModel
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -15,6 +18,18 @@ import org.junit.runner.RunWith
  */
 @RunWith(AndroidJUnit4::class)
 class PrintMethodPersistenceTest {
+
+    @Before
+    fun clearPrintMethodPreference() {
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        app.getSharedPreferences(SettingsStore.PREFERENCES_NAME, android.content.Context.MODE_PRIVATE)
+            .edit()
+            .remove(SettingsStore.KEY_PRINT_METHOD)
+            .commit()
+    }
+
+    @After
+    fun cleanupPrintMethodPreference() = clearPrintMethodPreference()
 
     @Test
     fun printMethodPersistsAcrossViewModelInstances() {

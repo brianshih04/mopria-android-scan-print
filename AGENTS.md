@@ -48,7 +48,7 @@ git diff --check
 
 - PR #5 已把 `feat/direct-ipp-fixes` 合併到 `main`；目前 `main` 已包含 Direct IPP、PWG-Raster、PCLm、reliability hardening、capability options、localization 與 tests。舊 feature branch 只供歷史追溯，不是實作差異來源。
 - `codex/ocr-searchable-pdf-review` 已 fast-forward 合併並推送到 `main`；目前另有 `main-backup` 指向合併前的 `f7fc813`。`main` 已包含 OpenCV 4.14 file-first processing、ML Kit Text Recognition v2、按需 JP／KR 字型與 opt-in Searchable PDF。
-- Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 已完成 eSCL 掃描與 plain Direct IPP 基本流程實機驗證；`DIRECT_IPP_FOLLOWUPS.md` 追蹤剩餘 IPPS、格式／錯誤矩陣與高 DPI 多頁記憶體風險。實機聲明只限已記錄機型／情境，不可延伸成整個品牌或 Mopria Certified。
+- Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 已完成 eSCL 掃描；Brother 另以 Android Default Print Service／Mopria 完成一次系統列印，HP Direct IPP 實機工作為 `Completed`，Brother Direct IPP 實機工作為 `Failed`。`DIRECT_IPP_FOLLOWUPS.md` 追蹤 Brother resolution negotiation、IPPS、格式／錯誤矩陣與高 DPI 多頁記憶體風險。實機聲明只限已記錄機型／情境，不可延伸成整個品牌或 Mopria Certified。
 - 改動前先確認你在哪條 branch，並以 `app/build.gradle.kts` 為準，不要相信文件裡的 SDK 數字。
 
 ## 平台／環境 gotchas

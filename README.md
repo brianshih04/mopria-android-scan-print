@@ -2,7 +2,7 @@
 
 Kotlin／Jetpack Compose Android App，透過 eSCL（AirScan）掃描文件，並可透過 Android Print Framework 或實驗性的 Direct IPP 列印手機檔案與掃描結果。專案目前版本為 `0.1.0`，`minSdk 28`、`targetSdk 36`。
 
-> 目前狀態（2026-09-16 更新）：`main` 已包含 Mock／Real、eSCL pull scan、Flatbed／ADF、多頁文件、OpenCV file-first 影像處理（deskew／auto-crop／blank-page drop／背景淨化）、Google ML Kit Text Recognition v2、opt-in Searchable PDF、PDF／JPEG 文件庫、Android 系統列印、opt-in Direct IPP、10 種語言 UI、Dark Mode、文件／Flatbed／OCR layout 持久化與暫存檔清理。Brother eSCL 解析度/ADF 互通問題已於 2026-09-16 解決（根因：POST ScanJobs Content-Type 需為 `application/xml`，見 `docs/brother-contenttype-rootcause.md`）；Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 均已實機驗證掃描（ADF 多頁、多解析度、多尺寸、灰階）與 plain Direct IPP 列印。實體 Android ARM 裝置上的 ML Kit accuracy／PSS、16 KB、多語字型 coverage，以及 IPPS／完整列印格式與高 DPI soak 仍是外部 gate。
+> 目前狀態（2026-09-17 更新）：`main` 已包含 Mock／Real、eSCL pull scan、Flatbed／ADF、多頁文件、OpenCV file-first 影像處理（deskew／auto-crop／blank-page drop／背景淨化）、Google ML Kit Text Recognition v2、opt-in Searchable PDF、PDF／JPEG 文件庫、Android 系統列印、opt-in Direct IPP、10 種語言 UI、Dark Mode、文件／Flatbed／OCR layout 持久化與暫存檔清理。Brother eSCL 解析度／ADF 互通問題已於 2026-09-16 解決（根因：POST ScanJobs Content-Type 需為 `application/xml`，見 `docs/brother-contenttype-rootcause.md`）；Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 均已實機驗證掃描（ADF 多頁、多解析度、多尺寸、灰階）。Brother MFC-L2715DW 已透過 Android Default Print Service（Mopria，手動 IP 加入）完成系統列印；HP 已完成 Direct IPP 列印；Brother Direct IPP 實測工作失敗，仍待修正。跨品牌 ARM 實機、ML Kit accuracy／PSS、16 KB 與多語字型 coverage 仍是外部 gate。
 
 ## Android／Mopria 技術邊界
 
@@ -14,7 +14,15 @@ Android 沒有一個同時提供 Mopria 掃描與列印的公開「Mopria API」
 | 系統列印（預設） | Android `PrintManager` + `PrintDocumentAdapter` | 文件選擇、內容轉換、預覽入口與工作狀態；Print Service 負責探索、IPP/IPPS、紙張、色彩、雙面與 spool |
 | Direct IPP（opt-in） | `IppDiscovery` + `IppPrintClient` + `IppTransport` | 探索 `_ipp/_ipps`、capability 協商、格式轉換、送件、job polling 與錯誤清理 |
 
-因此，eSCL／AirScan 是掃描協定；列印方面，Real 模式可在設定切換「系統列印（Mopria，預設）」與「直接 IPP」——前者走 Android Print Framework，後者透過 `IppPrintClient` 探索 `_ipp/_ipps` 並送件；不支援 PDF 的印表機會依 capability 轉成 PWG-Raster 或 PCLm。JPEG／PNG 多頁工作會遵守 `multiple-document-jobs-supported`，不支援多文件工作的印表機改為逐頁建立單文件 job。Direct IPP 找不到印表機時會顯示明確錯誤，不會默默改走系統列印。2026-09-16 已在 Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 完成 plain Direct IPP 實機工作；其中 HP 完成 7 頁 ADF 掃描 → PDF → Direct IPP 列印並回報 job `Completed`。
+因此，eSCL／AirScan 是掃描協定；列印方面，Real 模式可在設定切換「系統列印（Mopria，預設）」與「直接 IPP」——前者走 Android Print Framework，後者透過 `IppPrintClient` 探索 `_ipp/_ipps` 並送件；不支援 PDF 的印表機會依 capability 轉成 PWG-Raster 或 PCLm。JPEG／PNG 多頁工作會遵守 `multiple-document-jobs-supported`，不支援多文件工作的印表機改為逐頁建立單文件 job。Direct IPP 找不到印表機時會顯示明確錯誤，不會默默改走系統列印。直接 IPP 已於 2026-09-17 在 HP LaserJet Pro MFP 3104fdw 實機驗證（掃描 PDF → Direct IPP 列印，job Completed）；同日 Brother MFC-L2715DW 的 Direct IPP 工作為 Failed，但透過 Android Default Print Service 的 Mopria 系統列印工作為 Completed。
+
+## 實機列印驗證快照（2026-09-17）
+
+| 設備 | 路徑 | 結果 |
+|---|---|---|
+| Brother MFC-L2715DW（`10.1.121.175`） | Android Default Print Service／Mopria；手動加入 IP | 通過：系統工作與 App History 均為 `Completed`，Brother 佇列回到 0、狀態 `idle` |
+| HP LaserJet Pro MFP 3104fdw（`10.1.121.182`） | Direct IPP | 通過：App History 與 HP 端工作清單均為 `Completed` |
+| Brother MFC-L2715DW（`10.1.121.175`） | Direct IPP | 失敗：App History 為 `Failed`；IPP capability 查詢成功但尚未完成相容性修正 |
 
 ## 已完成的使用者功能
 
@@ -85,7 +93,7 @@ OCR 語言選項是獨立於 App UI 語系的設定。預設只選取 English、
 - 接受 JPEG、PDF、PNG，並比對 MIME type 與檔案 signature；PDF 以 `PdfRenderer` 對應實際頁數。
 - HTTPS 使用 Android 系統 trust store，不使用 trust-all；TLS provider 必須具備 TLS 1.3。
 
-刻意未宣稱的範圍：Push Scan、Stored Job Requests、ML Kit 實機模型下載／辨識準確率、多語字型完整覆蓋率、無 Google Play services 環境的替代 OCR、加密 PDF request、ScanBufferInfo、ADF duplex 跨機型相容性、使用者認證輸入、QR／NFC 加入設備，以及 Mopria 認證。Direct IPP 的 plain IPP 基本流程已在 Brother／HP 實機驗證，但 IPPS 憑證情境、PDF／JPEG／PNG／PWG-Raster／PCLm 完整接受度、所有 job option／錯誤路徑與高 DPI 多頁 soak 尚未完成；因此不延伸宣稱其他型號或完整品牌相容性。`426` 可升級為同 host HTTPS；同一 TCP connection 內的 RFC 2817 raw Upgrade 不在目前支援範圍。
+刻意未宣稱的範圍：Push Scan、Stored Job Requests、ML Kit 實機模型下載／辨識準確率、多語字型完整覆蓋率、無 Google Play services 環境的替代 OCR、加密 PDF request、ScanBufferInfo、ADF duplex 實機相容性、使用者認證輸入、手動 IP／URL、Mopria 認證（Brother 的 Mopria 系統列印已完成一次實機工作驗證；Direct IPP 目前僅 HP 通過，Brother 仍失敗，IPPS 與高 DPI 多頁 soak 尚未完成，見 `IppPrintClient` 與「下一階段」）。`426` 可升級為同 host HTTPS；同一 TCP connection 內的 RFC 2817 raw Upgrade 不在目前支援範圍。
 
 Mopria 規格 PDF 是本機、受限制的研究來源，不會複製到此 repository。公開參考入口：[Mopria eSCL Specification](https://mopria.org/mopria-escl-specification)。
 
@@ -207,13 +215,14 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 
 ## 最新驗證紀錄
 
-2026-09-16 的 `main` 本機建置／品質驗證：
+2026-09-17 的 `main` 本機建置／品質驗證：
 
 - 工具鏈：AGP 9.3.1、Gradle 9.5.0、JDK 25 daemon、`compileSdk 37`。
 - Release 啟用 R8 minify + resource shrinking；一般 unsigned APK 約 60.4 MB，只包含 arm64-v8a／armeabi-v7a。加上 `-PreleaseAbiSplits=true` 可產生個別 ABI APK；Play 發布使用 AAB。
-- Android lint：0 errors、12 warnings；Kotlin compiler 有既有 rotate icon deprecation 與一個多餘 safe-call warning。
-- `:app:testDebugUnitTest`：180 passed；`:app:assembleDebug`、`:app:assembleRelease`、`:app:bundleRelease`：passed。
-- API 36 emulator instrumentation 最近一次完整紀錄為 2026-08-11 的 28 passed，包含設定持久化、OpenCV pipeline、deskew／crop／blank-page、ML Kit OCR 邊界、OCR sidecar、50 頁 Searchable PDF 與 memory soak；後續驗證仍以當次 Gradle 報告為準。
+- Android lint：0 errors、12 warnings；Kotlin compiler 僅有既有 rotate icon deprecation warnings。
+- `:app:testDebugUnitTest`：180 passed；`:app:lintDebug`、`:app:assembleDebug`：passed。
+- API 36 emulator instrumentation：34 passed，包含設定持久化、OpenCV pipeline、deskew／crop／blank-page、ML Kit OCR 邊界、OCR sidecar、50 頁 Searchable PDF 與 memory soak。
+- 實機列印矩陣：Brother MFC-L2715DW 透過 Android Default Print Service／Mopria（手動 IP）`Completed`；HP LaserJet Pro MFP 3104fdw Direct IPP `Completed`；Brother Direct IPP `Failed`，待 resolution negotiation 修正。
 - OpenCV A4 300 dpi 十頁 soak：absolute peak PSS ≤256 MB，GC/idle 後 retained PSS 增量 ≤64 MB。
 - Release APK `zipalign -c -P 16 -v 4`：passed；目前 API 36 AVD 為 4 KB，16 KB page-size 尚未驗證。
 - GitHub Actions CI：舊的 `main@f5dca33` 曾因 Linux runner 無法執行 `./gradlew`（exit 127）失敗；`.gitattributes`／wrapper line-ending 與 executable 修復後，`main@68c2112` 已於 2026-09-16 通過 CI。
@@ -234,12 +243,12 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`。
 - 文件頁：實際縮圖、PDF／JPEG、列印與分享入口存在。
 - Runtime log：smoke flow 無 `FATAL EXCEPTION`／app OOM。
 
-這些模擬結果證明協定 fixture 與 Android 整合可執行；實機聲明只限上述已記錄的 Brother MFC-L2715DW／HP LaserJet Pro MFP 3104fdw 測試情境，不延伸為其他型號、完整品牌相容性或 Mopria 認證。
+這些結果證明模擬流程、協定 fixture 與 Android 整合可執行；實機矩陣只涵蓋上表列出的設備、路徑與設定，不等同其他功能、其他品牌或 Mopria 認證已通過。
 
 ## 下一階段
 
-1. 以已驗證的 Brother／HP 為基準，擴充更多 eSCL MFP 與 `_uscans`、自訂 `rs`、Flatbed／ADF 錯誤、斷線及 job cleanup 情境。
-2. 在 Brother／HP 與後續設備完成 Android Print Service、IPPS、PDF／JPEG／PNG／PWG-Raster／PCLm、憑證、紙張、色彩、雙面、取消、離線及高 DPI 多頁 soak；目前只宣稱已記錄的 plain Direct IPP 基本流程。
+1. 在已完成 Brother／HP 基本 eSCL 驗證的基礎上，補齊 `_uscan`／`_uscans`、自訂 `rs`、取消、TLS 與斷線清理的跨品牌案例。
+2. 修正 Brother Direct IPP 的 format-specific resolution negotiation 後重測；再以至少兩個品牌補齊 Android Print Service 與 Direct IPP 的 IPP/IPPS、PDF／JPEG／PNG／PWG-Raster／PCLm、job lifecycle、憑證、紙張、色彩、雙面、取消與離線案例。
 3. 將真實 scanner capability 反映為動態掃描 UI 選項，加入手動 IP／URL 與認證流程。
 4. 加入工作持久化、進行中工作恢復與暫存檔保留期限；文件／Flatbed／OCR layout 已可恢復，並持續擴充大型文件 soak test。
 5. 以含 Google Play services 的 ARM64 實機驗證 ML Kit Latin、繁中／簡中、按需日文／韓文模型與字型下載、cold/warm latency、辨識準確率與 PSS；另以 16 KB page-size 環境驗證 OpenCV／ML Kit，並決定無 Google Play services 裝置的產品 fallback。

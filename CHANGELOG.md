@@ -2,6 +2,19 @@
 
 本專案依 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 的概念記錄重要變更；GitHub Release `v0.1.0` 已建立，目前合併後續變更記錄在 Unreleased。
 
+## [Unreleased] - 2026-09-17
+
+### Fixed — Instrumentation Test Isolation
+
+- `PrintMethodPersistenceTest` 在每個測試前後只清除 `print_method` preference，避免測試順序共用 `mopria_settings` 導致 `printMethodDefaultsToSystem` 被前一測試污染。
+
+### Testing — Physical Print Matrix
+
+- Brother MFC-L2715DW（`10.1.121.175`）透過 Android Default Print Service（Mopria，手動加入 IP）列印掃描 PDF；系統工作與 App History 均為 `Completed`，Brother IPP 佇列回到 0、狀態 `idle`。
+- HP LaserJet Pro MFP 3104fdw（`10.1.121.182`）Direct IPP 列印工作完成；App History 與 HP 端工作清單均為 `Completed`。
+- Brother MFC-L2715DW Direct IPP 已實測但工作為 `Failed`。Brother Get-Printer-Attributes 成功並宣告 `image/pwg-raster`；`pwg-raster-document-resolution-supported` 只有 600×600，而通用解析度另宣告 300／600／1200，現行 client 偏好 300 的 format-specific negotiation mismatch 是初步疑點，尚未修正或證實。
+- 2026-09-17 本機驗證：`:app:testDebugUnitTest` 180 passed、`:app:connectedDebugAndroidTest` 34 passed；lint 與 debug assemble 亦通過。
+
 ## [Unreleased] - 2026-09-16
 
 ### Fixed — Brother eSCL Resolution/ADF Root Cause
@@ -10,7 +23,7 @@
 
 ### Verified — Brother／HP Real Devices
 
-- Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 已完成 eSCL 掃描及 plain Direct IPP 基本工作驗證；HP 另完成 7 頁 ADF 掃描 → PDF → Direct IPP 並回報 job `Completed`。這些結果不延伸為 IPPS、所有格式／選項／錯誤情境、其他型號或 Mopria 認證。
+- Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 已完成 eSCL 掃描；Brother 另透過 Android Default Print Service（Mopria，手動 IP）完成系統列印，HP Direct IPP 工作回報 `Completed`，Brother Direct IPP 工作回報 `Failed`。這些結果不延伸為 IPPS、所有格式／選項／錯誤情境、其他型號或 Mopria 認證。
 - Linux Gradle wrapper／line-ending 修復後，`main@68c2112` 已於 2026-09-16 通過 GitHub Actions；README、HANDOFF、開發計畫、使用指南與 Direct IPP 追蹤文件同步移除過期的「尚未實機驗證／CI 仍阻塞」敘述。
 
 ## [Unreleased] - 2026-08-12
