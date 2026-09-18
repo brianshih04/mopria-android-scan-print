@@ -6,7 +6,7 @@
 
 ## 文件目的
 
-本文件供接手開發者追蹤 Direct IPP 已完成的 code review fixes 與剩餘風險。PR #5 已將 Direct IPP、PWG-Raster／PCLm、格式 payload 一致性、job polling、fixed-length streaming、OOM sampling、錯誤本地化、no-printer error 與 instrumentation tests 合併到 `main`；2026-09-17 實機結果為 HP LaserJet Pro MFP 3104fdw Direct IPP 完成、Brother MFC-L2715DW Direct IPP 送件失敗（同一 Brother 的 Android Default Print Service／Mopria 系統列印完成）。Direct IPP 仍維持 experimental opt-in，直到 Brother 修正、IPPS、完整格式／錯誤矩陣與高 DPI 多頁 soak 驗證完成。
+本文件供接手開發者追蹤 Direct IPP 已完成的 code review fixes 與剩餘風險。PR #5 已將 Direct IPP、PWG-Raster／PCLm、格式 payload 一致性、job polling、fixed-length streaming、OOM sampling、錯誤本地化、no-printer error 與 instrumentation tests 合併到 `main`；2026-09-17 實機結果為 HP LaserJet Pro MFP 3104fdw Direct IPP 完成、Brother MFC-L2715DW Direct IPP 送件失敗；2026-09-18 已確認根因（Brother IPP 服務無法完成 HTTP/1.1 回應，transport 改 raw-socket HTTP/1.0）並實測 Brother Direct IPP `Completed`。Direct IPP 仍維持 experimental opt-in，直到 IPPS、完整格式／錯誤矩陣與高 DPI 多頁 soak 驗證完成。
 
 ## 審查基準
 
@@ -32,7 +32,7 @@
 - [x] Direct IPP 找不到印表機時顯示明確錯誤，不再 silent fallback。
 - [x] Direct IPP 錯誤訊息支援 string resources。
 - [x] 恢復 instrumentation test dependencies 與基本 UI smoke tests。
-- [ ] 實體設備驗證仍未完成：HP plain Direct IPP job lifecycle 已通過；Brother plain Direct IPP 送件失敗，IPPS、PWG-Raster／PCLm 跨品牌格式與憑證行為仍待驗證。
+- [ ] 實體設備驗證仍未完成：HP 與 Brother plain Direct IPP job lifecycle 已通過（Brother 2026-09-18 修復）；IPPS、PWG-Raster／PCLm 跨品牌格式與憑證行為仍待驗證。
 - [x] `IppRasterizer` 已改為逐頁 bitmap streaming，不再同時保留所有頁面；swath streaming 與實體高 DPI soak 仍是後續 gate。
 
 ## P1：實機 rollout 或擴大測試前必須處理
@@ -94,7 +94,7 @@ git diff --check
 
 目前 `_ipps._tcp` discovery 會優先於 `_ipp._tcp`，並使用 Android system trust store。實體印表機常見 self-signed certificate、hostname 與 resolved IP 不一致，可能造成 TLS 或 hostname verification 失敗。
 
-HP 已完成 plain Direct IPP 基本工作；Brother Direct IPP 送件失敗但其 Android Default Print Service／Mopria 系統列印已完成一次。仍請使用至少一台適合的實體設備驗證：
+HP 與 Brother 均已完成 plain Direct IPP 基本工作；Brother 的 Android Default Print Service／Mopria 系統列印亦已完成一次。仍請使用至少一台適合的實體設備驗證：
 
 - `_ipp._tcp` plain IPP 回歸，作為 IPPS 對照組。
 - `_ipps._tcp` 有效憑證。
@@ -119,7 +119,7 @@ HP 已完成 plain Direct IPP 基本工作；Brother Direct IPP 送件失敗但�
 
 ### 8. 驗證 HTTP streaming interoperability
 
-[`IppTransport.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppTransport.kt) 已改用已知長度的 fixed-length HTTP body，不再使用 chunked streaming；JVM test server 已驗證 `Content-Length`。HP 實機已完成 Direct IPP Create-Job／Send-Document／job completion；Brother 實機送件失敗，修正 resolution negotiation 後仍需重測並補足跨品牌 interoperability。
+[`IppTransport.kt`](https://github.com/brianshih04/mopria-android-scan-print/blob/main/app/src/main/java/com/brianshih/mopria/android/scanprint/domain/IppTransport.kt) 已改用已知長度的 fixed-length HTTP body，不再使用 chunked streaming；JVM test server 已驗證 `Content-Length`。HP 與 Brother 實機均已完成 Direct IPP Create-Job／Send-Document／job completion（Brother 於 2026-09-18 修復 HTTP/1.0 相容後通過；先前的 resolution negotiation 假設已證實非原因）。
 
 ### 9. 補 capability-driven print options
 

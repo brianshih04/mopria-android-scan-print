@@ -154,7 +154,7 @@ Lint 目前無 error；Kotlin compiler 仍有既有 `EditScreen` rotate icon dep
 - 一般 PDF 輸出使用 Android `PdfDocument` 重繪頁面，不保留原始 PDF 的文字／向量語意；只有使用者同時啟用 OCR 與 Searchable PDF 時改走 PDFBox invisible text layer。
 - 50 頁是 App 安全上限；大型高 dpi 掃描仍需實機 soak 與儲存空間檢查。
 - Direct IPP 的 `IppRasterizer` 已逐頁持有 bitmap，但在完成實體高 DPI 多頁 soak（必要時再做 swath streaming）前，不應宣稱大型多頁工作已具產品級穩定性。
-- Brother MFC-L2715DW 的 Direct IPP 目前在 capability 查詢後送件失敗；其 PWG-Raster 解析度只宣告 600×600，而現行 client 的通用解析度偏好可能選 300，需完成 format-specific negotiation 並重新實測。
+- Brother MFC-L2715DW 的 Direct IPP 已於 2026-09-18 修復並實測通過：根因為 Brother IPP 服務無法完成 HTTP/1.1 回應（transport 已改 raw-socket HTTP/1.0），先前的 PWG-Raster resolution negotiation 假設已證實非原因。
 
 ## 8. Android 平台注意事項
 

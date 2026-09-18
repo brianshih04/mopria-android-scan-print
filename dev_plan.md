@@ -22,7 +22,7 @@
 | App state | `MopriaViewModel` + `StateFlow`；SharedPreferences 保存設定，內部 JSON 保存文件／Flatbed session，gzip sidecar 保存 page-scoped OCR layout；active job 仍為記憶體狀態 |
 | 掃描探索 | Android `NsdManager`，服務 `_uscan._tcp`／`_uscans._tcp` |
 | 掃描傳輸 | 自建 bounded eSCL HTTP client；系統 trust store；不使用 trust-all |
-| 列印 | Real 模式可切換：系統列印（Mopria，預設）或直接 IPP（`IppPrintClient`，opt-in，找不到印表機時顯示明確錯誤，不 silent fallback）；Brother Mopria 系統列印與 HP Direct IPP 已實機完成，Brother Direct IPP 送件失敗 |
+| 列印 | Real 模式可切換：系統列印（Mopria，預設）或直接 IPP（`IppPrintClient`，opt-in，找不到印表機時顯示明確錯誤，不 silent fallback）；Brother Mopria 系統列印、HP 與 Brother 的 Direct IPP 均已實機完成（Brother Direct IPP 於 2026-09-18 修復 IPP HTTP/1.1 掛起問題後通過） |
 | 掃描後處理 | OpenCV 4.14 file-first pipeline；deskew、auto-crop、blank-page drop、背景淨化；失敗保留 source |
 | OCR | Google ML Kit Text Recognition v2 unbundled clients；模型由 Google Play services 管理；OCR 與 Searchable PDF 都是 opt-in |
 | 文件輸出 | 一般 PDF 使用 Android `PdfDocument`；Searchable PDF 使用 PDFBox mixed/temp invisible text layer；MediaStore、FileProvider、Sharesheet |
@@ -85,7 +85,7 @@
 - `SystemPrintAdapter`／`UriPrintAdapter` 遵守 Android page range 與 media size。
 - 系統列印為預設路徑，由 Android Print Service 負責印表機探索、IPP/IPPS 與 spooler 設定。
 - Direct IPP 已整合到 `main`，可在 Real 模式 opt-in；支援 `_ipp/_ipps` 探索、PDF／JPEG／PNG／PWG-Raster／PCLm、capability-constrained options、job polling、timeout cancel、fixed-length HTTP、bounded 300 dpi source rendering 與 single-document printer batching。
-- Direct IPP 找不到印表機時會顯示本地化錯誤，不會默默 fallback 到系統列印；HP LaserJet Pro MFP 3104fdw Direct IPP 工作完成，Brother MFC-L2715DW Direct IPP 送件失敗；同一 Brother 的 Android Default Print Service／Mopria 系統列印工作完成。
+- Direct IPP 找不到印表機時會顯示本地化錯誤，不會默默 fallback 到系統列印；HP LaserJet Pro MFP 3104fdw 與 Brother MFC-L2715DW 的 Direct IPP 工作均已完成（Brother 於 2026-09-18 修復）；同一 Brother 的 Android Default Print Service／Mopria 系統列印工作完成。
 
 ## 4. 目前不在完成宣稱內
 
@@ -96,7 +96,7 @@
 - 使用者認證、PIN、OAuth、client certificate UI。
 - QR／NFC 加入設備，以及與認證 UI 整合的進階手動 endpoint 流程；目前已有手動 IP／host 輸入。
 - active job／網路工作持久化、前景服務與背景續傳；文件／Flatbed session／OCR layout 已可恢復。
-- Direct IPP 的廣泛產品級相容性宣稱；HP Direct IPP 與 Brother Mopria 系統列印各有一次實機完成，Brother Direct IPP 送件失敗；IPPS 憑證、各格式／選項／錯誤接受度與高 DPI 多頁記憶體仍待實體／soak 驗證。
+- Direct IPP 的廣泛產品級相容性宣稱；HP／Brother Direct IPP 與 Brother Mopria 系統列印均已有實機完成紀錄；IPPS 憑證、各格式／選項／錯誤接受度與高 DPI 多頁記憶體仍待實體／soak 驗證。
 - Mopria Certified 或任何廠商品牌相容性宣稱。
 
 ## 5. 里程碑
@@ -108,7 +108,7 @@
 | M2 eSCL v2.97 pull-scan client | 程式、fixture 與兩款 MFP 基本實機完成 | Brother／HP eSCL、ADF、多解析度／尺寸／灰階；尚缺 `_uscans`、更多錯誤與設備矩陣 |
 | M3 Flatbed／ADF 多頁 PDF | Mock／UI 完成 | Flatbed 2 頁、ADF 6 頁 emulator smoke |
 | M3.1 多國語言 | 完成 | 10 種 resource locale、系統偵測、English fallback、手動選擇與 JVM tests |
-| M3.2 Direct IPP | 程式、自動測試與 HP MFP 基本實機完成；Brother Direct IPP 失敗待修正 | HP opt-in 路徑與 job completion 已驗證；尚缺 Brother 修正、IPPS、完整格式／錯誤矩陣與高 DPI soak |
+| M3.2 Direct IPP | 程式、自動測試與 HP／Brother 實機完成 | HP 與 Brother 的 opt-in 路徑與 job completion 均已驗證（Brother 於 2026-09-18 修復 IPP HTTP/1.0 相容）；尚缺 IPPS、完整格式／錯誤矩陣與高 DPI soak |
 | M3.3 OpenCV／OCR／Searchable PDF | 程式與 emulator gate 完成 | 12 MP OCR bound、256 MB PSS gate、50 頁 PDF；尚缺 ARM 模型／accuracy／16 KB／多語實機 |
 | M4 實體跨品牌驗收 | 部分完成 | Brother／HP 基本掃描、Brother Mopria 系統列印與 HP Direct IPP 已完成；Brother Direct IPP、IPPS、格式、錯誤、TLS 與 soak matrix 待補 |
 | M5 文件編輯／持久工作 | 部分完成（文件／Flatbed／OCR sidecar、暫存清理、旋轉／排序／裁切完成；active job 尚未持久化） | process death、raw retention、背景工作、大型文件 |
@@ -129,7 +129,7 @@ Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 已完成基本 eSCL 實機�
 
 ### Printer matrix
 
-HP 已完成一次 plain Direct IPP 基本工作；Brother Direct IPP 送件失敗，但同一 Brother 的 Android Default Print Service／Mopria 系統列印已完成一次。仍須在這兩款與後續設備完整測試 Android Default Print Service／Mopria Print Service、IPP／IPPS 與下列矩陣：
+HP 與 Brother 各已完成 plain Direct IPP 基本工作（Brother 於 2026-09-18 修復 IPP HTTP/1.1 掛起後通過），Brother 的 Android Default Print Service／Mopria 系統列印亦已完成一次。仍須在這兩款與後續設備完整測試 Android Default Print Service／Mopria Print Service、IPP／IPPS 與下列矩陣：
 
 - 手機 PDF、JPEG、PNG 與掃描 multi-page PDF。
 - 份數、紙張、方向、彩色／灰階、雙面、頁面範圍。
@@ -193,7 +193,7 @@ git diff --check
 - 文件、CHANGELOG 與 HANDOFF 同步更新。
 - 沒有未處理的 blocker／critical finding，且敏感文件／規格未提交 Git。
 
-目前程式碼已完成實作、本機／模擬器 DoD，以及 Brother／HP 基本 eSCL、Brother Mopria 系統列印與 HP Direct IPP 實機驗證；Brother Direct IPP 送件失敗待修正。M4 的完整 IPPS／格式／錯誤／TLS／soak matrix 與 ML Kit ARM／16 KB DoD 尚未完成。`./gradlew` exit 127 已由 wrapper／line-ending 修復，`main@68c2112` 的 GitHub Actions 已於 2026-09-16 通過。
+目前程式碼已完成實作、本機／模擬器 DoD，以及 Brother／HP 基本 eSCL、Brother Mopria 系統列印與 HP／Brother Direct IPP 實機驗證（Brother Direct IPP 於 2026-09-18 修復 IPP HTTP/1.1 掛起後通過）。M4 的完整 IPPS／格式／錯誤／TLS／soak matrix 與 ML Kit ARM／16 KB DoD 尚未完成。`./gradlew` exit 127 已由 wrapper／line-ending 修復，`main@68c2112` 的 GitHub Actions 已於 2026-09-16 通過。
 
 ## 10. 建議下一步
 

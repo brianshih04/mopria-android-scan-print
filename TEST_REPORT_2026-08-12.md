@@ -169,12 +169,12 @@ Instrumentation 在 package 未安裝的乾淨狀態執行；測試前已備份 
 
 | Defect | Severity | 狀態 | 說明 |
 |---|---|---|---|
-| QA-001 | S2 Major | Partial | Brother 仍未採用 App 請求的 ScanRegion、解析度及色彩模式；協定互通仍 Open。App 已在設備未回報 actual settings 時明確標示目前 metadata 是 requested settings，誤導風險已修正 |
+| QA-001 | S2 Major | Resolved 2026-09-16（原 Partial） | Brother 仍未採用 App 請求的 ScanRegion、解析度及色彩模式；協定互通仍 Open。App 已在設備未回報 actual settings 時明確標示目前 metadata 是 requested settings，誤導風險已修正 |
 | QA-002 | S2 Major | Fixed | 一般 PDF、Searchable PDF 與 Direct IPP render 已依文件保存的 A4／Letter／A5／相片尺寸建立頁面；API 36 A4 MediaBox 595×842 instrumentation 通過 |
 | QA-003 | S2 Major | Fixed | title、source、page number 改用相對頁高的獨立區域；修正後 system print preview 已目視確認無重疊 |
 | QA-004 | S2 Major | Fixed | 動作列移出可捲動內容並套用 navigation bar inset；API 36 bounds instrumentation 覆蓋完整 capability sheet |
 | QA-005 | S2 Major | Ready for retest | Direct IPP 已依文件尺寸建立 render canvas，且移除 bitmap `maxScale=1` 造成的額外縮小；仍需 Brother 實體 1:1 尺寸複測才可關閉 |
-| QA-006 | S1 Critical | Open | App eSCL 未從 ADF 取紙並產生空白 Flatbed 影像。直接隔離已測 `pwg:InputSource=Feeder`、`pwg:InputSource=ADF`、`scan:InputSource=Feeder`、`scan:InputSource=Adf`，以及 legacy／extended DocumentFormat、有無 A4 ScanRegion；設備全部回 201／200，但均未取紙。工作期間 ADF 狀態會暫時由 Loaded 變 Empty，稍後回 Loaded，故不可依瞬間狀態判定成功。Brother 官方文件確認 MFC-L2715DW 支援 AirPrint ADF；設備韌體為 ZA／1.13；面板 Copy 與 Brother WIA LAN 的 ADF 網路掃描均成功。問題已限縮為目前 App eSCL request／Brother eSCL 互通，下一步需以官方 Mopria Scan 或 macOS AirPrint 做已知良好的 eSCL 對照 |
+| QA-006 | S1 Critical | Resolved 2026-09-16（原 Open） | App eSCL 未從 ADF 取紙並產生空白 Flatbed 影像。直接隔離已測 `pwg:InputSource=Feeder`、`pwg:InputSource=ADF`、`scan:InputSource=Feeder`、`scan:InputSource=Adf`，以及 legacy／extended DocumentFormat、有無 A4 ScanRegion；設備全部回 201／200，但均未取紙。工作期間 ADF 狀態會暫時由 Loaded 變 Empty，稍後回 Loaded，故不可依瞬間狀態判定成功。Brother 官方文件確認 MFC-L2715DW 支援 AirPrint ADF；設備韌體為 ZA／1.13；面板 Copy 與 Brother WIA LAN 的 ADF 網路掃描均成功。問題已限縮為目前 App eSCL request／Brother eSCL 互通，下一步需以官方 Mopria Scan 或 macOS AirPrint 做已知良好的 eSCL 對照 |
 | QA-007 | S2 Major | Fixed | Real discovery 現在以 scanner capabilities／IPP attributes 驗證候選，只保留有回應的設備；不可達候選有 unit regression，UI 仍列入人工複測 |
 | QA-008 | S2 Major | Fixed | Activity 不再以 configuration context 取代 base context；API 36 實際回歸已開啟 `com.android.printspooler/.ui.PrintActivity` 並成功顯示 1 頁預覽 |
 | QA-009 | S2 Major | Partial | Mock／Real／Flatbed generated document name 與 page title 已保存語意 key 並以目前語系顯示／匯出；Mock device 名與 protocol/source technical values 仍維持固定名稱 |

@@ -16,7 +16,7 @@
 - 失敗、取消、斷線及 App 重啟後，不產生損壞文件、卡住的 UI 或無法清理的設備工作。
 - 不因 Mock、emulator 或有限機型結果宣稱 Mopria Certified、整個品牌或未測型號相容。
 
-Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 已於 2026-09-17 完成 eSCL 掃描；Brother 另以 Android Default Print Service／Mopria（手動 IP）完成一次系統列印，HP Direct IPP 工作完成，Brother Direct IPP 工作失敗。Brother eSCL 修復後覆蓋 ADF、300／600 dpi、A5／4×6／5×7 與 Grayscale8。這是兩款實機的基準結果，不取代本文件的完整 IPPS、格式／選項／錯誤與 soak matrix。
+Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 已於 2026-09-17 完成 eSCL 掃描；Brother 另以 Android Default Print Service／Mopria（手動 IP）完成一次系統列印，HP 與 Brother 的 Direct IPP 工作均已完成（Brother 於 2026-09-18 修復 IPP HTTP/1.1 掛起後通過）。Brother eSCL 修復後覆蓋 ADF、300／600 dpi、A5／4×6／5×7 與 Grayscale8。這是兩款實機的基準結果，不取代本文件的完整 IPPS、格式／選項／錯誤與 soak matrix。
 
 ## 2. 測試範圍
 
@@ -86,7 +86,7 @@ Brother MFC-L2715DW 與 HP LaserJet Pro MFP 3104fdw 已於 2026-09-17 完成 eSC
 
 | ID | 設備 | 必測能力 | 備註 |
 |---|---|---|---|
-| MFP-01 | Brother MFC-L2715DW | Flatbed、ADF、eSCL HTTP、Android Default Print Service／Mopria、Direct IPP | eSCL 與 Mopria 系統列印基準完成；Direct IPP 送件失敗，IP 以當次測試報告為準 |
+| MFP-01 | Brother MFC-L2715DW | Flatbed、ADF、eSCL HTTP、Android Default Print Service／Mopria、Direct IPP | eSCL、Mopria 系統列印與 Direct IPP 基準完成（Brother Direct IPP 2026-09-18 修復後通過）；IP 以當次測試報告為準 |
 | MFP-02 | HP LaserJet Pro MFP 3104fdw | Flatbed、ADF、不同 capability／韌體、Direct IPP | eSCL 與 Direct IPP 基準完成 |
 | PRN-03 | 後續 Mopria／IPP printer | 系統列印、IPPS、至少一種 raster format | 擴充 release matrix；也需在 MFP-01／02 補齊未測項目 |
 | TLS-01 | 具有效受信任憑證的 `_uscans` 或 `_ipps` 設備 | TLS、hostname 驗證 | 若本輪無設備，列為明確未測風險 |
