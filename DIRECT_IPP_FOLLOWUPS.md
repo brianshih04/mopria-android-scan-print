@@ -133,7 +133,7 @@ capability-driven print options 已完成：從 `Get-Printer-Attributes` 解析 
 
 以下內容已在 PR #5 合併時同步；後續功能或驗證變更仍需一起維護：
 
-- README、HANDOFF、CHANGELOG 的驗證快照：2026-09-17 本機實際為 180 JVM tests、34 個 API 36 emulator instrumentation tests；實機矩陣為 Brother Mopria system print `Completed`、HP Direct IPP `Completed`、Brother Direct IPP `Failed`；後續仍應以當次 Gradle 輸出為準。
+- README、HANDOFF、CHANGELOG 的驗證快照：2026-09-17 本機實際為 180 JVM tests、34 個 API 36 emulator instrumentation tests；實機矩陣為 Brother Mopria system print `Completed`、HP Direct IPP `Completed`、Brother Direct IPP 當日 `Failed`（2026-09-18 修復 IPP HTTP/1.1 掛起後已 `Completed`）；後續仍應以當次 Gradle 輸出為準。
 - README 的環境需求：JDK 25 daemon、compileSdk 37、Android SDK 版本要一致。
 - CHANGELOG 可記載 Get-Job-Attributes／Cancel-Job lifecycle 已接線並有 JVM tests；HP Direct IPP 與 Brother Mopria system print 的實體 job 已完成一次驗證，Brother Direct IPP 仍待修正後重測。
 - 明確記載 Direct IPP 是否仍為 opt-in，以及找不到設備時是否允許 fallback。

@@ -95,3 +95,43 @@ HP 的 409 回應帶 HP ErrorInfo XML（`conflictWithExisting — Input Settings
 1. 「Brother 對非 Windows TCP client 降級」的舊結論作廢；`docs/adf-resolution-investigation.md` 僅供歷史參考
 2. Content-Type 修復同時解決：解析度被忽略（1680×2193）、ScanRegion 被忽略（非 A4 比例 0.766）兩個症狀
 3. Brother「ADF 不取紙」（8/14 報告）在本輪未再出現；ADF 取紙正常
+
+---
+
+## Direct IPP：HTTP/1.1 掛起問題（2026-09-17 發現並修復）
+
+### 症狀
+
+Direct IPP 列印在 HP LaserJet Pro MFP 3104fdw 成功，在 Brother MFC-L2715DW 失敗（App 等 60 秒 readTimeout 後回報錯誤）。
+
+### 根因
+
+Brother `debut/1.30` 的 IPP 服務（`:631`）**無法完成 HTTP/1.1 回應**。對照實測（連續、序列化、可 100% 重現）：
+
+| 請求框架 | Brother `:631/ipp/print` | HP `:8080`/`:631` |
+|---|---|---|
+| HTTP/1.1（keep-alive） | ❌ 掛住 → client timeout | ✅ |
+| HTTP/1.1（`Connection: close`） | ❌ 掛住 → client timeout | ✅ |
+| **HTTP/1.0** | ✅ HTTP 200 + IPP successful-ok（8445B 完整屬性） | ✅ |
+
+`java.net.HttpURLConnection` 沒有公開 API 可強制 HTTP/1.0，因此 App（原本走 `HttpURLConnection`）在 Brother 上必失敗。
+
+### 修復
+
+`BoundedIppTransport`（`domain/IppTransport.kt`）改為 raw socket 直寫 HTTP frame：
+
+- `POST {path} HTTP/1.0` + `Host` + `Content-Type: application/ipp` + `Content-Length` + `Connection: close`
+- `ipps://` 目標經 `SSLSocketFactory.getDefault()`（Android 系統 trust store，無 trust-all）
+- 保留既有傳輸紀律：固定 `Content-Length`（不做 chunked；DIRECT_IPP_FOLLOWUPS.md P2.8）、IPP 回應 2MB 上限、HTTP header 16KB 上限
+- HTTP/1.0 對 IPP 合法：每個請求都帶精確 `Content-Length`，回應讀至 printer 關閉連線（或 Content-Length 滿足）
+
+### 驗證（2026-09-17/18 實測）
+
+- curl probe 矩陣：Brother HTTP/1.0 ×3 全成功（ipp-status 0x0000、含 `printer-make-and-model`/`document-format-supported`）；HP HTTP/1.0 亦成功
+- App 端到端（emulator + Brother + ADF 1 張）：掃描（2448×3484）→ PDF 匯出 → **Direct IPP 列印 job Completed**；Job history 三項全綠
+- Unit tests（含 `IppPrintClientTest` 對 JDK HttpServer 的 12 項）全數通過
+
+### 實作注意事項
+
+- 自製 HTTP header 解析需偵測 **CR LF CR LF**（4 bytes）結尾 — 最後兩 bytes 是 CR、LF，不是 LF、LF（開發時踩過的 bug）
+- Brother 的 eSCL（`debut/1.30`）與 IPP 是同一 firmware 的兩個獨立 quirk：eSCL 要求 `Content-Type: application/xml`（見上文章節），IPP 要求 HTTP/1.0
